@@ -136,6 +136,11 @@ These are the two live-demo paths the tests now model. Each path starts from a
 blank tenant home so the appearing files are attributable to the queries in
 that path.
 
+The demo proves the adaptive-retrieval loop, not just the answers. Starting
+from `search / execute / observe`, the system records a successful trajectory,
+turns it into typed tenant-owned interfaces, and then uses those interfaces to
+shorten the next similar query.
+
 ### Path A: Deterministic Primitive Becomes A Procedure
 
 ```text
@@ -157,6 +162,17 @@ Intent 2
 
 What this proves: a generic execute primitive can become a typed procedure, and
 the procedure shortens a similar future query without creating another chain.
+
+Primitive and procedure notes:
+
+| Primitive / Procedure | One-line Description |
+| --- | --- |
+| `finqa_cases.findSimilar` | Search primitive that retrieves candidate filings from the current data plane. |
+| `finqa_resolve.pickFiling` | Execute primitive that chooses the filing whose retrieved text and table labels fit the intent. |
+| `finqa_table_math.inferPlan` | Execute primitive that infers `{ operation, row, years }` from the question and filing table. |
+| `finqa_table_math.execute` | Execute primitive that runs the inferred table operation and returns evidence. |
+| `procedure_store.save` | Observe/persist step that crystallizes the successful chain into tenant-owned procedure files. |
+| `procedures.table_math` | Replayed procedure that hides the previous chain behind one typed intent-interface. |
 
 ### Path B: A Primitive Can Be An Agent
 
@@ -181,6 +197,23 @@ Intent 4
 
 What this proves: the agent itself is a typed primitive, and the second intent
 can reuse it while the observer writes only the new compositional glue.
+
+Primitive and procedure notes:
+
+| Primitive / Procedure | One-line Description |
+| --- | --- |
+| `finqa_cases.findSimilar` | Search primitive that retrieves candidate filings from the current data plane. |
+| `finqa_resolve.pickFiling` | Execute primitive that chooses the best filing for the target and evidence need. |
+| `document_units.sentences` | Execute primitive that turns document text into sentence-level evidence units. |
+| `document_units.titleOrQuoteUnits` | Execute primitive that changes the evidence surface to headings and quote-like units. |
+| `agent_store.findReusable` | Observe/search step that checks whether the tenant already has a matching agent primitive. |
+| `finqa_outlook.createOutlookScorerAgentSpec` | Observe primitive that creates the reusable typed scorer agent when none exists. |
+| `agent_store.save` | Observe/persist step that stores the new agent primitive for future composition. |
+| `finqa_outlook.scoreUnits` | Agent primitive that scores each evidence unit for negative competitive-outlook relevance. |
+| `finqa_observe.codifyTableFunction` | Observe primitive that writes deterministic TypeScript glue around the scored units. |
+| `finqa_observe.executeCodifiedFunction` | Execute primitive that runs the observer-created glue and returns answer plus evidence. |
+| `procedure_store.save` | Observe/persist step that saves the composed intent-interface as procedure files. |
+| `procedures.negative_outlook_title_or_quote_references` | Replayed procedure that reuses the persisted agent and generated title/quote glue. |
 
 ## Storage Boundary
 
