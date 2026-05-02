@@ -6,7 +6,7 @@ interface UserEntry {
   role: string;
   tenant: string;
   procedures: { name: string }[];
-  intents: { name: string }[];
+  primitives: { name: string }[];
   data: { name: string }[];
 }
 
@@ -166,8 +166,8 @@ function AgentCard({
           <span className="v">{user.procedures.length}</span>
         </div>
         <div>
-          <span className="l">INTENTS</span>
-          <span className="v">{user.intents.length}</span>
+          <span className="l">PRIMITIVES</span>
+          <span className="v">{user.primitives.length}</span>
         </div>
         <div>
           <span className="l">DATA</span>
@@ -192,7 +192,7 @@ export function Overview({ alice, bob, cluster, setActive }: OverviewProps) {
     role: "Equity research analyst",
     tenant: "alice",
     procedures: [],
-    intents: [],
+    primitives: [],
     data: [],
   };
   const bobEntry: UserEntry = bob ?? {
@@ -200,7 +200,7 @@ export function Overview({ alice, bob, cluster, setActive }: OverviewProps) {
     role: "Competitive intelligence analyst",
     tenant: "bob",
     procedures: [],
-    intents: [],
+    primitives: [],
     data: [],
   };
 
@@ -214,7 +214,7 @@ export function Overview({ alice, bob, cluster, setActive }: OverviewProps) {
           </h1>
           <p className="v01-overview__lede">
             Atlas data is loaded once into a typed virtual filesystem. Each
-            agent's chain library and intent schema grows as queries are
+            agent's chain library and primitive set grows as queries are
             exercised — the same MongoDB cluster underneath, different overlays
             on top. Pick an agent to drive their surface.
           </p>
@@ -227,6 +227,9 @@ export function Overview({ alice, bob, cluster, setActive }: OverviewProps) {
           <div className="v01-topo__bus">
             <span className="v01-topo__bus-line v01-topo__bus-line--l"></span>
             <span className="v01-topo__bus-line v01-topo__bus-line--r"></span>
+            <span className="v01-topo__bus-arm v01-topo__bus-arm--l"></span>
+            <span className="v01-topo__bus-arm v01-topo__bus-arm--r"></span>
+            <span className="v01-topo__bus-feed"></span>
             <div className="v01-topo__cluster">
               <span className="v01-topo__pulse"></span>
               <div>
@@ -279,14 +282,15 @@ export function Overview({ alice, bob, cluster, setActive }: OverviewProps) {
             <p>
               Compiled, named affordances at{" "}
               <code>chains/&lt;tenant&gt;/</code>. Diverge per agent as each
-              exercises their own intents.
+              exercises their own questions.
             </p>
           </div>
           <div>
-            <div className="l">INTENT SCHEMA</div>
+            <div className="l">PRIMITIVES</div>
             <p>
-              Parameterised verbs the agent can dispatch. Cold queries enter a
-              ReAct loop; warm ones hit a chain directly.
+              Typed callables — deterministic at boot, plus Flue-spawned agents
+              learned at runtime. The set grows when a question demands LLM
+              judgement no t=0 primitive can provide.
             </p>
           </div>
         </div>

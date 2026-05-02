@@ -74,7 +74,7 @@ function viewFromState(state: StateResponse | null) {
 }
 
 export default function App() {
-  const [active, setActive] = useState<ActiveView>("alice");
+  const [active, setActive] = useState<ActiveView>("overview");
   const [connecting, setConnecting] = useState(true);
 
   const [slots, setSlots] = useState<Record<TenantId, TenantSlot>>({
@@ -351,7 +351,7 @@ export default function App() {
                   role: aliceView.role,
                   tenant: aliceView.tenant,
                   procedures: aliceView.procedures,
-                  intents: aliceView.intents,
+                  primitives: aliceView.primitives,
                   data: aliceView.data,
                 }
               : null
@@ -363,7 +363,7 @@ export default function App() {
                   role: bobView.role,
                   tenant: bobView.tenant,
                   procedures: bobView.procedures,
-                  intents: bobView.intents,
+                  primitives: bobView.primitives,
                   data: bobView.data,
                 }
               : null

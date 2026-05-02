@@ -118,7 +118,14 @@
   font-family: var(--font-mono); font-size: 11px; padding: 0 18px; cursor: pointer;
 }
 .v01-search__sugg {
-  display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0 14px;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 0 14px;
+}
+.v01-search__sugg-label {
+  font-family: var(--font-label); font-size: 9px; letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+.v01-search__sugg-row {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch;
 }
 .v01-search__sugg button {
   background: transparent; border: 1px solid var(--border);
@@ -129,10 +136,10 @@
 .v01-search__sugg button:hover { background: var(--surface); border-color: var(--text-muted); color: var(--text); }
 .v01-search__sugg button .glyph { color: var(--accent); font-size: 10px; }
 .v01-search__chip {
+  flex: 1 1 240px;
   flex-direction: column !important; align-items: stretch !important;
   gap: 4px !important; padding: 8px 12px !important;
-  width: 360px; max-width: 360px;
-  min-height: 96px;
+  min-height: 80px;
   background: var(--bg) !important;
   text-align: left !important;
   transition: background-color 120ms, border-color 120ms;
@@ -713,7 +720,7 @@
 .v01-topo {
   display: grid; grid-template-columns: 1fr 1fr; gap: 0;
   position: relative;
-  padding-bottom: 130px;
+  padding-bottom: 170px;
 }
 .v01-topo__agent {
   background: var(--bg); border: 1px solid var(--border);
@@ -781,30 +788,46 @@
 .v01-topo__agent[data-who="alice"]:hover .v01-topo__agent-cta { color: var(--accent); }
 .v01-topo__agent[data-who="bob"]:hover   .v01-topo__agent-cta { color: var(--info); }
 
-/* Bus + cluster node */
+/* Bus + cluster node — agents feed DOWN into Atlas via 90° elbows */
 .v01-topo__bus {
   position: absolute; left: 0; right: 0; bottom: 0;
-  display: flex; justify-content: center; align-items: center;
-  height: 110px;
+  height: 150px;
 }
+/* Vertical drops from each agent card center */
 .v01-topo__bus-line {
-  position: absolute; top: 0; height: 50px; width: 1px;
+  position: absolute; top: 0; height: 80px; width: 1px;
   background: var(--border);
+  overflow: hidden;
 }
 .v01-topo__bus-line::after {
-  content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 14px;
+  content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 18px;
   background: var(--text);
   animation: v01drip 1.8s linear infinite;
 }
 @keyframes v01drip {
-  0%   { top: -14px; opacity: 0; }
+  0%   { top: -18px; opacity: 0; }
   20%  { opacity: 1; }
-  100% { top: 50px; opacity: 0; }
+  100% { top: 80px; opacity: 0; }
 }
 .v01-topo__bus-line--l { left: 25%; }
 .v01-topo__bus-line--r { left: 75%; }
+
+/* 90° horizontal arms — elbow at the top of the cluster, converging inward */
+.v01-topo__bus-arm {
+  position: absolute; top: 80px; height: 1px;
+  background: var(--border);
+}
+.v01-topo__bus-arm--l { left: 25%; right: 50%; }
+.v01-topo__bus-arm--r { left: 50%; right: 25%; }
+
+/* Tiny drop-feed nubs from the merge point into the cluster top */
+.v01-topo__bus-feed {
+  position: absolute; top: 80px; left: calc(50% - 0.5px);
+  width: 1px; height: 14px; background: var(--text); opacity: 0.7;
+}
+
 .v01-topo__cluster {
-  margin-top: 30px;
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
   display: inline-flex; gap: 14px; align-items: center;
   border: 1px solid var(--text); background: var(--text); color: var(--bg);
   padding: 14px 22px;

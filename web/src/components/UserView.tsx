@@ -134,7 +134,8 @@ export function UserView({
           <button onClick={() => submit(query)}>[run ↵]</button>
         </div>
         <div className="v01-search__sugg">
-          <span className="label">DEMO INTENTS</span>
+          <div className="v01-search__sugg-label">DEMO INTENTS</div>
+          <div className="v01-search__sugg-row">
           {suggested.map((s) => {
             const provesIdx = s.hint?.toUpperCase().indexOf("PROVES:") ?? -1;
             const watchIdx = s.hint?.toUpperCase().indexOf("WATCH:") ?? -1;
@@ -180,6 +181,7 @@ export function UserView({
               clear
             </button>
           )}
+          </div>
         </div>
       </div>
       <div
