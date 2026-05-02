@@ -105,7 +105,7 @@ describe("demo happy paths from blank tenants", () => {
       "finqa_resolve.pickFiling",
       "document_units.sentences",
       "agent_store.findReusable",
-      "finqa_outlook.createOutlookScorerAgentSpec",
+      "finqa_observe.createAgentPrimitive",
       "agent_store.save",
       "finqa_outlook.scoreUnits",
       "finqa_observe.codifyTableFunction",
@@ -148,7 +148,7 @@ describe("demo happy paths from blank tenants", () => {
       "finqa_observe.executeCodifiedFunction",
       "procedure_store.save"
     ]);
-    expect(callNames(titleIntent)).not.toContain("finqa_outlook.createOutlookScorerAgentSpec");
+    expect(callNames(titleIntent)).not.toContain("finqa_observe.createAgentPrimitive");
 
     const titleProcedure = await readProcedureJson<{
       implementation: { kind: string; agentName: string };

@@ -140,6 +140,14 @@ export const finqa_agent = {
 async function runFlueJson(agent: string, payloadData: unknown): Promise<unknown> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), `atlasfs-${agent}-`));
   const payloadFile = path.join(tempDir, "payload.json");
+  const outputDir = path.join(
+    process.cwd(),
+    "node_modules",
+    ".cache",
+    "atlasfs-flue",
+    `${agent}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+  const envFile = path.join(process.cwd(), ".env");
   await writeFile(payloadFile, JSON.stringify(payloadData), "utf8");
   const payload = JSON.stringify({ payloadFile });
   const env = {
@@ -159,8 +167,10 @@ async function runFlueJson(agent: string, payloadData: unknown): Promise<unknown
       `${agent}-${Date.now()}`,
       "--payload",
       payload,
+      "--output",
+      outputDir,
       "--env",
-      ".env"
+      envFile
     ],
     {
       cwd: process.cwd(),

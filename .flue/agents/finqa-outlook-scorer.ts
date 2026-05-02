@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import type { FlueContext } from "@flue/sdk/client";
-import * as v from "valibot";
 
 export const triggers = {};
 
@@ -28,15 +27,20 @@ Lens: ${loadedPayload.lens ?? "competitive_outlook"}
 Document unit:
 ${unit.text ?? ""}
 
-Return a strict typed score. A negative reference should identify competitive pressure, emerging entrants, direct competition, regulatory disadvantage, adverse market pressure, or similar outlook risk.`,
-    {
-      result: v.object({
-        isReference: v.boolean(),
-        polarity: v.picklist(["negative", "neutral", "positive", "mixed"]),
-        severity: v.number(),
-        rationale: v.string(),
-        evidence: v.string()
-      })
-    }
+Return a strict typed score. A negative reference should identify competitive pressure, emerging entrants, direct competition, regulatory disadvantage, adverse market pressure, or similar outlook risk.
+
+When complete, output exactly one JSON object between ---RESULT_START--- and ---RESULT_END---.
+Do not use markdown fences.
+
+Return JSON matching this schema:
+{
+  "isReference": true | false,
+  "polarity": "negative" | "neutral" | "positive" | "mixed",
+  "severity": 0 | 1 | 2 | 3,
+  "rationale": "one short sentence",
+  "evidence": "exact supporting text, or empty string"
+}
+
+Use severity 0 when isReference is false. Use polarity "negative" when isReference is true for this lens.`
   );
 }

@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { FinqaCase } from "../../finqa/types.js";
 import type { DocumentUnit } from "./document_units.js";
 
 const execFileAsync = promisify(execFile);
@@ -41,11 +40,6 @@ export type OutlookScore = {
 };
 
 export type OutlookAgentRuntime = {
-  createOutlookScorerAgentSpec(args: {
-    question: string;
-    filing: FinqaCase;
-    units: DocumentUnit[];
-  }): Promise<OutlookScorerAgentSpec>;
   scoreUnit(args: {
     spec: OutlookScorerAgentSpec;
     unit: DocumentUnit;
@@ -55,30 +49,6 @@ export type OutlookAgentRuntime = {
 };
 
 export class FixtureOutlookAgentRuntime implements OutlookAgentRuntime {
-  async createOutlookScorerAgentSpec(): Promise<OutlookScorerAgentSpec> {
-    return {
-      agentName: "negativeOutlookReferenceScorerAgent",
-      description:
-        "Scores a short document unit for negative competitive-outlook references about a target company.",
-      capability: "negative_outlook_reference_scoring",
-      inputSchema: {
-        unitText: "string",
-        target: "string",
-        lens: "competitive_outlook"
-      },
-      outputSchema: {
-        isReference: "boolean",
-        polarity: ["negative", "neutral", "positive", "mixed"],
-        severity: "0|1|2|3",
-        rationale: "string",
-        evidence: "string"
-      },
-      prompt:
-        "Given one short document unit, decide whether it is a negative competitive-outlook reference about the target company. Prefer reusable criteria: competition, emerging entrants, direct competition, regulatory constraints, pressure, or adverse market dynamics.",
-      observer: "fixture"
-    };
-  }
-
   async scoreUnit(args: {
     unit: DocumentUnit;
   }): Promise<OutlookScore> {
@@ -118,15 +88,6 @@ export class FixtureOutlookAgentRuntime implements OutlookAgentRuntime {
 }
 
 export class FlueOutlookAgentRuntime implements OutlookAgentRuntime {
-  async createOutlookScorerAgentSpec(args: {
-    question: string;
-    filing: FinqaCase;
-    units: DocumentUnit[];
-  }): Promise<OutlookScorerAgentSpec> {
-    const result = await runFlueJson("finqa-outlook-agent-factory", args);
-    return normalizeOutlookScorerAgentSpec(result);
-  }
-
   async scoreUnit(args: {
     spec: OutlookScorerAgentSpec;
     unit: DocumentUnit;
@@ -146,13 +107,6 @@ export function createOutlookAgentRuntime(kind = process.env.ATLASFS_OUTLOOK_AGE
 }
 
 export const finqa_outlook = {
-  async createOutlookScorerAgentSpec(
-    args: { question: string; filing: FinqaCase; units: DocumentUnit[] },
-    runtime: OutlookAgentRuntime = createOutlookAgentRuntime()
-  ): Promise<OutlookScorerAgentSpec> {
-    return runtime.createOutlookScorerAgentSpec(args);
-  },
-
   async scoreUnits(
     args: {
       spec: OutlookScorerAgentSpec;
@@ -178,6 +132,14 @@ export const finqa_outlook = {
 async function runFlueJson(agent: string, payloadData: unknown): Promise<unknown> {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), `atlasfs-${agent}-`));
   const payloadFile = path.join(tempDir, "payload.json");
+  const outputDir = path.join(
+    process.cwd(),
+    "node_modules",
+    ".cache",
+    "atlasfs-flue",
+    `${agent}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
+  const envFile = path.join(process.cwd(), ".env");
   await writeFile(payloadFile, JSON.stringify(payloadData), "utf8");
   const payload = JSON.stringify({ payloadFile });
   const env = {
@@ -197,8 +159,10 @@ async function runFlueJson(agent: string, payloadData: unknown): Promise<unknown
       `${agent}-${Date.now()}`,
       "--payload",
       payload,
+      "--output",
+      outputDir,
       "--env",
-      ".env"
+      envFile
     ],
     {
       cwd: process.cwd(),
@@ -206,41 +170,111 @@ async function runFlueJson(agent: string, payloadData: unknown): Promise<unknown
       maxBuffer: 1024 * 1024 * 10
     }
   );
-  const first = stdout.indexOf("{");
-  const last = stdout.lastIndexOf("}");
-  if (first === -1 || last === -1) {
-    throw new Error(`Could not parse Flue JSON output for ${agent}: ${stdout.slice(0, 1000)}`);
-  }
-  return JSON.parse(stdout.slice(first, last + 1));
+  return parseFlueJson(stdout, agent);
 }
 
-function normalizeOutlookScorerAgentSpec(value: unknown): OutlookScorerAgentSpec {
-  const spec = value as Partial<OutlookScorerAgentSpec>;
-  if (!spec.agentName || !spec.description || !spec.prompt) {
-    throw new Error(`Invalid outlook scorer agent spec: ${JSON.stringify(value)}`);
+function parseFlueJson(stdout: string, label: string): unknown {
+  const parsed = JSON.parse(extractJsonText(stdout, label)) as unknown;
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    typeof (parsed as { text?: unknown }).text === "string"
+  ) {
+    return JSON.parse(extractJsonText((parsed as { text: string }).text, label));
   }
-  return {
-    agentName: spec.agentName,
-    description: spec.description,
-    capability: "negative_outlook_reference_scoring",
-    inputSchema: {
-      unitText: "string",
-      target: "string",
-      lens: "competitive_outlook"
-    },
-    outputSchema: {
-      isReference: "boolean",
-      polarity: ["negative", "neutral", "positive", "mixed"],
-      severity: "0|1|2|3",
-      rationale: "string",
-      evidence: "string"
-    },
-    prompt: spec.prompt,
-    observer: spec.observer ?? "flue"
-  };
+  return parsed;
+}
+
+function extractJsonText(stdout: string, label: string): string {
+  const resultBlocks = Array.from(stdout.matchAll(/---RESULT_START---\s*([\s\S]*?)---RESULT_END---/g));
+  for (const match of resultBlocks.reverse()) {
+    const candidate = stripFence(match[1] ?? "");
+    if (isJson(candidate)) {
+      return candidate;
+    }
+  }
+
+  const fencedBlocks = Array.from(stdout.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi));
+  for (const match of fencedBlocks.reverse()) {
+    const candidate = (match[1] ?? "").trim();
+    if (isJson(candidate)) {
+      return candidate;
+    }
+  }
+
+  for (const candidate of jsonObjectCandidates(stdout).reverse()) {
+    if (isJson(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`Could not parse Flue JSON output for ${label}: ${stdout.slice(0, 1000)}`);
+}
+
+function stripFence(value: string): string {
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+  return (fenced?.[1] ?? trimmed).trim();
+}
+
+function isJson(value: string): boolean {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function jsonObjectCandidates(value: string): string[] {
+  const candidates: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+      } else if (char === "\\") {
+        escaping = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) {
+        start = index;
+      }
+      depth += 1;
+    } else if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(value.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+  return candidates;
 }
 
 function normalizeOutlookScore(value: unknown, unit: DocumentUnit): OutlookScore {
+  if (
+    value &&
+    typeof value === "object" &&
+    typeof (value as { text?: unknown }).text === "string"
+  ) {
+    return normalizeOutlookScore(
+      JSON.parse(extractJsonText((value as { text: string }).text, "finqa-outlook-scorer")),
+      unit
+    );
+  }
   const score = value as Partial<OutlookScore>;
   const severity = typeof score.severity === "number" ? Math.max(0, Math.min(3, Math.round(score.severity))) : 0;
   const polarity = score.polarity && ["negative", "neutral", "positive", "mixed"].includes(score.polarity)

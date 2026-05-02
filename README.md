@@ -59,6 +59,29 @@ Expected behavior:
 - Endorsement writes `.atlasfs/procedures/financial-analyst/average_payment_volume_per_transaction.{json,ts}`.
 - Replay: `mode: "procedure"`, answer `91.67`, one procedure call.
 
+## Live Terminal Submission Demo
+
+For the recording, use the live demo command. It starts from a clean local
+project memory folder, but uses MongoDB Atlas for data and Flue-backed agents
+for observer/scorer work. It refuses fixture fallback.
+
+```sh
+set -a; source .env; set +a
+pnpm atlasfs demo --project ./atlasfs-live-demo --reset
+```
+
+Expected visible story:
+
+1. Atlas status confirms FinQA cases, search units, and queryable Search indexes.
+2. A first table intent calls `finqa_cases.findSimilar`, table manipulation
+   primitives, and writes a `table_math` procedure.
+3. A sibling table intent replays as one `procedures.table_math` call.
+4. A negative-outlook intent uses live Flue agents, writes a reusable
+   `negativeOutlookReferenceScorerAgent`, and saves agentic procedure glue.
+5. A title/quote variant reuses the stored agent and writes only new procedure
+   glue.
+6. The final title/quote replay executes as one stored procedure call.
+
 ## Observer-Agent Proof Loop
 
 Some intermediate steps need an LLM to codify a reusable table-manipulation

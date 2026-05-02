@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import type { FlueContext } from "@flue/sdk/client";
-import * as v from "valibot";
 
 export const triggers = {};
 
@@ -25,20 +24,27 @@ Design posture:
 - The agent should score one short document unit at a time.
 - The agent must be reusable across sentences, headings, quotes, and other future unit extractors.
 - Do not specialize the interface to one exact sentence.
+- The returned JSON must match the host interface exactly.
+- Use agentName exactly: negativeOutlookReferenceScorerAgent.
+- Keep prompt under 900 characters.
+- Do not include markdown fences, examples, comments, or nested JSON inside prompt.
+- The prompt must instruct the scorer to return exactly:
+  { "isReference": boolean, "polarity": "negative"|"neutral"|"positive"|"mixed", "severity": 0|1|2|3, "rationale": string, "evidence": string }.
 
 User question:
 ${loadedPayload.question}
 
 Candidate unit examples:
-${JSON.stringify((loadedPayload.units ?? []).slice(0, 8), null, 2)}
+${JSON.stringify((loadedPayload.units ?? []).slice(0, 5), null, 2)}
 
-Return the typed agent interface for scoring negative competitive-outlook references about a target company.`,
-    {
-      result: v.object({
-        agentName: v.string(),
-        description: v.string(),
-        prompt: v.string()
-      })
-    }
+When complete, output exactly one JSON object between ---RESULT_START--- and ---RESULT_END---.
+Do not use markdown fences.
+
+Return this JSON object:
+{
+  "agentName": "negativeOutlookReferenceScorerAgent",
+  "description": "Scores one document unit for negative competitive-outlook references about a target company.",
+  "prompt": "A short reusable scorer prompt matching the required output schema."
+}`
   );
 }

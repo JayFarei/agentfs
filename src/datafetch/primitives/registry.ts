@@ -130,13 +130,13 @@ export const primitiveRegistry: PrimitiveDefinition[] = [
     description: "Runs the generated typed sentiment agent over a document excerpt."
   },
   {
-    name: "finqa_outlook.createOutlookScorerAgentSpec",
-    module: "/datafetch/db/finqa_outlook",
+    name: "finqa_observe.createAgentPrimitive",
+    module: "/datafetch/db/finqa_observe",
     signature:
-      "createOutlookScorerAgentSpec(args: { question: string; filing: FinqaCase; units: DocumentUnit[] }): Promise<OutlookScorerAgentSpec>",
+      "createAgentPrimitive(args: { question: string; filing: FinqaCase; units: DocumentUnit[]; capability: string }): Promise<OutlookScorerAgentSpec>",
     implementation: "flue",
     description:
-      "Observer-created reusable specialized agent interface for scoring short units as negative competitive-outlook references."
+      "Observer primitive that creates a reusable specialized agent interface when a trajectory needs a missing task capability."
   },
   {
     name: "finqa_outlook.scoreUnits",

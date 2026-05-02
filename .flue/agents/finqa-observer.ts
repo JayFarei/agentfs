@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import type { FlueContext } from "@flue/sdk/client";
-import * as v from "valibot";
 
 export const triggers = {};
 
@@ -52,13 +51,15 @@ The answer may be a number for a single metric or a concise string for a multi-y
 roundedAnswer must be a number when present; omit it for narrative/string answers if no single numeric answer applies.
 When a reviewed denominator names a table row, use that row directly by labelKey; do not reconstruct it from other rows unless the row is absent.
 For non-table glue, the generated function may accept a generic input object instead of a filing, but it must still return { answer, roundedAnswer, label, evidence }.
-Do not import packages. The source must be compatible with new Function.`,
-    {
-      result: v.object({
-        functionName: v.string(),
-        description: v.string(),
-        source: v.string()
-      })
-    }
+Do not import packages. The source must be compatible with new Function.
+
+When complete, output exactly one JSON object between ---RESULT_START--- and ---RESULT_END---.
+Do not use markdown fences.
+The JSON must contain:
+{
+  "functionName": "camelCaseName",
+  "description": "one sentence",
+  "source": "function camelCaseName(input) { ... }"
+}`
   );
 }

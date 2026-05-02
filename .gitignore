@@ -2,6 +2,10 @@
 .agent-trace/
 node_modules/
 dist/
+web/dist/
+web/src/**/*.js
+web/tsconfig.tsbuildinfo
+src/server/types.js
 .env
 .env.local
 data/

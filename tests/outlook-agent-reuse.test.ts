@@ -37,7 +37,7 @@ describe("negative outlook scorer reuse", () => {
       "finqa_resolve.pickFiling",
       "document_units.sentences",
       "agent_store.findReusable",
-      "finqa_outlook.createOutlookScorerAgentSpec",
+      "finqa_observe.createAgentPrimitive",
       "agent_store.save",
       "finqa_outlook.scoreUnits",
       "finqa_observe.codifyTableFunction",
@@ -131,7 +131,7 @@ describe("negative outlook scorer reuse", () => {
       "finqa_observe.executeCodifiedFunction",
       "procedure_store.save"
     ]);
-    expect(callNames(titleIntent)).not.toContain("finqa_outlook.createOutlookScorerAgentSpec");
+    expect(callNames(titleIntent)).not.toContain("finqa_observe.createAgentPrimitive");
     expect(callNames(titleIntent)).not.toContain("agent_store.save");
     const afterTitle = await artifactSnapshot(harness.baseDir, harness.tenantId);
     expectOnlyArtifactDelta(beforeTitle, afterTitle, { trajectories: 1, procedures: 2 });

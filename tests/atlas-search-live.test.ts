@@ -135,7 +135,7 @@ liveDescribe("MongoDB Atlas Search-backed evolution", () => {
 
     expect(sentenceIntent.mode).toBe("novel");
     expect(sentenceIntent.answer).toBe("4 negative competitive outlook sentence references");
-    expect(callNames(sentenceIntent)).toContain("finqa_outlook.createOutlookScorerAgentSpec");
+    expect(callNames(sentenceIntent)).toContain("finqa_observe.createAgentPrimitive");
     expect(callNames(sentenceIntent)).toContain("procedure_store.save");
 
     const titleIntent = await runQuery({
@@ -150,7 +150,7 @@ liveDescribe("MongoDB Atlas Search-backed evolution", () => {
     expect(titleIntent.mode).toBe("novel");
     expect(titleIntent.answer).toBe("1 negative competitive outlook title or quote references");
     expect(callNames(titleIntent)).toContain("agent_store.findReusable");
-    expect(callNames(titleIntent)).not.toContain("finqa_outlook.createOutlookScorerAgentSpec");
+    expect(callNames(titleIntent)).not.toContain("finqa_observe.createAgentPrimitive");
 
     const agent = await readAgentJson<{ capability: string; agentName: string }>(
       baseDir,

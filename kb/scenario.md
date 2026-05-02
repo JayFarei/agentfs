@@ -207,7 +207,7 @@ Primitive and procedure notes:
 | `document_units.sentences` | Execute primitive that turns document text into sentence-level evidence units. |
 | `document_units.titleOrQuoteUnits` | Execute primitive that changes the evidence surface to headings and quote-like units. |
 | `agent_store.findReusable` | Observe/search step that checks whether the tenant already has a matching agent primitive. |
-| `finqa_outlook.createOutlookScorerAgentSpec` | Observe primitive that creates the reusable typed scorer agent when none exists. |
+| `finqa_observe.createAgentPrimitive` | Observe primitive that creates the reusable typed scorer agent when none exists. |
 | `agent_store.save` | Observe/persist step that stores the new agent primitive for future composition. |
 | `finqa_outlook.scoreUnits` | Agent primitive that scores each evidence unit for negative competitive-outlook relevance. |
 | `finqa_observe.codifyTableFunction` | Observe primitive that writes deterministic TypeScript glue around the scored units. |

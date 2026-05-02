@@ -4,12 +4,13 @@ import { createTaskAgentRuntime } from "./datafetch/db/finqa_agent.js";
 import { createOutlookAgentRuntime } from "./datafetch/db/finqa_outlook.js";
 import { loadAllFinqaToAtlas, loadFinqaToAtlas } from "./loader/loadFinqaToAtlas.js";
 import { getAtlasSearchStatus, setupAtlasSearch } from "./loader/setupAtlasSearch.js";
+import { runLiveDemo } from "./demo.js";
 import { endorseTrajectory, loadLocalDemoCases, reviewDraft, runQuery } from "./runner.js";
 
 function parseFlags(argv: string[]): { positionals: string[]; flags: Record<string, string | boolean> } {
   const positionals: string[] = [];
   const flags: Record<string, string | boolean> = {};
-  const booleanFlags = new Set(["all", "local", "no-wait", "reset", "yes"]);
+  const booleanFlags = new Set(["all", "local", "no-wait", "reset", "skip-atlas-check", "yes"]);
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!arg.startsWith("--")) {
@@ -56,6 +57,7 @@ Commands:
   pnpm atlasfs load-finqa [--all] [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
   pnpm atlasfs setup-search [--no-wait]
   pnpm atlasfs atlas-status
+  pnpm atlasfs demo [--project ./demo-project] [--reset] [--tenant financial-analyst]
   pnpm atlasfs run "question" [--tenant financial-analyst] [--local] [--observer fixture|anthropic|flue] [--task-agent fixture|flue] [--outlook-agent fixture|flue]
   pnpm atlasfs review <draft-id> --confirm "guidance"
   pnpm atlasfs review <draft-id> --specify "extra requirement" [--local]
@@ -66,6 +68,10 @@ Commands:
 Environment for Atlas:
   MONGODB_URI      MongoDB Atlas connection string for the Sandbox Project
   ATLAS_DB_NAME    Database name, defaults to atlasfs_hackathon
+
+Live demo:
+  Uses MongoDB Atlas plus live Flue agents by default. It refuses fixture fallback.
+  Requires ANTHROPIC_API_KEY or ANTHROPIC_KEY.
 `);
 }
 
@@ -114,6 +120,26 @@ async function main(): Promise<void> {
   if (command === "atlas-status") {
     const result = await getAtlasSearchStatus();
     console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "demo") {
+    const observer = flagString(flags, "observer") ?? "flue";
+    const outlookAgent = flagString(flags, "outlook-agent") ?? "flue";
+    if (observer !== "flue" && observer !== "anthropic") {
+      throw new Error("Live demo observer must be --observer flue or --observer anthropic; fixture is not allowed.");
+    }
+    if (outlookAgent !== "flue") {
+      throw new Error("Live demo outlook agent must be --outlook-agent flue; fixture is not allowed.");
+    }
+    await runLiveDemo({
+      projectDir: flagString(flags, "project") ?? "atlasfs-live-demo",
+      tenantId: flagString(flags, "tenant") ?? "financial-analyst",
+      reset: Boolean(flags.reset),
+      observer,
+      outlookAgent,
+      skipAtlasCheck: Boolean(flags["skip-atlas-check"])
+    });
     return;
   }
 

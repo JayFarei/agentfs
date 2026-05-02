@@ -6,10 +6,17 @@
   "scripts": {
     "atlasfs": "tsx src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "api": "tsx watch src/server/server.ts",
+    "api:once": "tsx src/server/server.ts",
+    "web": "pnpm --dir web dev",
+    "web:install": "pnpm --dir web install",
+    "demo": "pnpm api & pnpm web; kill %1 2>/dev/null"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
+    "@hono/node-server": "^2.0.1",
+    "hono": "^4.12.16",
     "mongodb": "^6.21.0",
     "valibot": "^1.3.1"
   },

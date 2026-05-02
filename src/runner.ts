@@ -652,16 +652,17 @@ async function runNegativeOutlookQuery(args: {
   );
   if (!spec) {
     spec = await recorder.call(
-      "finqa_outlook.createOutlookScorerAgentSpec",
+      "finqa_observe.createAgentPrimitive",
       { question: args.question, filename: filing.filename, unitCount: units.length },
       () =>
-        finqa_outlook.createOutlookScorerAgentSpec(
+        finqa_observe.createAgentPrimitive(
           {
             question: args.question,
             filing,
-            units
+            units,
+            capability: "negative_outlook_reference_scoring"
           },
-          args.outlookAgentRuntime ?? createOutlookAgentRuntime()
+          args.observerRuntime ?? createObserverRuntime()
         )
     );
     const createdSpec = spec;
