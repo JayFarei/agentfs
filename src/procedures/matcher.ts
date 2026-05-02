@@ -41,6 +41,15 @@ export function isRevenueShareIntent(question: string): boolean {
   return asksForShare && mentionsRevenue && mentionsSegment;
 }
 
+export function isTableMathIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  return (
+    /\b(range|change|difference)\b/.test(q) ||
+    ((q.includes("percentage") || q.includes("percent") || q.includes("portion") || q.includes("share")) &&
+      /\b20\d{2}\b/.test(q))
+  );
+}
+
 export function isNegativeOutlookTitleOrQuoteIntent(question: string): boolean {
   const q = question.toLowerCase();
   return (
@@ -82,6 +91,8 @@ export function matchProcedure(question: string, procedures: StoredProcedure[]):
       ? "document_sentiment"
     : isRevenueShareIntent(question)
       ? "revenue_share"
+    : isTableMathIntent(question)
+      ? "table_math"
     : isAveragePaymentVolumeIntent(question)
       ? "average_payment_volume_per_transaction"
       : null;

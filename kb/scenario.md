@@ -125,6 +125,63 @@ Proven scenarios:
    - Intent 2 reuses the same agent for title/quote units and creates only new glue.
    - Replay uses the persisted agent and one title/quote procedure call.
 
+6. Generic table-math crystallisation:
+   - Intent 1 composes `findSimilar -> pickFiling -> finqa_table_math.inferPlan -> finqa_table_math.execute`.
+   - The successful chain persists `table_math.{json,ts}` for the tenant.
+   - A similar table-math query over the same filing replays through one `procedures.table_math` call.
+
+## Four-Intent Demo Happy Paths
+
+These are the two live-demo paths the tests now model. Each path starts from a
+blank tenant home so the appearing files are attributable to the queries in
+that path.
+
+### Path A: Deterministic Primitive Becomes A Procedure
+
+```text
+Intent 1
+  User: range for chemical revenue, 2014-2016
+  Chain: search -> execute -> observe/persist
+  Result: 190
+  New artifacts:
+    trajectories/<id>.json
+    procedures/table_math.json
+    procedures/table_math.ts
+
+Intent 2
+  User: range for coal revenue, 2014-2016
+  Chain: procedures.table_math
+  Result: 1687
+  New artifacts: none
+```
+
+What this proves: a generic execute primitive can become a typed procedure, and
+the procedure shortens a similar future query without creating another chain.
+
+### Path B: A Primitive Can Be An Agent
+
+```text
+Intent 3
+  User: negative competitive outlook references about Visa, sentence evidence
+  Chain: search -> execute -> observe
+  Result: 4 sentence references
+  New artifacts:
+    agents/negativeOutlookReferenceScorerAgent.json
+    procedures/negative_outlook_references.json
+    procedures/negative_outlook_references.ts
+
+Intent 4
+  User: negative competitive outlook references about Visa, titles or quotes
+  Chain: search -> execute existing agent -> observe new glue
+  Result: 1 title/quote reference
+  New artifacts:
+    procedures/negative_outlook_title_or_quote_references.json
+    procedures/negative_outlook_title_or_quote_references.ts
+```
+
+What this proves: the agent itself is a typed primitive, and the second intent
+can reuse it while the observer writes only the new compositional glue.
+
 ## Storage Boundary
 
 MongoDB Atlas is the data plane:

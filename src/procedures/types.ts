@@ -10,6 +10,7 @@ export type StoredProcedure = {
       | "largest_average_payment_volume_per_transaction"
       | "document_sentiment"
       | "revenue_share"
+      | "table_math"
       | "negative_outlook_references"
       | "negative_outlook_title_or_quote_references";
     examples: string[];
@@ -20,6 +21,9 @@ export type StoredProcedure = {
     denominator?: string;
     years?: string[];
     includeChange?: boolean;
+    operation?: "difference" | "range" | "share";
+    rowLabel?: string;
+    denominatorRowLabel?: string;
     target?: string;
     lens?: "competitive_outlook";
     unitKind?: "sentence" | "title_or_quote";
@@ -48,6 +52,10 @@ export type StoredProcedure = {
         source: string;
         observer: "fixture" | "anthropic" | "flue";
         agentName: string;
+      }
+    | {
+        kind: "table_math";
+        primitive: "finqa_table_math";
       };
 };
 

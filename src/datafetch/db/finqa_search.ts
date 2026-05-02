@@ -38,7 +38,7 @@ type SearchIndexModel = {
 
 type RetrievalQuery = {
   text: string;
-  target?: string;
+  targetPhrases: string[];
 };
 
 export function finqaCasesCollection(db: Db): Collection<FinqaCase> {
@@ -273,35 +273,26 @@ function caseSearchCompound(query: string, retrievalQuery: RetrievalQuery): Docu
   ];
 
   return {
-    ...(retrievalQuery.target
+    ...(retrievalQuery.targetPhrases.length > 0
       ? {
-          must: [
-            {
-              text: {
-                query: retrievalQuery.target,
-                path: ["preText", "postText", "searchableText", "table"]
-              }
-            }
-          ]
+          must: retrievalQuery.targetPhrases.map((target) => targetTextClause(target, [
+            "preText",
+            "postText",
+            "searchableText",
+            "table"
+          ]))
         }
       : {}),
     should,
-    minimumShouldMatch: retrievalQuery.target ? 0 : 1
+    minimumShouldMatch: retrievalQuery.targetPhrases.length > 0 ? 0 : 1
   };
 }
 
 function unitSearchCompound(retrievalQuery: RetrievalQuery): Document {
   return {
-    ...(retrievalQuery.target
+    ...(retrievalQuery.targetPhrases.length > 0
       ? {
-          must: [
-            {
-              text: {
-                query: retrievalQuery.target,
-                path: "text"
-              }
-            }
-          ]
+          must: retrievalQuery.targetPhrases.map((target) => targetTextClause(target, "text"))
         }
       : {}),
     should: [
@@ -327,14 +318,24 @@ function unitSearchCompound(retrievalQuery: RetrievalQuery): Document {
         }
       }
     ],
-    minimumShouldMatch: retrievalQuery.target ? 0 : 1
+    minimumShouldMatch: retrievalQuery.targetPhrases.length > 0 ? 0 : 1
+  };
+}
+
+function targetTextClause(query: string, path: string | string[]): Document {
+  return {
+    text: {
+      query,
+      path,
+      matchCriteria: "all"
+    }
   };
 }
 
 function buildRetrievalQuery(query: string): RetrievalQuery {
   const lower = query.toLowerCase();
   const terms = meaningfulTerms(query);
-  const target = inferTargetTerm(lower);
+  const targetPhrases = inferTargetPhrases(query);
 
   if (lower.includes("outlook") || lower.includes("competitive") || lower.includes("competition")) {
     terms.push(
@@ -362,27 +363,76 @@ function buildRetrievalQuery(query: string): RetrievalQuery {
     terms.push("agricultural", "products", "freight", "revenues", "operating");
   }
 
-  if (target) {
-    terms.push(...target.split(/\s+/));
+  for (const target of targetPhrases) {
+    terms.push(...target.toLowerCase().split(/\s+/));
   }
 
   return {
     text: Array.from(new Set(terms)).join(" ") || query,
-    target
+    targetPhrases
   };
 }
 
-function inferTargetTerm(lowerQuery: string): string | undefined {
-  if (lowerQuery.includes("american express")) {
-    return "american express";
+function inferTargetPhrases(query: string): string[] {
+  const candidates = [
+    ...capitalizedPhrases(query),
+    ...quotedPhrases(query),
+    ...prepositionTargetPhrases(query)
+  ];
+  const seen = new Set<string>();
+  return candidates
+    .map((candidate) => candidate.toLowerCase().replace(/'s\b/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim())
+    .filter((candidate) => candidate.length > 2 && !isGenericTargetPhrase(candidate))
+    .filter((candidate) => {
+      if (seen.has(candidate)) {
+        return false;
+      }
+      seen.add(candidate);
+      return true;
+    });
+}
+
+function capitalizedPhrases(query: string): string[] {
+  return Array.from(query.matchAll(/\b[A-Z][a-z0-9]+(?:['’]s)?(?:\s+[A-Z][a-z0-9]+(?:['’]s)?)*\b/g))
+    .map((match) => match[0])
+    .filter((phrase) => phrase.length > 2);
+}
+
+function quotedPhrases(query: string): string[] {
+  return Array.from(query.matchAll(/["']([^"']{3,80})["']/g)).map((match) => match[1]);
+}
+
+function prepositionTargetPhrases(query: string): string[] {
+  const phrases: string[] = [];
+  const matches = query.matchAll(/\b(?:about|for)\s+([a-z][a-z0-9&.'-]*(?:\s+[a-z][a-z0-9&.'-]*){0,2})/gi);
+  for (const match of matches) {
+    const phrase = match[1]
+      .replace(/\b(in|from|with|by|at|on|per|that|which|who|what|when|where)\b.*$/i, "")
+      .trim();
+    if (phrase) {
+      phrases.push(phrase);
+    }
   }
-  if (lowerQuery.includes("union pacific")) {
-    return "union pacific";
-  }
-  if (lowerQuery.includes("visa")) {
-    return "visa";
-  }
-  return undefined;
+  return phrases;
+}
+
+function isGenericTargetPhrase(candidate: string): boolean {
+  const generic = new Set([
+    "find",
+    "what",
+    "which",
+    "show",
+    "calculate",
+    "considering",
+    "for",
+    "from",
+    "in",
+    "as",
+    "the"
+  ]);
+  return candidate
+    .split(/\s+/)
+    .every((token) => generic.has(token) || /^\d+$/.test(token));
 }
 
 function meaningfulTerms(query: string): string[] {

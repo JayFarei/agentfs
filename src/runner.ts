@@ -24,8 +24,14 @@ import {
   type SentimentLabel,
   type TaskAgentRuntime
 } from "./datafetch/db/finqa_agent.js";
+import { finqa_table_math } from "./datafetch/db/finqa_table_math.js";
 import { finqa_resolve } from "./datafetch/db/finqa_resolve.js";
-import { LocalProcedureStore, buildNegativeOutlookProcedure, buildProcedureFromTrajectory } from "./procedures/store.js";
+import {
+  LocalProcedureStore,
+  buildNegativeOutlookProcedure,
+  buildProcedureFromTrajectory,
+  buildTableMathProcedure
+} from "./procedures/store.js";
 import {
   extractCompany,
   isLargestAveragePaymentVolumeIntent,
@@ -33,6 +39,7 @@ import {
   isNegativeOutlookReferencesIntent,
   isNegativeOutlookTitleOrQuoteIntent,
   isRevenueShareIntent,
+  isTableMathIntent,
   matchProcedure
 } from "./procedures/matcher.js";
 import { LocalAgentStore } from "./agents/store.js";
@@ -111,6 +118,33 @@ export async function runQuery(args: {
   const matched = matchProcedure(args.question, procedures);
 
   if (matched) {
+    if (matched.procedure.implementation.kind === "table_math") {
+      const [filing] = await finqaCases.findExact({ filename: matched.procedure.params.filename }, 1);
+      if (!filing) {
+        throw new Error(`No filing found for ${matched.procedure.params.filename}`);
+      }
+      const plan = finqa_table_math.inferPlan({ question: args.question, filing });
+      const result = finqa_table_math.execute({ filing, plan });
+      return {
+        mode: "procedure",
+        answer: result.answer,
+        roundedAnswer: result.roundedAnswer,
+        procedureName: matched.procedure.name,
+        calls: [
+          {
+            primitive: `procedures.${matched.procedure.name}`,
+            input: {
+              filename: matched.procedure.params.filename,
+              question: args.question,
+              primitive: matched.procedure.implementation.primitive
+            },
+            output: result
+          }
+        ],
+        evidence: result.evidence
+      };
+    }
+
     if (matched.procedure.implementation.kind === "agentic_ts_function") {
       const [filing] = await finqaCases.findExact({ filename: matched.procedure.params.filename }, 1);
       if (!filing) {
@@ -298,6 +332,15 @@ export async function runQuery(args: {
     });
   }
 
+  if (isTableMathIntent(args.question)) {
+    return runTableMathQuery({
+      question: args.question,
+      tenantId,
+      baseDir,
+      finqaCases
+    });
+  }
+
   const recorder = new TrajectoryRecorder({ tenantId, question: args.question });
   const candidates = await recorder.call("finqa_cases.findSimilar", { question: args.question, limit: 10 }, (input) =>
     finqaCases.findSimilar(input.question, input.limit)
@@ -333,6 +376,54 @@ export async function runQuery(args: {
     answer: result.answer,
     roundedAnswer: result.roundedAnswer,
     trajectoryId: recorder.id,
+    calls: recorder.snapshot.calls,
+    evidence: result.evidence
+  };
+}
+
+async function runTableMathQuery(args: {
+  question: string;
+  tenantId: string;
+  baseDir: string;
+  finqaCases: FinqaCasesPrimitive;
+}): Promise<RunQueryResult> {
+  const recorder = new TrajectoryRecorder({ tenantId: args.tenantId, question: args.question });
+  const candidates = await recorder.call("finqa_cases.findSimilar", { question: args.question, limit: 10 }, (input) =>
+    args.finqaCases.findSimilar(input.question, input.limit)
+  );
+  const filing = await recorder.call("finqa_resolve.pickFiling", { question: args.question, candidates }, (input) =>
+    finqa_resolve.pickFiling(input)
+  );
+  const plan = await recorder.call("finqa_table_math.inferPlan", { question: args.question, filename: filing.filename }, () =>
+    finqa_table_math.inferPlan({ question: args.question, filing })
+  );
+  const result = await recorder.call("finqa_table_math.execute", { filename: filing.filename, plan }, (input) =>
+    finqa_table_math.execute({ filing, plan: input.plan })
+  );
+  const procedure = buildTableMathProcedure({
+    tenantId: args.tenantId,
+    question: args.question,
+    sourceTrajectoryId: recorder.id,
+    filename: filing.filename,
+    plan
+  });
+  await recorder.call("procedure_store.save", { procedureName: procedure.name, filename: filing.filename }, () =>
+    new LocalProcedureStore(args.baseDir).save(procedure)
+  );
+
+  recorder.setResult({
+    answer: result.answer,
+    roundedAnswer: result.roundedAnswer,
+    evidence: result.evidence
+  });
+  await recorder.save(args.baseDir);
+
+  return {
+    mode: "novel",
+    answer: result.answer,
+    roundedAnswer: result.roundedAnswer,
+    trajectoryId: recorder.id,
+    procedureName: procedure.name,
     calls: recorder.snapshot.calls,
     evidence: result.evidence
   };

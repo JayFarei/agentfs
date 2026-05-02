@@ -29,6 +29,18 @@ function tokenOverlap(a: string, b: string): number {
   return score;
 }
 
+function normalizedTokenOverlap(a: string, b: string): number {
+  const left = new Set(normalizeKey(a).split("_").filter((token) => token.length > 1));
+  const right = new Set(normalizeKey(b).split("_").filter((token) => token.length > 1));
+  let score = 0;
+  for (const token of left) {
+    if (right.has(token) || (token.endsWith("s") && right.has(token.slice(0, -1)))) {
+      score += 1;
+    }
+  }
+  return score;
+}
+
 function tickerHintScore(question: string, candidate: FinqaCase): number {
   const q = question.toLowerCase();
   if ((q.includes("visa") || q.includes("payment network")) && candidate.filename.startsWith("V/")) {
@@ -46,6 +58,14 @@ function tickerHintScore(question: string, candidate: FinqaCase): number {
 function backendSearchScore(candidate: FinqaCase): number {
   const score = (candidate as FinqaCase & { score?: unknown }).score;
   return typeof score === "number" ? score : 0;
+}
+
+function tableLabelScore(question: string, candidate: FinqaCase): number {
+  const bestRowScore = candidate.table.rows.reduce(
+    (best, row) => Math.max(best, normalizedTokenOverlap(question, row.label)),
+    0
+  );
+  return bestRowScore * 12;
 }
 
 function inferCompanyKey(question: string, filing: FinqaCase): string | null {
@@ -96,6 +116,7 @@ export const finqa_resolve: FinqaResolvePrimitive = {
         candidate,
         score:
           backendSearchScore(candidate) +
+          tableLabelScore(args.question, candidate) +
           tokenOverlap(args.question, candidate.searchableText) +
           tickerHintScore(args.question, candidate)
       }))

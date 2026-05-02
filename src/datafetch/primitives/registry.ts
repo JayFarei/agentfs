@@ -75,6 +75,24 @@ export const primitiveRegistry: PrimitiveDefinition[] = [
     description: "Locate a numeric table cell needed by the current derivation. Deterministic now, replaceable by a Flue sub-agent later."
   },
   {
+    name: "finqa_table_math.inferPlan",
+    module: "/datafetch/db/finqa_table_math",
+    signature:
+      "inferPlan(args: { question: string; filing: FinqaCase }): TableMathPlan",
+    implementation: "local",
+    description:
+      "Generic execute helper that infers a small table operation plan from retrieved data and the question, without source-specific rules."
+  },
+  {
+    name: "finqa_table_math.execute",
+    module: "/datafetch/db/finqa_table_math",
+    signature:
+      "execute(args: { filing: FinqaCase; plan: TableMathPlan }): TableMathResult",
+    implementation: "local",
+    description:
+      "Executes generic table operations such as share, range, and difference over a normalized filing table."
+  },
+  {
     name: "arithmetic.divide",
     module: "/datafetch/db/arithmetic",
     signature: "divide(numerator: number, denominator: number): number",
