@@ -8,6 +8,101 @@ Local-first proof of the AtlasFS typed-primitive loop:
 4. Endorsement crystallizes the trajectory into a local procedure file.
 5. A sibling question replays through the saved procedure.
 
+## Demo App Setup
+
+Use this path if you are judging or running the demo yourself. The demo has two
+front doors:
+
+- **UI demo:** a Vite/React app for clicking through Alice and Bob's evolving
+  tenant state.
+- **CLI demo:** a terminal fallback that runs the same live Atlas + Flue proof
+  loop and prints the trajectories/artifacts as it goes.
+
+Both demos use MongoDB Atlas for the FinQA data/search plane and Anthropic via
+Flue for the observer-created agent path.
+
+Prerequisites:
+
+- Node.js 24+ or any Node version with `process.loadEnvFile` support.
+- `pnpm`.
+- A MongoDB Atlas connection string for a cluster with the FinQA data loaded.
+- An Anthropic API key. This is required for the live Flue observer/scorer
+  path; without it, the agent-creation part of the demo cannot run live.
+
+Create `.env` in the repo root:
+
+```sh
+ATLAS_URI='mongodb+srv://...'
+ATLAS_DB_NAME='atlasfs_hackathon'
+ANTHROPIC_API_KEY='sk-ant-...'
+
+# Required for the UI demo to use live Flue agents instead of fixture runtimes.
+ATLASFS_OBSERVER='flue'
+ATLASFS_OUTLOOK_AGENT='flue'
+```
+
+Install dependencies:
+
+```sh
+pnpm install
+pnpm web:install
+```
+
+Confirm Atlas is reachable and the Search indexes are queryable:
+
+```sh
+pnpm atlasfs atlas-status
+```
+
+Start the UI demo app:
+
+```sh
+pnpm demo
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+The API runs on `http://localhost:5174`; Vite proxies `/api` calls from the web
+app to that API server.
+
+Run the CLI demo instead:
+
+```sh
+pnpm atlasfs demo --project ./atlasfs-live-demo --reset
+```
+
+The CLI path is useful if the UI is not available during judging. It uses the
+same Atlas-backed data plane and live Flue observer/scorer path, then prints the
+mode, answer, primitive calls, and newly created artifacts for each staged
+intent.
+
+For a clean first-run demo, reset Alice and Bob in the UI with `[ start over ]`
+or start with a fresh memory folder:
+
+```sh
+ATLASFS_HOME=/tmp/atlasfs-demo pnpm demo
+```
+
+Demo limitations compared to `kb/product-design.md`:
+
+- Retrieval currently uses Atlas Search lexical relevance via `$search`, not
+  the full planned Voyage embedding + reranking + `$rankFusion` hybrid path.
+- Tenant evolution is stored in local `.atlasfs` files; the design calls for a
+  durable multi-tenant store such as Durable Objects or MongoDB-backed tenant
+  state.
+- The demo supports a small set of FinQA-shaped intent families instead of a
+  broad, open-ended procedure induction surface.
+- Procedure replay is typed and one-call at the runner level, but the later
+  optimisation worker that compiles hot procedures into cheaper Atlas
+  aggregation pipelines is not implemented yet.
+- Flue creates the observer/agent artifacts live, but safety review,
+  sandboxing, versioning, and promotion workflows are minimal hackathon
+  versions rather than the full governance layer in the product design.
+
 ## Atlas Setup
 
 Target MongoDB project: `gabriele.farei@gmail.com` / `Sandbox Project` for MongoDB.local London.
