@@ -22,6 +22,38 @@ export type FinqaCasesPrimitive = {
     filename: string;
     company: string;
   }): Promise<{ answer: number; roundedAnswer: number; evidence: unknown[] }>;
+  runRevenueShare(args: RevenueShareArgs): Promise<RevenueShareResult>;
+};
+
+export type RevenueShareArgs = {
+  filename: string;
+  segment: string;
+  denominator: string;
+  years: string[];
+  includeChange?: boolean;
+};
+
+export type RevenueShareYearResult = {
+  year: string;
+  numerator: number;
+  denominator: number;
+  percentage: number;
+  roundedPercentage: number;
+  rowLabel: string;
+  denominatorRowLabel: string;
+};
+
+export type RevenueShareResult = {
+  answer: number | string;
+  roundedAnswer?: number;
+  rows: RevenueShareYearResult[];
+  change?: {
+    fromYear: string;
+    toYear: string;
+    percentagePointChange: number;
+    roundedPercentagePointChange: number;
+  };
+  evidence: unknown[];
 };
 
 function caseCollection(db: Db): Collection<FinqaCase> {
@@ -68,6 +100,124 @@ function normalizeCompanyName(company: string): string {
     return "american_express";
   }
   return key;
+}
+
+function normalizeRevenueRowName(name: string): string {
+  const key = normalizeKey(name);
+  const aliases: Record<string, string> = {
+    agriculture: "agricultural_products",
+    agricultural: "agricultural_products",
+    agriculture_products: "agricultural_products",
+    agricultural_commodity_group: "agricultural_products",
+    chemicals_freight: "chemicals",
+    chemical_freight: "chemicals",
+    operating_revenue: "total_operating_revenues",
+    operating_revenues: "total_operating_revenues",
+    total_operating_revenue: "total_operating_revenues",
+    freight_revenue: "total_freight_revenues",
+    freight_revenues: "total_freight_revenues",
+    total_freight_revenue: "total_freight_revenues"
+  };
+  return aliases[key] ?? key;
+}
+
+function findRevenueRow(filing: FinqaCase, requested: string) {
+  const requestedKey = normalizeRevenueRowName(requested);
+  const exact = filing.table.rows.find((row) => row.labelKey === requestedKey);
+  if (exact) {
+    return exact;
+  }
+
+  const partial = filing.table.rows.find(
+    (row) => row.labelKey.includes(requestedKey) || requestedKey.includes(row.labelKey)
+  );
+  if (partial) {
+    return partial;
+  }
+
+  throw new Error(`No row found for ${requested} in ${filing.filename}`);
+}
+
+function formatPercent(value: number): string {
+  return `${round2(value).toFixed(2)}%`;
+}
+
+function formatSignedPoints(value: number): string {
+  const rounded = round2(value);
+  return `${rounded >= 0 ? "+" : ""}${rounded.toFixed(2)} pp`;
+}
+
+function revenueShareAnswer(rows: RevenueShareYearResult[], change?: RevenueShareResult["change"]): number | string {
+  if (rows.length === 1 && !change) {
+    return rows[0].percentage;
+  }
+
+  const rowText = rows.map((row) => `${row.year}: ${formatPercent(row.percentage)}`).join("; ");
+  if (!change) {
+    return rowText;
+  }
+  return `${rowText}; change: ${formatSignedPoints(change.percentagePointChange)}`;
+}
+
+function computeRevenueShare(filing: FinqaCase, args: RevenueShareArgs): RevenueShareResult {
+  const segmentRow = findRevenueRow(filing, args.segment);
+  const denominatorRow = findRevenueRow(filing, args.denominator);
+  const years = args.years.length > 0 ? args.years : filing.table.headerKeys.filter((key) => /^20\d{2}$/.test(key)).slice(0, 1);
+  if (years.length === 0) {
+    throw new Error(`No year columns found in ${filing.filename}`);
+  }
+
+  const rows = years.map((year) => {
+    const yearKey = normalizeKey(year);
+    const numerator = segmentRow.cells.find((cell) => cell.columnKey === yearKey);
+    const denominator = denominatorRow.cells.find((cell) => cell.columnKey === yearKey);
+    if (numerator?.value == null) {
+      throw new Error(`Missing ${segmentRow.label} value for ${year} in ${filing.filename}`);
+    }
+    if (denominator?.value == null || denominator.value === 0) {
+      throw new Error(`Missing usable ${denominatorRow.label} value for ${year} in ${filing.filename}`);
+    }
+    const percentage = (numerator.value / denominator.value) * 100;
+    return {
+      year: yearKey,
+      numerator: numerator.value,
+      denominator: denominator.value,
+      percentage,
+      roundedPercentage: round2(percentage),
+      rowLabel: segmentRow.label,
+      denominatorRowLabel: denominatorRow.label
+    };
+  });
+
+  const change =
+    args.includeChange && rows.length >= 2
+      ? {
+          fromYear: rows[0].year,
+          toYear: rows[1].year,
+          percentagePointChange: rows[0].percentage - rows[1].percentage,
+          roundedPercentagePointChange: round2(rows[0].percentage - rows[1].percentage)
+        }
+      : undefined;
+
+  return {
+    answer: revenueShareAnswer(rows, change),
+    roundedAnswer: rows.length === 1 ? rows[0].roundedPercentage : undefined,
+    rows,
+    change,
+    evidence: [
+      {
+        caseId: filing.id,
+        filename: filing.filename,
+        segmentRow: segmentRow.label,
+        denominatorRow: denominatorRow.label,
+        years: rows.map((row) => ({
+          year: row.year,
+          numerator: row.numerator,
+          denominator: row.denominator
+        }))
+      }
+    ]
+  };
 }
 
 function localAveragePaymentVolume(
@@ -206,6 +356,14 @@ async function mongoAveragePaymentVolume(
   };
 }
 
+async function mongoRevenueShare(collection: Collection<FinqaCase>, args: RevenueShareArgs): Promise<RevenueShareResult> {
+  const filing = await collection.findOne({ filename: args.filename });
+  if (!filing) {
+    throw new Error(`No FinQA case found for filename ${args.filename}`);
+  }
+  return computeRevenueShare(filing, args);
+}
+
 export function createFinqaCasesPrimitive(backend: FinqaCasesBackend): FinqaCasesPrimitive {
   return {
     async findExact(filter, limit = 10) {
@@ -259,6 +417,18 @@ export function createFinqaCasesPrimitive(backend: FinqaCasesBackend): FinqaCase
       }
 
       return mongoAveragePaymentVolume(caseCollection(backend.db), args);
+    },
+
+    async runRevenueShare(args) {
+      if (backend.kind === "local") {
+        const filing = backend.cases.find((candidate) => candidate.filename === args.filename);
+        if (!filing) {
+          throw new Error(`No FinQA case found for filename ${args.filename}`);
+        }
+        return computeRevenueShare(filing, args);
+      }
+
+      return mongoRevenueShare(caseCollection(backend.db), args);
     }
   };
 }

@@ -38,6 +38,15 @@ export const primitiveRegistry: PrimitiveDefinition[] = [
     description: "Hybrid retrieval contract. It starts as text search and is the stable call site for future $rankFusion over vector and lexical search."
   },
   {
+    name: "finqa_cases.runRevenueShare",
+    module: "/datafetch/db/finqa_cases",
+    signature:
+      "runRevenueShare(args: { filename: string; segment: string; denominator: string; years: string[]; includeChange?: boolean }): Promise<RevenueShareResult>",
+    implementation: "atlas",
+    description:
+      "Atlas-backed primitive for computing a revenue segment as a percentage of a selected denominator row across one or more years."
+  },
+  {
     name: "finqa_resolve.pickFiling",
     module: "/datafetch/db/finqa_resolve",
     signature: "pickFiling(args: { question: string; candidates: FinqaCase[]; priorTickers?: string[] }): Promise<FinqaCase>",

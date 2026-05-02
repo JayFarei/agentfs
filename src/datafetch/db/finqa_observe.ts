@@ -25,14 +25,18 @@ export type ObserverRuntime = {
 };
 
 export type ObserverResult = {
-  answer: number;
-  roundedAnswer: number;
+  answer: number | string;
+  roundedAnswer?: number;
   label: string;
   evidence: unknown[];
 };
 
 export class FixtureObserverRuntime implements ObserverRuntime {
-  async codifyTableFunction(): Promise<CodifiedTableFunction> {
+  async codifyTableFunction(args: CodifyTableFunctionArgs): Promise<CodifiedTableFunction> {
+    if (isRevenueShareCodification(args.question)) {
+      return fixtureRevenueShareFunction(args.question);
+    }
+
     return {
       functionName: "largestAveragePaymentVolumePerTransaction",
       description:
@@ -68,6 +72,95 @@ export class FixtureObserverRuntime implements ObserverRuntime {
 }`
     };
   }
+}
+
+function isRevenueShareCodification(question: string): boolean {
+  const q = question.toLowerCase();
+  return q.includes("reviewed requirements") && q.includes("revenue") && q.includes("segment:");
+}
+
+function reviewedValue(question: string, key: string): string | null {
+  const match = question.match(new RegExp(`${key}:\\s*([^\\n]+)`, "i"));
+  return match?.[1]?.trim() ?? null;
+}
+
+function fixtureRevenueShareFunction(question: string): CodifiedTableFunction {
+  const segment = reviewedValue(question, "segment") ?? "agricultural products";
+  const denominator = reviewedValue(question, "denominator") ?? "total operating revenues";
+  const years = (reviewedValue(question, "years") ?? "2016")
+    .split(",")
+    .map((year) => year.trim())
+    .filter(Boolean);
+  const includeChange = (reviewedValue(question, "includeChange") ?? "false").toLowerCase() === "true";
+
+  return {
+    functionName: "reviewedRevenueShare",
+    description: `Compute ${segment} as a percentage of ${denominator} for ${years.join(", ")}.`,
+    observer: "fixture",
+    source: `function reviewedRevenueShare(filing) {
+  const segment = ${JSON.stringify(segment)};
+  const denominator = ${JSON.stringify(denominator)};
+  const years = ${JSON.stringify(years)};
+  const includeChange = ${JSON.stringify(includeChange)};
+  const normalize = (value) => String(value).toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+  const aliases = {
+    agriculture: "agricultural_products",
+    agricultural: "agricultural_products",
+    operating_revenue: "total_operating_revenues",
+    operating_revenues: "total_operating_revenues",
+    total_operating_revenue: "total_operating_revenues",
+    freight_revenue: "total_freight_revenues",
+    freight_revenues: "total_freight_revenues",
+    total_freight_revenue: "total_freight_revenues"
+  };
+  const keyFor = (value) => aliases[normalize(value)] || normalize(value);
+  const findRow = (label) => {
+    const key = keyFor(label);
+    const row = filing.table.rows.find((candidate) => candidate.labelKey === key);
+    if (!row) {
+      throw new Error("No row found for " + label);
+    }
+    return row;
+  };
+  const round2 = (value) => Math.round(value * 100) / 100;
+  const formatPercent = (value) => round2(value).toFixed(2) + "%";
+  const formatPoints = (value) => (round2(value) >= 0 ? "+" : "") + round2(value).toFixed(2) + " pp";
+  const segmentRow = findRow(segment);
+  const denominatorRow = findRow(denominator);
+  const rows = years.map((year) => {
+    const yearKey = normalize(year);
+    const numerator = segmentRow.cells.find((cell) => cell.columnKey === yearKey);
+    const denominatorCell = denominatorRow.cells.find((cell) => cell.columnKey === yearKey);
+    if (!numerator || numerator.value == null || !denominatorCell || denominatorCell.value == null || denominatorCell.value === 0) {
+      throw new Error("Missing values for " + year);
+    }
+    const percentage = numerator.value / denominatorCell.value * 100;
+    return {
+      year,
+      numerator: numerator.value,
+      denominator: denominatorCell.value,
+      percentage,
+      roundedPercentage: round2(percentage)
+    };
+  });
+  const change = includeChange && rows.length >= 2 ? rows[0].percentage - rows[1].percentage : null;
+  const answer = rows.length === 1 && change == null
+    ? rows[0].percentage
+    : rows.map((row) => row.year + ": " + formatPercent(row.percentage)).join("; ") + (change == null ? "" : "; change: " + formatPoints(change));
+  return {
+    answer,
+    roundedAnswer: rows[0] ? rows[0].roundedPercentage : undefined,
+    label: segment + " / " + denominator,
+    evidence: [{
+      filename: filing.filename,
+      segment,
+      denominator,
+      years: rows,
+      includeChange
+    }]
+  };
+}`
+  };
 }
 
 export class AnthropicObserverRuntime implements ObserverRuntime {
@@ -206,7 +299,10 @@ Rules:
 - The source must be plain JavaScript/TypeScript compatible with new Function.
 - Do not import packages.
 - Use filing.table.rows and each row's cells.
-- Return { answer: number, roundedAnswer: number, label: string, evidence: unknown[] }.
+- Return { answer: number | string, roundedAnswer?: number, label: string, evidence: unknown[] }.
+- roundedAnswer must be a number when present. Omit it for a narrative/string answer if no single numeric answer applies.
+- If reviewed requirements are present, encode those exact requirements in the generated function.
+- When a reviewed denominator names a table row, use that row directly by labelKey; do not reconstruct it from other rows unless the row is absent.
 - For this question, infer the needed formula from the words, then codify it.`;
 }
 
@@ -240,8 +336,7 @@ function extractJson(text: string): string {
 function normalizeObserverResult(result: ObserverResult): ObserverResult {
   if (
     !result ||
-    typeof result.answer !== "number" ||
-    typeof result.roundedAnswer !== "number" ||
+    (typeof result.answer !== "number" && typeof result.answer !== "string") ||
     typeof result.label !== "string"
   ) {
     throw new Error(`Observer function returned invalid result: ${JSON.stringify(result)}`);
@@ -249,6 +344,12 @@ function normalizeObserverResult(result: ObserverResult): ObserverResult {
 
   return {
     ...result,
+    roundedAnswer:
+      typeof result.roundedAnswer === "number"
+        ? result.roundedAnswer
+        : typeof result.answer === "number"
+          ? Math.round(result.answer * 100) / 100
+          : undefined,
     evidence: Array.isArray(result.evidence) ? result.evidence : [result.evidence]
   };
 }

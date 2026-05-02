@@ -25,6 +25,22 @@ export function isDocumentSentimentIntent(question: string): boolean {
   );
 }
 
+export function isRevenueShareIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  const asksForShare =
+    q.includes("portion") || q.includes("percentage") || q.includes("percent") || q.includes("share");
+  const mentionsRevenue = q.includes("revenue") || q.includes("revenues");
+  const mentionsSegment =
+    q.includes("agricultural") ||
+    q.includes("agriculture") ||
+    q.includes("coal") ||
+    q.includes("chemical") ||
+    q.includes("automotive") ||
+    q.includes("intermodal") ||
+    q.includes("industrial");
+  return asksForShare && mentionsRevenue && mentionsSegment;
+}
+
 export function extractCompany(question: string): string | null {
   const q = question.toLowerCase();
   for (const company of knownCompanies) {
@@ -42,6 +58,8 @@ export function matchProcedure(question: string, procedures: StoredProcedure[]):
     ? "largest_average_payment_volume_per_transaction"
     : isDocumentSentimentIntent(question)
       ? "document_sentiment"
+    : isRevenueShareIntent(question)
+      ? "revenue_share"
     : isAveragePaymentVolumeIntent(question)
       ? "average_payment_volume_per_transaction"
       : null;

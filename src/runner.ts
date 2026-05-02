@@ -24,9 +24,17 @@ import {
   extractCompany,
   isLargestAveragePaymentVolumeIntent,
   isDocumentSentimentIntent,
+  isRevenueShareIntent,
   matchProcedure
 } from "./procedures/matcher.js";
 import { readTrajectory, TrajectoryRecorder, atlasfsHome } from "./trajectory/recorder.js";
+import {
+  createRevenueShareDraft,
+  inferRevenueShareRequirement,
+  reviewRevenueShareDraft,
+  type ReviewAction,
+  type ReviewResult
+} from "./review/drafts.js";
 
 export type RunnerBackend =
   | {
@@ -42,17 +50,27 @@ export type RunQueryResult = {
   answer: number | string;
   roundedAnswer?: number;
   trajectoryId?: string;
+  draftId?: string;
   procedureName?: string;
   calls: unknown[];
   evidence: unknown[];
+  review?: {
+    status: string;
+    assumptions: string[];
+    nextActions: string[];
+  };
 };
 
 export async function loadLocalDemoCases(): Promise<FinqaCase[]> {
-  const raw = await loadRawFinqaDataset({
+  const visa = await loadRawFinqaDataset({
     dataset: "dev",
     filename: "V/2008/page_17.pdf"
   });
-  return raw.map(normalizeFinqaCase);
+  const revenueShare = await loadRawFinqaDataset({
+    dataset: "private_test",
+    filename: "UNP/2016/page_52.pdf"
+  });
+  return [...visa, ...revenueShare].map(normalizeFinqaCase);
 }
 
 async function createPrimitive(backend: RunnerBackend): Promise<FinqaCasesPrimitive> {
@@ -193,6 +211,15 @@ export async function runQuery(args: {
     });
   }
 
+  if (isRevenueShareIntent(args.question)) {
+    return runRevenueShareQuery({
+      question: args.question,
+      tenantId,
+      baseDir,
+      finqaCases
+    });
+  }
+
   const recorder = new TrajectoryRecorder({ tenantId, question: args.question });
   const candidates = await recorder.call("finqa_cases.findSimilar", { question: args.question, limit: 10 }, (input) =>
     finqaCases.findSimilar(input.question, input.limit)
@@ -283,6 +310,26 @@ export async function endorseTrajectory(args: {
   return new LocalProcedureStore(baseDir).save(procedure);
 }
 
+export async function reviewDraft(args: {
+  draftIdOrPath: string;
+  action: ReviewAction;
+  message?: string;
+  backend?: RunnerBackend;
+  baseDir?: string;
+  observerRuntime?: ObserverRuntime;
+}): Promise<ReviewResult> {
+  const backend = args.backend ?? { kind: "atlas" };
+  const finqaCases = args.action === "specify" || args.action === "yes" ? await createPrimitive(backend) : undefined;
+  return reviewRevenueShareDraft({
+    draftIdOrPath: args.draftIdOrPath,
+    action: args.action,
+    message: args.message,
+    baseDir: args.baseDir,
+    finqaCases,
+    observerRuntime: args.observerRuntime ?? (args.action === "yes" ? createObserverRuntime() : undefined)
+  });
+}
+
 export async function runLocalDemo(question: string): Promise<RunQueryResult> {
   const cases = await loadLocalDemoCases();
   return runQuery({ question, backend: { kind: "local", cases } });
@@ -331,5 +378,57 @@ async function runObserverDerivedQuery(args: {
     trajectoryId: recorder.id,
     calls: recorder.snapshot.calls,
     evidence: result.evidence
+  };
+}
+
+async function runRevenueShareQuery(args: {
+  question: string;
+  tenantId: string;
+  baseDir: string;
+  finqaCases: FinqaCasesPrimitive;
+}): Promise<RunQueryResult> {
+  const recorder = new TrajectoryRecorder({ tenantId: args.tenantId, question: args.question });
+  const candidates = await recorder.call("finqa_cases.findSimilar", { question: args.question, limit: 10 }, (input) =>
+    args.finqaCases.findSimilar(input.question, input.limit)
+  );
+  const filing = await recorder.call("finqa_resolve.pickFiling", { question: args.question, candidates }, (input) =>
+    finqa_resolve.pickFiling(input)
+  );
+  const requirements = inferRevenueShareRequirement(args.question, filing);
+  const result = await recorder.call(
+    "finqa_cases.runRevenueShare",
+    {
+      filename: filing.filename,
+      segment: requirements.segment,
+      denominator: requirements.denominator,
+      years: requirements.years,
+      includeChange: requirements.includeChange
+    },
+    (input) => args.finqaCases.runRevenueShare(input)
+  );
+
+  recorder.setResult(result);
+  await recorder.save(args.baseDir);
+  const draft = await createRevenueShareDraft({
+    trajectory: recorder.snapshot,
+    filing,
+    requirements,
+    result,
+    baseDir: args.baseDir
+  });
+
+  return {
+    mode: "novel",
+    answer: result.answer,
+    roundedAnswer: result.roundedAnswer,
+    trajectoryId: recorder.id,
+    draftId: draft.id,
+    calls: recorder.snapshot.calls,
+    evidence: result.evidence,
+    review: {
+      status: draft.status,
+      assumptions: draft.requirements.assumptions,
+      nextActions: ["confirm", "specify", "yes", "refuse"]
+    }
   };
 }

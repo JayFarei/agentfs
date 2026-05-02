@@ -37,6 +37,10 @@ ${JSON.stringify(
 )}
 
 Return a function that uses filing.table.rows and returns { answer, roundedAnswer, label, evidence }.
+If the question contains reviewed requirements, encode those exact requirements in the generated function.
+The answer may be a number for a single metric or a concise string for a multi-year comparison.
+roundedAnswer must be a number when present; omit it for narrative/string answers if no single numeric answer applies.
+When a reviewed denominator names a table row, use that row directly by labelKey; do not reconstruct it from other rows unless the row is absent.
 Do not import packages. The source must be compatible with new Function.`,
     {
       result: v.object({

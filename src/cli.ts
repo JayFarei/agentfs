@@ -2,12 +2,12 @@ import { closeAtlasClient } from "./datafetch/db/client.js";
 import { createObserverRuntime } from "./datafetch/db/finqa_observe.js";
 import { createTaskAgentRuntime } from "./datafetch/db/finqa_agent.js";
 import { loadFinqaToAtlas } from "./loader/loadFinqaToAtlas.js";
-import { endorseTrajectory, loadLocalDemoCases, runQuery } from "./runner.js";
+import { endorseTrajectory, loadLocalDemoCases, reviewDraft, runQuery } from "./runner.js";
 
 function parseFlags(argv: string[]): { positionals: string[]; flags: Record<string, string | boolean> } {
   const positionals: string[] = [];
   const flags: Record<string, string | boolean> = {};
-  const booleanFlags = new Set(["local", "reset"]);
+  const booleanFlags = new Set(["local", "reset", "yes"]);
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!arg.startsWith("--")) {
@@ -53,6 +53,10 @@ function usage(): void {
 Commands:
   pnpm atlasfs load-finqa [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
   pnpm atlasfs run "question" [--tenant financial-analyst] [--local] [--observer fixture|anthropic|flue] [--task-agent fixture|flue]
+  pnpm atlasfs review <draft-id> --confirm "guidance"
+  pnpm atlasfs review <draft-id> --specify "extra requirement" [--local]
+  pnpm atlasfs review <draft-id> --yes [--local] [--observer flue|anthropic|fixture]
+  pnpm atlasfs review <draft-id> --refuse "reason"
   pnpm atlasfs endorse <trajectory-id-or-path>
 
 Environment for Atlas:
@@ -111,6 +115,47 @@ async function main(): Promise<void> {
     const result = await endorseTrajectory({ trajectoryIdOrPath });
     console.log(`wrote ${result.jsonPath}`);
     console.log(`wrote ${result.tsPath}`);
+    return;
+  }
+
+  if (command === "review") {
+    const draftIdOrPath = positionals[0];
+    if (!draftIdOrPath) {
+      throw new Error("Usage: pnpm atlasfs review <draft-id> --confirm|--specify|--yes|--refuse");
+    }
+    const requested = [
+      flags.confirm ? "confirm" : null,
+      flags.specify ? "specify" : null,
+      flags.yes ? "yes" : null,
+      flags.refuse ? "refuse" : null
+    ].filter(Boolean) as Array<"confirm" | "specify" | "yes" | "refuse">;
+    if (requested.length !== 1) {
+      throw new Error("Review requires exactly one action: --confirm, --specify, --yes, or --refuse");
+    }
+    const action = requested[0];
+    const message =
+      action === "confirm"
+        ? flagString(flags, "confirm")
+        : action === "specify"
+          ? flagString(flags, "specify")
+          : action === "refuse"
+            ? flagString(flags, "refuse")
+            : undefined;
+    const needsBackend = action === "specify" || action === "yes";
+    const backend = needsBackend
+      ? flags.local
+        ? { kind: "local" as const, cases: await loadLocalDemoCases() }
+        : { kind: "atlas" as const }
+      : undefined;
+    const observer = action === "yes" ? flagString(flags, "observer") ?? "flue" : undefined;
+    const result = await reviewDraft({
+      draftIdOrPath,
+      action,
+      message,
+      backend,
+      observerRuntime: observer ? createObserverRuntime(observer) : undefined
+    });
+    console.log(JSON.stringify(result, null, 2));
     return;
   }
 

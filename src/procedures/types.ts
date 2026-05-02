@@ -8,11 +8,16 @@ export type StoredProcedure = {
     intent:
       | "average_payment_volume_per_transaction"
       | "largest_average_payment_volume_per_transaction"
-      | "document_sentiment";
+      | "document_sentiment"
+      | "revenue_share";
     examples: string[];
   };
   params: {
     filename: string;
+    segment?: string;
+    denominator?: string;
+    years?: string[];
+    includeChange?: boolean;
   };
   implementation:
     | {

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { StoredProcedure } from "./types.js";
 import type { TrajectoryRecord } from "../trajectory/recorder.js";
 import { atlasfsHome } from "../trajectory/recorder.js";
+import type { CodifiedTableFunction } from "../datafetch/db/finqa_observe.js";
 
 const averageProcedureName = "average_payment_volume_per_transaction";
 const largestProcedureName = "largest_average_payment_volume_per_transaction";
@@ -172,7 +173,48 @@ export function buildTaskAgentProcedure(trajectory: TrajectoryRecord): StoredPro
   };
 }
 
+export function buildRevenueShareProcedure(args: {
+  tenantId: string;
+  question: string;
+  sourceTrajectoryId: string;
+  filename: string;
+  segment: string;
+  denominator: string;
+  years: string[];
+  includeChange: boolean;
+  codified: CodifiedTableFunction;
+}): StoredProcedure {
+  return {
+    name: "revenue_share",
+    tenantId: args.tenantId,
+    description:
+      "Compute what percentage of a selected revenue denominator is contributed by a chosen revenue segment, optionally comparing years.",
+    sourceTrajectoryId: args.sourceTrajectoryId,
+    createdAt: new Date().toISOString(),
+    matcher: {
+      intent: "revenue_share",
+      examples: [args.question]
+    },
+    params: {
+      filename: args.filename,
+      segment: args.segment,
+      denominator: args.denominator,
+      years: args.years,
+      includeChange: args.includeChange
+    },
+    implementation: {
+      kind: "ts_function",
+      functionName: args.codified.functionName,
+      source: args.codified.source,
+      observer: args.codified.observer
+    }
+  };
+}
+
 export function buildProcedureFromTrajectory(trajectory: TrajectoryRecord): StoredProcedure {
+  if (trajectory.calls.some((call) => call.primitive === "finqa_cases.runRevenueShare")) {
+    throw new Error("Revenue-share trajectories must be committed through review --yes so the final procedure is codified by the observer runtime");
+  }
   if (trajectory.calls.some((call) => call.primitive === "finqa_agent.createSentimentAgentSpec")) {
     return buildTaskAgentProcedure(trajectory);
   }
