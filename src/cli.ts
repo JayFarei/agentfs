@@ -1,6 +1,7 @@
 import { closeAtlasClient } from "./datafetch/db/client.js";
 import { createObserverRuntime } from "./datafetch/db/finqa_observe.js";
 import { createTaskAgentRuntime } from "./datafetch/db/finqa_agent.js";
+import { createOutlookAgentRuntime } from "./datafetch/db/finqa_outlook.js";
 import { loadFinqaToAtlas } from "./loader/loadFinqaToAtlas.js";
 import { endorseTrajectory, loadLocalDemoCases, reviewDraft, runQuery } from "./runner.js";
 
@@ -52,7 +53,7 @@ function usage(): void {
 
 Commands:
   pnpm atlasfs load-finqa [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
-  pnpm atlasfs run "question" [--tenant financial-analyst] [--local] [--observer fixture|anthropic|flue] [--task-agent fixture|flue]
+  pnpm atlasfs run "question" [--tenant financial-analyst] [--local] [--observer fixture|anthropic|flue] [--task-agent fixture|flue] [--outlook-agent fixture|flue]
   pnpm atlasfs review <draft-id> --confirm "guidance"
   pnpm atlasfs review <draft-id> --specify "extra requirement" [--local]
   pnpm atlasfs review <draft-id> --yes [--local] [--observer flue|anthropic|fixture]
@@ -96,12 +97,14 @@ async function main(): Promise<void> {
       : { kind: "atlas" as const };
     const observer = flagString(flags, "observer");
     const taskAgent = flagString(flags, "task-agent");
+    const outlookAgent = flagString(flags, "outlook-agent");
     const result = await runQuery({
       question,
       tenantId,
       backend,
       observerRuntime: observer ? createObserverRuntime(observer) : undefined,
-      taskAgentRuntime: taskAgent ? createTaskAgentRuntime(taskAgent) : undefined
+      taskAgentRuntime: taskAgent ? createTaskAgentRuntime(taskAgent) : undefined,
+      outlookAgentRuntime: outlookAgent ? createOutlookAgentRuntime(outlookAgent) : undefined
     });
     console.log(JSON.stringify(result, null, 2));
     return;

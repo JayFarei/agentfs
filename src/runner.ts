@@ -7,11 +7,17 @@ import {
   createFinqaCasesPrimitive,
   type FinqaCasesPrimitive
 } from "./datafetch/db/finqa_cases.js";
+import { document_units, type DocumentUnitKind } from "./datafetch/db/document_units.js";
 import {
   createObserverRuntime,
   finqa_observe,
   type ObserverRuntime
 } from "./datafetch/db/finqa_observe.js";
+import {
+  createOutlookAgentRuntime,
+  finqa_outlook,
+  type OutlookAgentRuntime
+} from "./datafetch/db/finqa_outlook.js";
 import {
   createTaskAgentRuntime,
   finqa_agent,
@@ -19,14 +25,17 @@ import {
   type TaskAgentRuntime
 } from "./datafetch/db/finqa_agent.js";
 import { finqa_resolve } from "./datafetch/db/finqa_resolve.js";
-import { LocalProcedureStore, buildProcedureFromTrajectory } from "./procedures/store.js";
+import { LocalProcedureStore, buildNegativeOutlookProcedure, buildProcedureFromTrajectory } from "./procedures/store.js";
 import {
   extractCompany,
   isLargestAveragePaymentVolumeIntent,
   isDocumentSentimentIntent,
+  isNegativeOutlookReferencesIntent,
+  isNegativeOutlookTitleOrQuoteIntent,
   isRevenueShareIntent,
   matchProcedure
 } from "./procedures/matcher.js";
+import { LocalAgentStore } from "./agents/store.js";
 import { readTrajectory, TrajectoryRecorder, atlasfsHome } from "./trajectory/recorder.js";
 import {
   createRevenueShareDraft,
@@ -70,7 +79,11 @@ export async function loadLocalDemoCases(): Promise<FinqaCase[]> {
     dataset: "private_test",
     filename: "UNP/2016/page_52.pdf"
   });
-  return [...visa, ...revenueShare].map(normalizeFinqaCase);
+  const visaOutlook = await loadRawFinqaDataset({
+    dataset: "train",
+    filename: "V/2012/page_28.pdf"
+  });
+  return [...visa, ...revenueShare, ...visaOutlook].map(normalizeFinqaCase);
 }
 
 async function createPrimitive(backend: RunnerBackend): Promise<FinqaCasesPrimitive> {
@@ -87,6 +100,7 @@ export async function runQuery(args: {
   baseDir?: string;
   observerRuntime?: ObserverRuntime;
   taskAgentRuntime?: TaskAgentRuntime;
+  outlookAgentRuntime?: OutlookAgentRuntime;
 }): Promise<RunQueryResult> {
   const tenantId = args.tenantId ?? "financial-analyst";
   const baseDir = args.baseDir ?? atlasfsHome();
@@ -97,6 +111,58 @@ export async function runQuery(args: {
   const matched = matchProcedure(args.question, procedures);
 
   if (matched) {
+    if (matched.procedure.implementation.kind === "agentic_ts_function") {
+      const [filing] = await finqaCases.findExact({ filename: matched.procedure.params.filename }, 1);
+      if (!filing) {
+        throw new Error(`No filing found for ${matched.procedure.params.filename}`);
+      }
+      const agentStore = new LocalAgentStore(baseDir);
+      const spec = await agentStore.findByName(tenantId, matched.procedure.implementation.agentName);
+      if (!spec) {
+        throw new Error(`No reusable agent found for ${matched.procedure.implementation.agentName}`);
+      }
+      const units =
+        matched.procedure.params.unitKind === "title_or_quote"
+          ? document_units.titleOrQuoteUnits(filing)
+          : document_units.sentences(filing);
+      const scoredUnits = await finqa_outlook.scoreUnits(
+        {
+          spec,
+          units,
+          target: matched.procedure.params.target ?? "Visa",
+          lens: "competitive_outlook"
+        },
+        args.outlookAgentRuntime ?? createOutlookAgentRuntime(spec.observer)
+      );
+      const result = finqa_observe.executeCodifiedFunction(
+        {
+          functionName: matched.procedure.implementation.functionName,
+          source: matched.procedure.implementation.source,
+          description: matched.procedure.description,
+          observer: matched.procedure.implementation.observer
+        },
+        { scoredUnits, units }
+      );
+      return {
+        mode: "procedure",
+        answer: result.answer,
+        roundedAnswer: result.roundedAnswer,
+        procedureName: matched.procedure.name,
+        calls: [
+          {
+            primitive: `procedures.${matched.procedure.name}`,
+            input: {
+              filename: matched.procedure.params.filename,
+              agentName: spec.agentName,
+              unitKind: matched.procedure.params.unitKind
+            },
+            output: result
+          }
+        ],
+        evidence: result.evidence
+      };
+    }
+
     if (matched.procedure.implementation.kind === "ts_function") {
       const [filing] = await finqaCases.findExact({ filename: matched.procedure.params.filename }, 1);
       if (!filing) {
@@ -198,6 +264,18 @@ export async function runQuery(args: {
       baseDir,
       finqaCases,
       observerRuntime: args.observerRuntime
+    });
+  }
+
+  if (isNegativeOutlookReferencesIntent(args.question)) {
+    return runNegativeOutlookQuery({
+      question: args.question,
+      tenantId,
+      baseDir,
+      finqaCases,
+      unitKind: isNegativeOutlookTitleOrQuoteIntent(args.question) ? "title_or_quote" : "sentence",
+      observerRuntime: args.observerRuntime,
+      outlookAgentRuntime: args.outlookAgentRuntime
     });
   }
 
@@ -430,5 +508,148 @@ async function runRevenueShareQuery(args: {
       assumptions: draft.requirements.assumptions,
       nextActions: ["confirm", "specify", "yes", "refuse"]
     }
+  };
+}
+
+function negativeOutlookProcedureName(unitKind: DocumentUnitKind): "negative_outlook_references" | "negative_outlook_title_or_quote_references" {
+  return unitKind === "title_or_quote" ? "negative_outlook_title_or_quote_references" : "negative_outlook_references";
+}
+
+function negativeOutlookCodificationQuestion(args: {
+  question: string;
+  unitKind: DocumentUnitKind;
+  agentName: string;
+}): string {
+  return `${args.question}
+
+Procedure derivation request:
+intent: negative outlook references
+unitKind: ${args.unitKind}
+agentName: ${args.agentName}
+input: { scoredUnits, units }
+
+Generate only the deterministic glue function. It must consume scoredUnits produced by the reusable scorer agent, filter negative references, count them, and return structured evidence.`;
+}
+
+async function runNegativeOutlookQuery(args: {
+  question: string;
+  tenantId: string;
+  baseDir: string;
+  finqaCases: FinqaCasesPrimitive;
+  unitKind: DocumentUnitKind;
+  observerRuntime?: ObserverRuntime;
+  outlookAgentRuntime?: OutlookAgentRuntime;
+}): Promise<RunQueryResult> {
+  const recorder = new TrajectoryRecorder({ tenantId: args.tenantId, question: args.question });
+  const candidates = await recorder.call("finqa_cases.findSimilar", { question: args.question, limit: 10 }, (input) =>
+    args.finqaCases.findSimilar(input.question, input.limit)
+  );
+  const filing = await recorder.call("finqa_resolve.pickFiling", { question: args.question, candidates }, (input) =>
+    finqa_resolve.pickFiling(input)
+  );
+  const units = await recorder.call(
+    args.unitKind === "title_or_quote" ? "document_units.titleOrQuoteUnits" : "document_units.sentences",
+    { filename: filing.filename },
+    () => (args.unitKind === "title_or_quote" ? document_units.titleOrQuoteUnits(filing) : document_units.sentences(filing))
+  );
+
+  const agentStore = new LocalAgentStore(args.baseDir);
+  let spec = await recorder.call(
+    "agent_store.findReusable",
+    { capability: "negative_outlook_reference_scoring" as const },
+    (input) => agentStore.findByCapability(args.tenantId, input.capability)
+  );
+  if (!spec) {
+    spec = await recorder.call(
+      "finqa_outlook.createOutlookScorerAgentSpec",
+      { question: args.question, filename: filing.filename, unitCount: units.length },
+      () =>
+        finqa_outlook.createOutlookScorerAgentSpec(
+          {
+            question: args.question,
+            filing,
+            units
+          },
+          args.outlookAgentRuntime ?? createOutlookAgentRuntime()
+        )
+    );
+    const createdSpec = spec;
+    await recorder.call("agent_store.save", { agentName: createdSpec.agentName }, () =>
+      agentStore.save(args.tenantId, createdSpec)
+    );
+  }
+  if (!spec) {
+    throw new Error("No negative-outlook scorer agent is available");
+  }
+
+  const scoredUnits = await recorder.call(
+    "finqa_outlook.scoreUnits",
+    { agentName: spec.agentName, unitCount: units.length, target: "Visa", lens: "competitive_outlook" as const },
+    (input) =>
+      finqa_outlook.scoreUnits(
+        {
+          spec,
+          units,
+          target: input.target,
+          lens: input.lens
+        },
+        args.outlookAgentRuntime ?? createOutlookAgentRuntime(spec.observer)
+      )
+  );
+  const codified = await recorder.call(
+    "finqa_observe.codifyTableFunction",
+    { question: args.question, agentName: spec.agentName, unitKind: args.unitKind },
+    () =>
+      finqa_observe.codifyTableFunction(
+        {
+          question: negativeOutlookCodificationQuestion({
+            question: args.question,
+            unitKind: args.unitKind,
+            agentName: spec.agentName
+          }),
+          filing,
+          context: {
+            reusableAgent: spec,
+            unitKind: args.unitKind,
+            inputShape: "{ scoredUnits: OutlookScore[], units: DocumentUnit[] }"
+          }
+        },
+        args.observerRuntime ?? createObserverRuntime()
+      )
+  );
+  const result = await recorder.call(
+    "finqa_observe.executeCodifiedFunction",
+    { functionName: codified.functionName, scoredUnitCount: scoredUnits.length },
+    () => finqa_observe.executeCodifiedFunction(codified, { scoredUnits, units })
+  );
+
+  const procedureName = negativeOutlookProcedureName(args.unitKind);
+  const procedure = buildNegativeOutlookProcedure({
+    name: procedureName,
+    intent: procedureName,
+    tenantId: args.tenantId,
+    question: args.question,
+    sourceTrajectoryId: recorder.id,
+    filename: filing.filename,
+    target: "Visa",
+    unitKind: args.unitKind,
+    agentName: spec.agentName,
+    codified
+  });
+  await recorder.call("procedure_store.save", { procedureName, agentName: spec.agentName }, () =>
+    new LocalProcedureStore(args.baseDir).save(procedure)
+  );
+
+  recorder.setResult(result);
+  await recorder.save(args.baseDir);
+
+  return {
+    mode: "novel",
+    answer: result.answer,
+    roundedAnswer: result.roundedAnswer,
+    trajectoryId: recorder.id,
+    procedureName,
+    calls: recorder.snapshot.calls,
+    evidence: result.evidence
   };
 }

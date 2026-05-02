@@ -34,6 +34,9 @@ function tickerHintScore(question: string, candidate: FinqaCase): number {
   if ((q.includes("visa") || q.includes("payment network")) && candidate.filename.startsWith("V/")) {
     return 10;
   }
+  if (q.includes("payment volume") && candidate.question.toLowerCase().includes("payment volume")) {
+    return 8;
+  }
   if ((q.includes("union pacific") || q.includes("railroad") || q.includes("agricultural products")) && candidate.filename.startsWith("UNP/")) {
     return 10;
   }

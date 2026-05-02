@@ -12,11 +12,12 @@ Local-first proof of the AtlasFS typed-primitive loop:
 
 Target MongoDB project: `gabriele.farei@gmail.com` / `Sandbox Project` for MongoDB.local London.
 
-Set the Atlas connection string before loading data:
+Set the Atlas connection string in `.env` or export it before loading data.
+The CLI loads `.env` automatically through the Atlas client helper.
 
 ```sh
-export MONGODB_URI='mongodb+srv://...'
-export ATLAS_DB_NAME='atlasfs_hackathon'
+ATLAS_URI='mongodb+srv://...'
+ATLAS_DB_NAME='atlasfs_hackathon'
 ```
 
 Load the first FinQA proof slice:
@@ -112,6 +113,47 @@ The Flue task-agent files are:
 
 - `.flue/agents/finqa-agent-factory.ts`
 - `.flue/agents/finqa-task-agent.ts`
+
+## Reusable Agent And Glue Proof Loop
+
+The negative-outlook demo shows one intent creating a reusable specialized
+agent plus generated procedure glue, then a second intent reusing the same
+agent with different extraction glue.
+
+```sh
+pnpm atlasfs run --local --observer fixture --outlook-agent fixture \
+  "Find the negative competitive outlook references about Visa, count them, and show evidence sentences."
+
+pnpm atlasfs run --local --observer fixture --outlook-agent fixture \
+  "Find the negative competitive outlook references about Visa, but only from titles or quotes."
+
+pnpm atlasfs run --local --outlook-agent fixture \
+  "Find the negative competitive outlook references about Visa, but only from titles or quotes."
+```
+
+Expected behavior:
+
+- First run creates `.atlasfs/agents/financial-analyst/negativeOutlookReferenceScorerAgent.json`.
+- First run also writes
+  `.atlasfs/procedures/financial-analyst/negative_outlook_references.{json,ts}`.
+- Second run reuses `negativeOutlookReferenceScorerAgent` and writes only new
+  title/quote glue:
+  `.atlasfs/procedures/financial-analyst/negative_outlook_title_or_quote_references.{json,ts}`.
+- Third run replays through one procedure call with the same persisted scorer
+  agent.
+
+Live Flue version:
+
+```sh
+set -a; source .env; set +a
+ANTHROPIC_API_KEY="$ANTHROPIC_KEY" pnpm atlasfs run --local --observer flue --outlook-agent flue \
+  "Find the negative competitive outlook references about Visa, count them, and show evidence sentences."
+```
+
+The Flue outlook-agent files are:
+
+- `.flue/agents/finqa-outlook-agent-factory.ts`
+- `.flue/agents/finqa-outlook-scorer.ts`
 
 ## Multi-Turn Review Proof Loop
 

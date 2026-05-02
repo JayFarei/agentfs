@@ -41,6 +41,24 @@ export function isRevenueShareIntent(question: string): boolean {
   return asksForShare && mentionsRevenue && mentionsSegment;
 }
 
+export function isNegativeOutlookTitleOrQuoteIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  return (
+    isNegativeOutlookReferencesIntent(question) &&
+    (q.includes("title") || q.includes("heading") || q.includes("quote") || q.includes("quoted"))
+  );
+}
+
+export function isNegativeOutlookReferencesIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  return (
+    q.includes("negative") &&
+    (q.includes("outlook") || q.includes("competitive") || q.includes("competition")) &&
+    (q.includes("reference") || q.includes("references") || q.includes("evidence")) &&
+    q.includes("visa")
+  );
+}
+
 export function extractCompany(question: string): string | null {
   const q = question.toLowerCase();
   for (const company of knownCompanies) {
@@ -56,6 +74,10 @@ export function extractCompany(question: string): string | null {
 export function matchProcedure(question: string, procedures: StoredProcedure[]): ProcedureMatch | null {
   const intent = isLargestAveragePaymentVolumeIntent(question)
     ? "largest_average_payment_volume_per_transaction"
+    : isNegativeOutlookTitleOrQuoteIntent(question)
+      ? "negative_outlook_title_or_quote_references"
+    : isNegativeOutlookReferencesIntent(question)
+      ? "negative_outlook_references"
     : isDocumentSentimentIntent(question)
       ? "document_sentiment"
     : isRevenueShareIntent(question)

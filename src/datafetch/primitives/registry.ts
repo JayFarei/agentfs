@@ -1,4 +1,4 @@
-export type PrimitiveImplementationKind = "atlas" | "local" | "pure" | "future-flue";
+export type PrimitiveImplementationKind = "atlas" | "local" | "pure" | "future-flue" | "flue";
 
 export type PrimitiveDefinition = {
   name: string;
@@ -54,6 +54,20 @@ export const primitiveRegistry: PrimitiveDefinition[] = [
     description: "Select the most likely filing/case from retrieval candidates. Deterministic now, replaceable by a Flue sub-agent later."
   },
   {
+    name: "document_units.sentences",
+    module: "/datafetch/db/document_units",
+    signature: "sentences(filing: FinqaCase): DocumentUnit[]",
+    implementation: "local",
+    description: "Splits filing pre/post text into reusable sentence units for agent scoring."
+  },
+  {
+    name: "document_units.titleOrQuoteUnits",
+    module: "/datafetch/db/document_units",
+    signature: "titleOrQuoteUnits(filing: FinqaCase): DocumentUnit[]",
+    implementation: "local",
+    description: "Extracts quote-like or heading-like units so the same scorer agent can run over a different evidence surface."
+  },
+  {
     name: "finqa_resolve.locateFigure",
     module: "/datafetch/db/finqa_resolve",
     signature: "locateFigure(args: { question: string; filing: FinqaCase; role?: 'numerator' | 'denominator'; columnHint?: string }): Promise<LocatedFigure>",
@@ -96,5 +110,22 @@ export const primitiveRegistry: PrimitiveDefinition[] = [
     signature: "runSentimentAgent(args: { spec: SentimentAgentSpec; question: string; documentText: string }): Promise<SentimentResult>",
     implementation: "future-flue",
     description: "Runs the generated typed sentiment agent over a document excerpt."
+  },
+  {
+    name: "finqa_outlook.createOutlookScorerAgentSpec",
+    module: "/datafetch/db/finqa_outlook",
+    signature:
+      "createOutlookScorerAgentSpec(args: { question: string; filing: FinqaCase; units: DocumentUnit[] }): Promise<OutlookScorerAgentSpec>",
+    implementation: "flue",
+    description:
+      "Observer-created reusable specialized agent interface for scoring short units as negative competitive-outlook references."
+  },
+  {
+    name: "finqa_outlook.scoreUnits",
+    module: "/datafetch/db/finqa_outlook",
+    signature:
+      "scoreUnits(args: { spec: OutlookScorerAgentSpec; units: DocumentUnit[]; target: string; lens: 'competitive_outlook' }): Promise<OutlookScore[]>",
+    implementation: "flue",
+    description: "Runs a persisted reusable outlook scorer over document units."
   }
 ];

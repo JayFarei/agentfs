@@ -9,7 +9,9 @@ export type StoredProcedure = {
       | "average_payment_volume_per_transaction"
       | "largest_average_payment_volume_per_transaction"
       | "document_sentiment"
-      | "revenue_share";
+      | "revenue_share"
+      | "negative_outlook_references"
+      | "negative_outlook_title_or_quote_references";
     examples: string[];
   };
   params: {
@@ -18,6 +20,9 @@ export type StoredProcedure = {
     denominator?: string;
     years?: string[];
     includeChange?: boolean;
+    target?: string;
+    lens?: "competitive_outlook";
+    unitKind?: "sentence" | "title_or_quote";
   };
   implementation:
     | {
@@ -36,6 +41,13 @@ export type StoredProcedure = {
         agentName: string;
         prompt: string;
         observer: "fixture" | "flue";
+      }
+    | {
+        kind: "agentic_ts_function";
+        functionName: string;
+        source: string;
+        observer: "fixture" | "anthropic" | "flue";
+        agentName: string;
       };
 };
 

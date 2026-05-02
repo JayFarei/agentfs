@@ -82,6 +82,9 @@ function lexicalScore(query: string, candidate: FinqaCase): number {
   if (candidate.question.toLowerCase() === query.toLowerCase()) {
     score += 20;
   }
+  if (query.toLowerCase().includes("payment volume") && candidate.question.toLowerCase().includes("payment volume")) {
+    score += 5;
+  }
   return score;
 }
 

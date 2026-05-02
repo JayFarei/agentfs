@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFile);
 export type CodifyTableFunctionArgs = {
   question: string;
   filing: FinqaCase;
+  context?: unknown;
 };
 
 export type CodifiedTableFunction = {
@@ -36,6 +37,9 @@ export class FixtureObserverRuntime implements ObserverRuntime {
     if (isRevenueShareCodification(args.question)) {
       return fixtureRevenueShareFunction(args.question);
     }
+    if (isNegativeOutlookGlueCodification(args.question)) {
+      return fixtureNegativeOutlookGlueFunction(args.question);
+    }
 
     return {
       functionName: "largestAveragePaymentVolumePerTransaction",
@@ -44,9 +48,11 @@ export class FixtureObserverRuntime implements ObserverRuntime {
       observer: "fixture",
       source: `function largestAveragePaymentVolumePerTransaction(filing) {
   let best = null;
+  const isPaymentVolume = (cell) => cell.columnKey.includes("payment") && cell.columnKey.includes("volume");
+  const isTransactions = (cell) => cell.columnKey.includes("transaction");
   for (const row of filing.table.rows) {
-    const numerator = row.cells.find((cell) => cell.columnKey === "payments_volume_billions");
-    const denominator = row.cells.find((cell) => cell.columnKey === "total_transactions_billions");
+    const numerator = row.cells.find(isPaymentVolume);
+    const denominator = row.cells.find(isTransactions);
     if (!numerator || !denominator || numerator.value == null || denominator.value == null || denominator.value === 0) {
       continue;
     }
@@ -163,6 +169,43 @@ function fixtureRevenueShareFunction(question: string): CodifiedTableFunction {
   };
 }
 
+function isNegativeOutlookGlueCodification(question: string): boolean {
+  const q = question.toLowerCase();
+  return q.includes("procedure derivation request") && q.includes("negative outlook") && q.includes("scoredunits");
+}
+
+function fixtureNegativeOutlookGlueFunction(question: string): CodifiedTableFunction {
+  const unitKind = reviewedValue(question, "unitKind") ?? "sentence";
+  const functionName = unitKind === "title_or_quote" ? "selectNegativeOutlookTitleReferences" : "selectNegativeOutlookReferences";
+  const label =
+    unitKind === "title_or_quote"
+      ? "negative competitive outlook title or quote references"
+      : "negative competitive outlook sentence references";
+  return {
+    functionName,
+    description: `Select and count ${label} from reusable scorer output.`,
+    observer: "fixture",
+    source: `function ${functionName}(input) {
+  const scoredUnits = Array.isArray(input.scoredUnits) ? input.scoredUnits : [];
+  const matches = scoredUnits
+    .filter((score) => score && score.isReference && score.polarity === "negative")
+    .sort((a, b) => (b.severity || 0) - (a.severity || 0));
+  return {
+    answer: matches.length + " " + ${JSON.stringify(label)},
+    roundedAnswer: matches.length,
+    label: ${JSON.stringify(label)},
+    evidence: matches.map((score) => ({
+      unitId: score.unitId,
+      unitText: score.unitText,
+      severity: score.severity,
+      rationale: score.rationale,
+      evidence: score.evidence
+    }))
+  };
+}`
+  };
+}
+
 export class AnthropicObserverRuntime implements ObserverRuntime {
   private readonly client: Anthropic;
 
@@ -261,18 +304,25 @@ export const finqa_observe = {
     return runtime.codifyTableFunction(args);
   },
 
-  executeCodifiedFunction(codified: CodifiedTableFunction, filing: FinqaCase): ObserverResult {
+  executeCodifiedFunction(codified: CodifiedTableFunction, filing: FinqaCase | unknown): ObserverResult {
     const factory = new Function(
       "filing",
       `${codified.source}
 return ${codified.functionName}(filing);`
-    ) as (filing: FinqaCase) => ObserverResult;
+    ) as (filing: unknown) => ObserverResult;
     return normalizeObserverResult(factory(filing));
   }
 };
 
 function observerPrompt(args: CodifyTableFunctionArgs): string {
   return `You are an observer agent in AtlasFS. Your job is to codify a reusable TypeScript function for an intermediate table-reasoning step.
+
+Design posture:
+- Prefer small, general, composable functions in the spirit of the Unix philosophy.
+- Make each generated function do one clear job over typed inputs and outputs.
+- Avoid overfitting to the exact wording of one query when a reusable primitive-shaped function can solve a family of related intents.
+- Keep generated code free of hidden I/O, imports, global state, and persistence. Return structured artifacts; the host persists them.
+- When specialized agents are involved, generate glue that composes their typed outputs instead of folding all reasoning into one opaque function.
 
 Question:
 ${args.question}
@@ -287,6 +337,9 @@ ${JSON.stringify(
   null,
   2
 )}
+
+Additional derivation context:
+${JSON.stringify(args.context ?? null, null, 2)}
 
 Return ONLY JSON with this schema:
 {
