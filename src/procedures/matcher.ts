@@ -1,0 +1,59 @@
+import type { ProcedureMatch, StoredProcedure } from "./types.js";
+
+const knownCompanies = ["american express", "jcb", "visa inc", "mastercard", "discover", "diners club"];
+
+export function isAveragePaymentVolumeIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  return q.includes("average") && q.includes("payment volume") && q.includes("transaction") && !isLargestAveragePaymentVolumeIntent(question);
+}
+
+export function isLargestAveragePaymentVolumeIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  return (
+    (q.includes("highest") || q.includes("largest") || q.includes("biggest") || q.includes("maximum")) &&
+    q.includes("average") &&
+    q.includes("payment volume") &&
+    q.includes("transaction")
+  );
+}
+
+export function isDocumentSentimentIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  return (
+    (q.includes("sentiment") || q.includes("tone") || q.includes("positioning")) &&
+    (q.includes("document") || q.includes("excerpt") || q.includes("visa") || q.includes("competitive"))
+  );
+}
+
+export function extractCompany(question: string): string | null {
+  const q = question.toLowerCase();
+  for (const company of knownCompanies) {
+    if (q.includes(company)) {
+      return company === "visa inc" ? "visa inc. ( 1 )" : company;
+    }
+  }
+
+  const match = q.match(/for\s+([a-z][a-z0-9 .&-]+?)(?:\?|$)/);
+  return match?.[1]?.trim() ?? null;
+}
+
+export function matchProcedure(question: string, procedures: StoredProcedure[]): ProcedureMatch | null {
+  const intent = isLargestAveragePaymentVolumeIntent(question)
+    ? "largest_average_payment_volume_per_transaction"
+    : isDocumentSentimentIntent(question)
+      ? "document_sentiment"
+    : isAveragePaymentVolumeIntent(question)
+      ? "average_payment_volume_per_transaction"
+      : null;
+  if (!intent) {
+    return null;
+  }
+
+  const procedure = procedures.find((candidate) => candidate.matcher.intent === intent);
+  const company = intent === "average_payment_volume_per_transaction" ? extractCompany(question) : "__all__";
+  if (!procedure || !company) {
+    return null;
+  }
+
+  return { procedure, company };
+}

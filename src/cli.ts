@@ -1,0 +1,127 @@
+import { closeAtlasClient } from "./datafetch/db/client.js";
+import { createObserverRuntime } from "./datafetch/db/finqa_observe.js";
+import { createTaskAgentRuntime } from "./datafetch/db/finqa_agent.js";
+import { loadFinqaToAtlas } from "./loader/loadFinqaToAtlas.js";
+import { endorseTrajectory, loadLocalDemoCases, runQuery } from "./runner.js";
+
+function parseFlags(argv: string[]): { positionals: string[]; flags: Record<string, string | boolean> } {
+  const positionals: string[] = [];
+  const flags: Record<string, string | boolean> = {};
+  const booleanFlags = new Set(["local", "reset"]);
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!arg.startsWith("--")) {
+      positionals.push(arg);
+      continue;
+    }
+    const key = arg.slice(2);
+    if (booleanFlags.has(key)) {
+      flags[key] = true;
+      continue;
+    }
+    const next = argv[index + 1];
+    if (!next || next.startsWith("--")) {
+      flags[key] = true;
+    } else {
+      flags[key] = next;
+      index += 1;
+    }
+  }
+  return { positionals, flags };
+}
+
+function flagString(flags: Record<string, string | boolean>, key: string): string | undefined {
+  const value = flags[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
+  const value = flagString(flags, key);
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`--${key} must be a number`);
+  }
+  return parsed;
+}
+
+function usage(): void {
+  console.log(`atlasfs local proof loop
+
+Commands:
+  pnpm atlasfs load-finqa [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
+  pnpm atlasfs run "question" [--tenant financial-analyst] [--local] [--observer fixture|anthropic|flue] [--task-agent fixture|flue]
+  pnpm atlasfs endorse <trajectory-id-or-path>
+
+Environment for Atlas:
+  MONGODB_URI      MongoDB Atlas connection string for the Sandbox Project
+  ATLAS_DB_NAME    Database name, defaults to atlasfs_hackathon
+`);
+}
+
+async function main(): Promise<void> {
+  const [command, ...rest] = process.argv.slice(2);
+  const { positionals, flags } = parseFlags(rest);
+
+  if (!command || command === "help" || command === "--help") {
+    usage();
+    return;
+  }
+
+  if (command === "load-finqa") {
+    const result = await loadFinqaToAtlas({
+      dataset: (flagString(flags, "dataset") as "dev" | "train" | "test" | "private_test" | undefined) ?? "dev",
+      limit: flagNumber(flags, "limit"),
+      filename: flagString(flags, "filename"),
+      reset: Boolean(flags.reset)
+    });
+    console.log(`loaded ${result.cases} cases and ${result.searchUnits} search units into ${result.dbName}`);
+    return;
+  }
+
+  if (command === "run") {
+    const question = positionals.join(" ").trim();
+    if (!question) {
+      throw new Error('Usage: pnpm atlasfs run "question"');
+    }
+    const tenantId = flagString(flags, "tenant") ?? "financial-analyst";
+    const backend = flags.local
+      ? { kind: "local" as const, cases: await loadLocalDemoCases() }
+      : { kind: "atlas" as const };
+    const observer = flagString(flags, "observer");
+    const taskAgent = flagString(flags, "task-agent");
+    const result = await runQuery({
+      question,
+      tenantId,
+      backend,
+      observerRuntime: observer ? createObserverRuntime(observer) : undefined,
+      taskAgentRuntime: taskAgent ? createTaskAgentRuntime(taskAgent) : undefined
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "endorse") {
+    const trajectoryIdOrPath = positionals[0];
+    if (!trajectoryIdOrPath) {
+      throw new Error("Usage: pnpm atlasfs endorse <trajectory-id-or-path>");
+    }
+    const result = await endorseTrajectory({ trajectoryIdOrPath });
+    console.log(`wrote ${result.jsonPath}`);
+    console.log(`wrote ${result.tsPath}`);
+    return;
+  }
+
+  throw new Error(`Unknown command: ${command}`);
+}
+
+main()
+  .catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await closeAtlasClient();
+  });
