@@ -219,6 +219,39 @@ Expected behavior:
   `2016: 18.18%; 2015: 16.42%; change: +1.76 pp`.
 - `--refuse` marks the draft non-committable; the next run starts over.
 
+## Deferred For Later
+
+The proof loop demonstrates the architecture; a few load-bearing pieces are
+stubbed and need their full implementation before the system reaches the design
+described in `kb/product-design.md`. Listing them here so the hackathon scope
+is explicit and the next-step work is captured.
+
+- **Full Voyage integration for vector retrieval and reranking.**
+  `finqa_cases.findSimilar` and `finqa_cases.hybrid` are stable typed
+  primitives in the registry, but their bodies currently delegate to Atlas
+  lexical search (BM25 via `$search`). The intended contract is
+  `voyage-4-large` for text embeddings, `rerank-2.5` for cross-encoder
+  reranking, and `$rankFusion` to weight vector vs. lexical — all via the
+  native Atlas Embedding & Reranking API (Voyage was acquired by MongoDB in
+  Feb 2025). The call sites and signatures are already final; only the
+  implementations swap. See `src/datafetch/db/finqa_cases.ts` and
+  `kb/product-design.md` (the four-method primitive set documented in
+  "Schema is induced at three tiers").
+
+- **Query promotion: cheap replay via compiled aggregation pipelines.**
+  Today, an endorsed chain (e.g. `procedures/<tenant>/table_math.ts`) replays
+  as one TypeScript call but still issues multiple primitive calls under the
+  hood. The design specifies a third tier of crystallisation: a budget
+  optimisation worker takes an endorsed chain, compiles its multi-call ReAct
+  sequence into a single `db.collection.aggregate([...])` pipeline, validates
+  the rewrite against shadow inputs, and swaps the procedure body so the LLM
+  leaves the hot path entirely. The cost-convergence metrics (`T_n` trajectory
+  length, `D_n` determinism rate, `R_n` reuse rate, `I_n` information rate)
+  are all defined to track this transition from expensive to cheap; the
+  worker that performs it is not yet built. See `kb/product-design.md`,
+  Dimension 2 ("cost convergence within a tenant"), and the "compile path"
+  diagram for the full sequence.
+
 ## Verification
 
 ```sh

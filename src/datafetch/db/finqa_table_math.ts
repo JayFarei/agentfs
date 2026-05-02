@@ -3,11 +3,17 @@ import { normalizeKey } from "../../finqa/normalize.js";
 
 export type TableMathOperation = "difference" | "range" | "share";
 
+export type TableMathUnit = "raw" | "thousands" | "millions" | "billions";
+
 export type TableMathPlan = {
   operation: TableMathOperation;
   rowLabel: string;
   denominatorRowLabel?: string;
   years: string[];
+  /** unit the user asked the answer in (or "raw" if none asked) */
+  requestedUnit: TableMathUnit;
+  /** unit the underlying table is reported in, detected from filing pre/post text */
+  nativeUnit: TableMathUnit;
 };
 
 export type TableMathResult = {
@@ -87,8 +93,54 @@ function inferTableMathPlan(question: string, filing: FinqaCase): TableMathPlan 
     operation,
     rowLabel: row.label,
     denominatorRowLabel: denominator?.label,
-    years
+    years,
+    requestedUnit: detectUnit(question),
+    nativeUnit: detectNativeUnit(filing)
   };
+}
+
+const UNIT_RE =
+  /\bin\s+(thousands|millions|billions)\b|\((amounts?\s+)?in\s+(thousands|millions|billions)\)|\b(thousands|millions|billions)\s+of\s+(dollars|usd)\b|\$\s+in\s+(thousands|millions|billions)\b/i;
+
+function detectUnit(text: string): TableMathUnit {
+  const m = text.match(UNIT_RE);
+  if (!m) return "raw";
+  const found = (m[1] ?? m[3] ?? m[4] ?? m[6] ?? "").toLowerCase();
+  if (found === "thousands" || found === "millions" || found === "billions") return found;
+  return "raw";
+}
+
+function detectNativeUnit(filing: FinqaCase): TableMathUnit {
+  // Strongest signal: a column header is literally "millions" / "thousands" / "billions"
+  for (const h of filing.table.headers ?? []) {
+    const lower = (h ?? "").toLowerCase();
+    const m = lower.match(/\b(thousands|millions|billions)\b/);
+    if (m) return m[1] as TableMathUnit;
+  }
+  // Fallback: scan filing prose for unit phrases
+  const blob = `${filing.preText.join(" ")} ${filing.postText.join(" ")}`;
+  return detectUnit(blob);
+}
+
+function unitScale(unit: TableMathUnit): number {
+  switch (unit) {
+    case "thousands": return 1_000;
+    case "millions":  return 1_000_000;
+    case "billions":  return 1_000_000_000;
+    case "raw":       return 1;
+  }
+}
+
+function convertUnits(
+  rawAnswer: number,
+  nativeUnit: TableMathUnit,
+  requestedUnit: TableMathUnit
+): number {
+  // Share / percentage answers are already unit-free; never rescale them.
+  // (Caller passes operation === "share" through this fn unchanged.)
+  if (requestedUnit === "raw" || nativeUnit === "raw") return rawAnswer;
+  if (requestedUnit === nativeUnit) return rawAnswer;
+  return rawAnswer * (unitScale(nativeUnit) / unitScale(requestedUnit));
 }
 
 function inferOperation(question: string): TableMathOperation {
@@ -134,7 +186,8 @@ function executeTableMath(filing: FinqaCase, plan: TableMathPlan): TableMathResu
 
   if (plan.operation === "range") {
     const numbers = values.map((value) => value.cell.value);
-    const answer = Math.max(...numbers) - Math.min(...numbers);
+    const raw = Math.max(...numbers) - Math.min(...numbers);
+    const answer = convertUnits(raw, plan.nativeUnit, plan.requestedUnit);
     return result(filing, plan, answer, values);
   }
 
@@ -142,7 +195,8 @@ function executeTableMath(filing: FinqaCase, plan: TableMathPlan): TableMathResu
     if (values.length < 2) {
       throw new Error(`Difference requires at least two year values in ${filing.filename}`);
     }
-    const answer = values[values.length - 1].cell.value - values[0].cell.value;
+    const raw = values[values.length - 1].cell.value - values[0].cell.value;
+    const answer = convertUnits(raw, plan.nativeUnit, plan.requestedUnit);
     return result(filing, plan, answer, values);
   }
 

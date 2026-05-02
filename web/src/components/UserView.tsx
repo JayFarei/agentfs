@@ -124,6 +124,7 @@ export function UserView({
             placeholder={`ask ${tenant} anything…`}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onFocus={(e) => e.currentTarget.select()}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -152,7 +153,7 @@ export function UserView({
                 key={s.label}
                 className="v01-search__chip"
                 onClick={() => {
-                  setQuery(s.question);
+                  setQuery("");
                   submit(s.question);
                 }}
                 title={s.question}
