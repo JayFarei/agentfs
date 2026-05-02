@@ -4,6 +4,7 @@ import type {
   ApiSuggestedQuestion,
   ApiPrimitive,
   ApiStoredAgent,
+  ApiLearnedFunction,
 } from "@server/types";
 import { ProcPanel } from "./ProcPanel";
 import type { ProcEntry } from "./ProcPanel";
@@ -25,6 +26,7 @@ interface UserViewProps {
   procedures: ProcEntry[];
   primitives: ApiPrimitive[];
   agents: ApiStoredAgent[];
+  learnedFunctions: ApiLearnedFunction[];
   data: ApiDataCollection[];
   cluster: ApiClusterStatus | null;
   suggested: ApiSuggestedQuestion[];
@@ -56,6 +58,7 @@ export function UserView({
   procedures,
   primitives,
   agents,
+  learnedFunctions,
   data,
   cluster,
   suggested,
@@ -207,6 +210,7 @@ export function UserView({
         <SystemPrimitivesPanel
           primitives={primitives}
           agents={agents}
+          learnedFunctions={learnedFunctions}
           openIntent={openIntent}
         />
       </div>

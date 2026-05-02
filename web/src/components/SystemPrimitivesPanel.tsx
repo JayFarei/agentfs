@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ApiPrimitive, ApiStoredAgent } from "@server/types";
+import type { ApiPrimitive, ApiStoredAgent, ApiLearnedFunction } from "@server/types";
 
 interface IntentViewArg {
   name: string;
@@ -10,7 +10,23 @@ interface IntentViewArg {
 interface Props {
   primitives: ApiPrimitive[];
   agents: ApiStoredAgent[];
+  learnedFunctions: ApiLearnedFunction[];
   openIntent: (i: IntentViewArg) => void;
+}
+
+function synthLearnedFunctionTs(fn: ApiLearnedFunction): string {
+  const lines: string[] = [
+    `// learned function · ${fn.name}`,
+    `// observer: ${fn.observer}`,
+    `// created: ${fn.createdAt}`,
+    `//`,
+    `// ${fn.description}`,
+    ``,
+    `// signature: ${fn.signature}`,
+    ``,
+    fn.source,
+  ];
+  return lines.join("\n");
 }
 
 function pascalCase(s: string): string {
@@ -137,8 +153,9 @@ function useNewlyAdded<T>(items: T[], keyOf: (t: T) => string): Set<string> {
   return highlighted;
 }
 
-export function SystemPrimitivesPanel({ primitives, agents, openIntent }: Props) {
+export function SystemPrimitivesPanel({ primitives, agents, learnedFunctions, openIntent }: Props) {
   const newAgents = useNewlyAdded(agents, (a) => a.agentName);
+  const newLearnedFns = useNewlyAdded(learnedFunctions, (fn) => fn.name);
 
   const groups = new Map<string, MemberPrimitive[]>();
   for (const p of primitives) {
@@ -221,6 +238,38 @@ export function SystemPrimitivesPanel({ primitives, agents, openIntent }: Props)
             <span className="v01-prim-row__dot is-flue" aria-hidden="true"></span>
             <span className="v01-prim-row__name">{a.agentName}</span>
             <span className="v01-prim-row__badge is-flue">flue agent</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="v01-panel__sec v01-panel__sec--learned">
+        <div className="v01-panel__hd">
+          <span>learned functions</span>
+          <span className="count">{learnedFunctions.length}</span>
+        </div>
+        <p className="v01-panel__sub">
+          {learnedFunctions.length === 0
+            ? "nothing learned yet. deterministic TS functions the observer codified will appear here for off-script questions."
+            : "deterministic TS the observer wrote at runtime. cheap to call, reusable across sibling questions."}
+        </p>
+        {learnedFunctions.map((fn) => (
+          <button
+            key={fn.name}
+            className={`v01-prim-row v01-prim-row--btn v01-prim-row--learned ${
+              newLearnedFns.has(fn.name) ? "is-new" : ""
+            }`}
+            title={`${fn.signature}\n\n${fn.description}\n\nclick to view as TypeScript`}
+            onClick={() =>
+              openIntent({
+                name: fn.name,
+                desc: fn.description,
+                source: synthLearnedFunctionTs(fn),
+              })
+            }
+          >
+            <span className="v01-prim-row__dot is-local" aria-hidden="true"></span>
+            <span className="v01-prim-row__name">{fn.name}</span>
+            <span className="v01-prim-row__badge is-local">deterministic</span>
           </button>
         ))}
       </div>

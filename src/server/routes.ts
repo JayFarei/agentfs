@@ -25,6 +25,8 @@ function kindToStage(kind: StoredProcedure["implementation"]["kind"]): Procedure
       return "family";
     case "task_agent":
       return "endorsed";
+    case "planned_chain":
+      return "endorsed";
   }
 }
 

@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { LocalProcedureStore } from "../procedures/store.js";
 import { LocalAgentStore } from "../agents/store.js";
+import { LocalFunctionStore } from "../datafetch/primitives/learned_functions.js";
 import { primitiveRegistry } from "../datafetch/primitives/registry.js";
 import { atlasfsHome } from "../trajectory/recorder.js";
 import type {
@@ -14,6 +15,7 @@ import type {
   ApiTrajectorySummary,
   ApiPrimitive,
   ApiStoredAgent,
+  ApiLearnedFunction,
   ProcedureStage,
   TenantId
 } from "./types.js";
@@ -160,6 +162,8 @@ function kindToStage(kind: StoredProcedure["implementation"]["kind"]): Procedure
       return "family";
     case "task_agent":
       return "endorsed";
+    case "planned_chain":
+      return "endorsed";
   }
 }
 
@@ -292,6 +296,22 @@ export async function buildState(tenantId: TenantId): Promise<StateResponse> {
     storedAgents = [];
   }
 
+  const fnStore = new LocalFunctionStore(baseDir);
+  let learnedFunctions: ApiLearnedFunction[] = [];
+  try {
+    const list = await fnStore.list(tenantId);
+    learnedFunctions = list.map((fn) => ({
+      name: fn.name,
+      description: fn.description,
+      signature: fn.signature,
+      source: fn.source,
+      observer: fn.observer,
+      createdAt: fn.createdAt
+    }));
+  } catch {
+    learnedFunctions = [];
+  }
+
   return {
     agent: AGENT_DESCRIPTORS[tenantId] ?? AGENT_DESCRIPTORS.alice,
     procedures,
@@ -300,6 +320,7 @@ export async function buildState(tenantId: TenantId): Promise<StateResponse> {
     suggested: SUGGESTED_PER_TENANT[tenantId] ?? SUGGESTED_PER_TENANT.alice,
     trajectories,
     primitives: buildPrimitives(tenantId),
-    agents: storedAgents
+    agents: storedAgents,
+    learnedFunctions
   };
 }

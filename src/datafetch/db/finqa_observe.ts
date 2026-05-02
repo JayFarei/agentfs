@@ -33,6 +33,34 @@ export type CreateAgentPrimitiveArgs = {
 export type ObserverRuntime = {
   createAgentPrimitive(args: CreateAgentPrimitiveArgs): Promise<OutlookScorerAgentSpec>;
   codifyTableFunction(args: CodifyTableFunctionArgs): Promise<CodifiedTableFunction>;
+  /**
+   * Plan an off-script question into an ordered ExecutionPlan, identifying any
+   * primitives that need to be minted before execution. Optional — runtimes
+   * that don't implement this throw a clear "not yet wired" error.
+   */
+  planTrajectory?(args: import("../../planner/types.js").PlanTrajectoryArgs):
+    Promise<import("../../planner/types.js").PlanTrajectoryResult>;
+  /**
+   * Codify a deterministic TS function for a missing primitive identified by
+   * the planner. The function body must declare a function whose name matches
+   * the suffix of `name` after the last `.`.
+   */
+  codifyFunction?(args: CodifyFunctionArgs): Promise<CodifiedFunction>;
+};
+
+export type CodifyFunctionArgs = {
+  name: string;          // e.g. "stats.stddev"
+  signature: string;     // e.g. "stddev(values: number[]): number"
+  description: string;
+  exampleInput?: unknown;
+  exampleOutput?: unknown;
+};
+
+export type CodifiedFunction = {
+  name: string;
+  source: string;
+  description: string;
+  observer: "fixture" | "anthropic" | "flue";
 };
 
 export type ObserverResult = {
@@ -45,6 +73,16 @@ export type ObserverResult = {
 export class FixtureObserverRuntime implements ObserverRuntime {
   async createAgentPrimitive(): Promise<OutlookScorerAgentSpec> {
     return fixtureNegativeOutlookAgentSpec("fixture");
+  }
+
+  async planTrajectory(
+    args: import("../../planner/types.js").PlanTrajectoryArgs
+  ): Promise<import("../../planner/types.js").PlanTrajectoryResult> {
+    return fixturePlanTrajectory(args);
+  }
+
+  async codifyFunction(args: CodifyFunctionArgs): Promise<CodifiedFunction> {
+    return fixtureCodifyFunction(args);
   }
 
   async codifyTableFunction(args: CodifyTableFunctionArgs): Promise<CodifiedTableFunction> {
@@ -408,6 +446,200 @@ Rules:
 - If reviewed requirements are present, encode those exact requirements in the generated function.
 - When a reviewed denominator names a table row, use that row directly by labelKey; do not reconstruct it from other rows unless the row is absent.
 - For this question, infer the needed formula from the words, then codify it.`;
+}
+
+// ---- Off-script planner fixtures ----------------------------------------
+//
+// The MVP demo question is "what is the standard deviation of {row} revenue
+// from {y0} to {y1}, in millions?" — when the planner sees a stddev/variance
+// question, it returns a 6-step plan that locates each year's value via
+// finqa_resolve.locateFigure and feeds them to a freshly minted stats.stddev.
+//
+// For a richer LLM-backed planner, the Anthropic / Flue runtimes would emit
+// a similar plan structure but generated dynamically from the capabilities
+// list and the question. The shape stays the same.
+
+const STAT_PRIMITIVES: Record<string, { signature: string; description: string; source: string }> = {
+  "stats.stddev": {
+    signature: "stddev(values: number[]): number",
+    description: "Population standard deviation of an array of numeric values.",
+    source: `function stddev(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    throw new Error("stddev requires a non-empty numeric array");
+  }
+  const nums = values.map(Number).filter((v) => Number.isFinite(v));
+  if (nums.length === 0) throw new Error("stddev: no finite numbers");
+  const mean = nums.reduce((s, v) => s + v, 0) / nums.length;
+  const variance = nums.reduce((s, v) => s + (v - mean) ** 2, 0) / nums.length;
+  return Math.sqrt(variance);
+}`
+  },
+  "stats.variance": {
+    signature: "variance(values: number[]): number",
+    description: "Population variance of an array of numeric values.",
+    source: `function variance(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    throw new Error("variance requires a non-empty numeric array");
+  }
+  const nums = values.map(Number).filter((v) => Number.isFinite(v));
+  if (nums.length === 0) throw new Error("variance: no finite numbers");
+  const mean = nums.reduce((s, v) => s + v, 0) / nums.length;
+  return nums.reduce((s, v) => s + (v - mean) ** 2, 0) / nums.length;
+}`
+  },
+  "stats.median": {
+    signature: "median(values: number[]): number",
+    description: "Median of an array of numeric values.",
+    source: `function median(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    throw new Error("median requires a non-empty numeric array");
+  }
+  const sorted = values.map(Number).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (sorted.length === 0) throw new Error("median: no finite numbers");
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}`
+  }
+};
+
+function pickStatPrimitive(question: string): string | null {
+  const q = question.toLowerCase();
+  if (/\bstd\s*dev|standard deviation|stddev\b/.test(q)) return "stats.stddev";
+  if (/\bvariance\b/.test(q)) return "stats.variance";
+  if (/\bmedian\b/.test(q)) return "stats.median";
+  return null;
+}
+
+function extractRowLabel(question: string): string {
+  // Map question keywords to actual row labels in the loaded FinQA filings.
+  // The UNP freight-revenue table rows are: chemicals, coal, agricultural
+  // products, automotive, intermodal, industrial products.
+  const q = question.toLowerCase();
+  const ROW_MAP: Array<[RegExp, string]> = [
+    [/\bchemicals?\b/, "chemicals"],
+    [/\bcoal\b/, "coal"],
+    [/\bagricultural?\b|\bagriculture\b/, "agricultural products"],
+    [/\bautomotive\b/, "automotive"],
+    [/\bintermodal\b/, "intermodal"],
+    [/\bindustrial\b/, "industrial products"],
+  ];
+  for (const [re, label] of ROW_MAP) {
+    if (re.test(q)) return label;
+  }
+  // Fallback: first noun-like word before "revenue"
+  const m = q.match(/(\w+)\s+revenue/);
+  return m?.[1] ?? "chemicals";
+}
+
+function extractYears(question: string): string[] {
+  const range = question.match(/\b(20\d{2})\s*(?:[-–]|to)\s*(20\d{2})\b/);
+  if (range) {
+    const a = Number(range[1]);
+    const b = Number(range[2]);
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    const years: string[] = [];
+    for (let y = lo; y <= hi; y += 1) years.push(String(y));
+    return years;
+  }
+  const found = Array.from(new Set(question.match(/\b20\d{2}\b/g) ?? []));
+  return found.length > 0 ? found : ["2014", "2015", "2016"];
+}
+
+function fixturePlanTrajectory(
+  args: import("../../planner/types.js").PlanTrajectoryArgs
+): import("../../planner/types.js").PlanTrajectoryResult {
+  const stat = pickStatPrimitive(args.question);
+  if (!stat) {
+    throw new Error(
+      `FixtureObserverRuntime.planTrajectory only supports stat questions (stddev/variance/median); got: ${args.question}`
+    );
+  }
+  const rowLabel = extractRowLabel(args.question);
+  const years = extractYears(args.question);
+
+  const steps: import("../../planner/types.js").PlanStep[] = [
+    {
+      primitive: "finqa_cases.findSimilar",
+      bindings: {
+        query: { kind: "input", name: "question" },
+        limit: { kind: "literal", value: 10 }
+      },
+      produces: "candidates"
+    },
+    {
+      primitive: "finqa_resolve.pickFiling",
+      bindings: {
+        question: { kind: "input", name: "question" },
+        candidates: { kind: "step", index: 0 }
+      },
+      produces: "filing"
+    }
+  ];
+
+  // One locateFigure step per year
+  for (const year of years) {
+    steps.push({
+      primitive: "finqa_resolve.locateFigure",
+      bindings: {
+        question: { kind: "input", name: "question" },
+        filing: { kind: "step", index: 1 },
+        rowLabel: { kind: "literal", value: rowLabel },
+        columnHint: { kind: "literal", value: year }
+      },
+      produces: `${rowLabel}_${year}`
+    });
+  }
+
+  // The final stat call: pack each locateFigure's `value` into an array
+  const valueRefs: import("../../planner/types.js").JsonRef[] = years.map((_, i) => ({
+    kind: "step",
+    index: 2 + i,
+    path: "value"
+  }));
+  steps.push({
+    primitive: stat,
+    bindings: {
+      values: { kind: "array", items: valueRefs }
+    },
+    produces: stat.split(".").pop() ?? "result"
+  });
+
+  const plan: import("../../planner/types.js").ExecutionPlan = {
+    steps,
+    finalStepIndex: steps.length - 1,
+    rationale:
+      `${stat} of ${rowLabel} revenue across ${years.join(", ")}. ` +
+      `Locate each year's value, then apply the stat primitive.`
+  };
+
+  return {
+    plan,
+    gaps: [
+      {
+        name: stat,
+        kind: "function",
+        signature: STAT_PRIMITIVES[stat].signature,
+        description: STAT_PRIMITIVES[stat].description
+      }
+    ]
+  };
+}
+
+function fixtureCodifyFunction(args: CodifyFunctionArgs): CodifiedFunction {
+  const builtin = STAT_PRIMITIVES[args.name];
+  if (builtin) {
+    return {
+      name: args.name,
+      source: builtin.source,
+      description: args.description || builtin.description,
+      observer: "fixture"
+    };
+  }
+  throw new Error(
+    `FixtureObserverRuntime.codifyFunction has no canned implementation for "${args.name}". ` +
+      `Add it to STAT_PRIMITIVES or use the anthropic/flue observer.`
+  );
 }
 
 function fixtureNegativeOutlookAgentSpec(observer: "fixture" | "flue"): OutlookScorerAgentSpec {

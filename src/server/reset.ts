@@ -48,6 +48,7 @@ export async function resetTenant(tenantId: TenantId): Promise<ResetResponse> {
 
   const procedures = await rmDirCount(path.join(baseDir, "procedures", tenantId));
   const agents = await rmDirCount(path.join(baseDir, "agents", tenantId));
+  const learnedFunctions = await rmDirCount(path.join(baseDir, "functions", tenantId));
   const trajectories = await deleteJsonsMatching(
     path.join(baseDir, "trajectories"),
     (rec) => rec.tenantId === tenantId
@@ -59,6 +60,6 @@ export async function resetTenant(tenantId: TenantId): Promise<ResetResponse> {
 
   return {
     tenant: tenantId,
-    removed: { procedures, trajectories, agents, drafts }
+    removed: { procedures, trajectories, agents, drafts, learnedFunctions }
   };
 }

@@ -44,6 +44,7 @@ import {
 } from "./procedures/matcher.js";
 import { LocalAgentStore } from "./agents/store.js";
 import { readTrajectory, TrajectoryRecorder, atlasfsHome } from "./trajectory/recorder.js";
+import { runPlannedQuery } from "./planner/runner.js";
 import {
   createRevenueShareDraft,
   inferRevenueShareRequirement,
@@ -118,6 +119,52 @@ export async function runQuery(args: {
   const matched = matchProcedure(args.question, procedures);
 
   if (matched) {
+    if (matched.procedure.implementation.kind === "planned_chain") {
+      // Replay the saved plan via the executor. The chain's source-of-truth
+      // is `implementation.plan`; the procedure file just bundles it with
+      // the names of any learned primitives the plan references.
+      const [filing] = await finqaCases.findExact({ filename: matched.procedure.params.filename }, 1);
+      if (!filing) {
+        throw new Error(`No filing found for ${matched.procedure.params.filename}`);
+      }
+      const candidates = [filing];
+      const replayRecorder = new TrajectoryRecorder({ tenantId, question: args.question });
+      const { runPlan } = await import("./planner/executor.js");
+      const planRun = await runPlan(matched.procedure.implementation.plan, {
+        tenantId,
+        baseDir,
+        recorder: replayRecorder,
+        question: args.question,
+        filing,
+        finqaCases,
+        candidates
+      });
+      const answer = planRun.finalOutput;
+      const numericAnswer = typeof answer === "number" ? answer : Number(answer);
+      const roundedAnswer = Number.isFinite(numericAnswer)
+        ? Math.round(numericAnswer * 100) / 100
+        : undefined;
+      return {
+        mode: "procedure",
+        answer:
+          typeof answer === "number" || typeof answer === "string" ? answer : String(answer),
+        roundedAnswer,
+        procedureName: matched.procedure.name,
+        calls: [
+          {
+            primitive: `procedures.${matched.procedure.name}`,
+            input: {
+              filename: matched.procedure.params.filename,
+              question: args.question,
+              fingerprint: matched.procedure.implementation.questionFingerprint
+            },
+            output: { answer, roundedAnswer }
+          }
+        ],
+        evidence: planRun.stepOutputs
+      };
+    }
+
     if (matched.procedure.implementation.kind === "table_math") {
       const [filing] = await finqaCases.findExact({ filename: matched.procedure.params.filename }, 1);
       if (!filing) {
@@ -332,6 +379,19 @@ export async function runQuery(args: {
     });
   }
 
+  // Off-script statistical questions divert to the planner before the
+  // table_math predicate can mismatch them (table_math knows range/change/
+  // share; std-dev / variance / median / mean-of need a minted primitive).
+  if (isUnsupportedStatIntent(args.question)) {
+    return runPlannedQuery({
+      question: args.question,
+      tenantId,
+      baseDir,
+      finqaCases,
+      observerRuntime: args.observerRuntime
+    });
+  }
+
   if (isTableMathIntent(args.question)) {
     return runTableMathQuery({
       question: args.question,
@@ -341,44 +401,19 @@ export async function runQuery(args: {
     });
   }
 
-  const recorder = new TrajectoryRecorder({ tenantId, question: args.question });
-  const candidates = await recorder.call("finqa_cases.findSimilar", { question: args.question, limit: 10 }, (input) =>
-    finqaCases.findSimilar(input.question, input.limit)
-  );
-  const filing = await recorder.call("finqa_resolve.pickFiling", { question: args.question, candidates }, (input) =>
-    finqa_resolve.pickFiling(input)
-  );
-  const numerator = await recorder.call(
-    "finqa_resolve.locateFigure",
-    { question: args.question, filing, role: "numerator" as const },
-    (input) => finqa_resolve.locateFigure(input)
-  );
-  const denominator = await recorder.call(
-    "finqa_resolve.locateFigure",
-    { question: args.question, filing, role: "denominator" as const },
-    (input) => finqa_resolve.locateFigure(input)
-  );
-  const quotient = await recorder.call(
-    "arithmetic.divide",
-    { numerator: numerator.value, denominator: denominator.value },
-    (input) => arithmetic.divide(input.numerator, input.denominator)
-  );
-  const result: AnswerResult = {
-    answer: quotient,
-    roundedAnswer: arithmetic.round(quotient, 2),
-    evidence: [numerator, denominator]
-  };
-  recorder.setResult(result);
-  await recorder.save(baseDir);
+  // Genuinely unmatched questions: hand off to the off-script loop.
+  return runPlannedQuery({
+    question: args.question,
+    tenantId,
+    baseDir,
+    finqaCases,
+    observerRuntime: args.observerRuntime
+  });
+}
 
-  return {
-    mode: "novel",
-    answer: result.answer,
-    roundedAnswer: result.roundedAnswer,
-    trajectoryId: recorder.id,
-    calls: recorder.snapshot.calls,
-    evidence: result.evidence
-  };
+function isUnsupportedStatIntent(question: string): boolean {
+  const q = question.toLowerCase();
+  return /\b(std\s*dev|stddev|standard deviation|variance|median|mean of)\b/.test(q);
 }
 
 async function runTableMathQuery(args: {

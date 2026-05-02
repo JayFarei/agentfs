@@ -12,8 +12,11 @@ export type StoredProcedure = {
       | "revenue_share"
       | "table_math"
       | "negative_outlook_references"
-      | "negative_outlook_title_or_quote_references";
+      | "negative_outlook_title_or_quote_references"
+      | "planned_chain";
     examples: string[];
+    /** Stable hash of (normalised question, filename) — used by the planned_chain matcher fallback. */
+    questionFingerprint?: string;
   };
   params: {
     filename: string;
@@ -56,6 +59,13 @@ export type StoredProcedure = {
     | {
         kind: "table_math";
         primitive: "finqa_table_math";
+      }
+    | {
+        kind: "planned_chain";
+        plan: import("../planner/types.js").ExecutionPlan;
+        learnedFunctionNames: string[];
+        learnedAgentNames: string[];
+        questionFingerprint: string;
       };
 };
 

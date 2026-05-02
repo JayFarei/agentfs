@@ -5,6 +5,7 @@ import type {
   ApiSuggestedQuestion,
   ApiPrimitive,
   ApiStoredAgent,
+  ApiLearnedFunction,
 } from "@server/types";
 import {
   fetchState,
@@ -67,6 +68,7 @@ function viewFromState(state: StateResponse | null) {
     suggested: state.suggested as ApiSuggestedQuestion[],
     primitives: (state.primitives ?? []) as ApiPrimitive[],
     agents: (state.agents ?? []) as ApiStoredAgent[],
+    learnedFunctions: (state.learnedFunctions ?? []) as ApiLearnedFunction[],
     sourceMap: Object.fromEntries(
       state.procedures.map((p) => [p.name, p.source])
     ),
@@ -385,6 +387,7 @@ export default function App() {
               procedures={view?.procedures ?? []}
               primitives={view?.primitives ?? []}
               agents={view?.agents ?? []}
+              learnedFunctions={view?.learnedFunctions ?? []}
               data={view?.data ?? []}
               cluster={view?.cluster ?? null}
               suggested={view?.suggested ?? []}

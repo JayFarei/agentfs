@@ -10,7 +10,7 @@ export type ApiProcedureSummary = {
   sig: string;
   stage: ProcedureStage;
   hits: number;
-  implementationKind: "atlas_aggregation_template" | "ts_function" | "task_agent" | "agentic_ts_function" | "table_math";
+  implementationKind: "atlas_aggregation_template" | "ts_function" | "task_agent" | "agentic_ts_function" | "table_math" | "planned_chain";
   source: string;
   createdAt: string;
 };
@@ -64,6 +64,15 @@ export type ApiStoredAgent = {
   createdAt?: string;
 };
 
+export type ApiLearnedFunction = {
+  name: string;
+  description: string;
+  signature: string;
+  source: string;
+  observer: "fixture" | "anthropic" | "flue";
+  createdAt: string;
+};
+
 export type StateResponse = {
   agent: ApiAgent;
   procedures: ApiProcedureSummary[];
@@ -73,6 +82,7 @@ export type StateResponse = {
   trajectories?: ApiTrajectorySummary[];
   primitives?: ApiPrimitive[];
   agents?: ApiStoredAgent[];
+  learnedFunctions?: ApiLearnedFunction[];
   demo?: { showBob: boolean };
 };
 
@@ -112,5 +122,5 @@ export type EndorseResponse = {
 
 export type ResetResponse = {
   tenant: TenantId;
-  removed: { procedures: number; trajectories: number; agents: number; drafts: number };
+  removed: { procedures: number; trajectories: number; agents: number; drafts: number; learnedFunctions: number };
 };
