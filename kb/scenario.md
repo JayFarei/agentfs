@@ -133,9 +133,27 @@ MongoDB Atlas is the data plane:
 atlasfs_hackathon
   finqa_cases
     normalized filings, tables, text, metadata
+    Atlas Search index: finqa_cases_text
   finqa_search_units
     row/text units prepared for search, hybrid, and future vector retrieval
+    Atlas Search index: finqa_units_text
 ```
+
+The live Atlas Search milestone loaded the available FinQA corpus into
+`atlasfs_hackathon` and proved the same scenarios through MongoDB-backed
+retrieval:
+
+```text
+finqa_cases:        8474 normalized cases
+finqa_search_units: 243k+ retrieval units
+search indexes:     READY / queryable
+```
+
+The important integration lesson was that Atlas relevance scores must stay part
+of the resolver handoff. The full corpus has multiple plausible Visa filings;
+`findSimilar()` now performs target-aware Atlas Search query shaping, and
+`pickFiling()` preserves the backend search score instead of re-ranking only by
+local token overlap.
 
 Tenant evolution is the learned-behavior plane:
 

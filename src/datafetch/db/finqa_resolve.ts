@@ -43,6 +43,11 @@ function tickerHintScore(question: string, candidate: FinqaCase): number {
   return 0;
 }
 
+function backendSearchScore(candidate: FinqaCase): number {
+  const score = (candidate as FinqaCase & { score?: unknown }).score;
+  return typeof score === "number" ? score : 0;
+}
+
 function inferCompanyKey(question: string, filing: FinqaCase): string | null {
   const questionKey = normalizeKey(question);
   const exact = filing.table.rows.find((row) => row.labelKey && questionKey.includes(row.labelKey));
@@ -89,7 +94,10 @@ export const finqa_resolve: FinqaResolvePrimitive = {
     const ranked = args.candidates
       .map((candidate) => ({
         candidate,
-        score: tokenOverlap(args.question, candidate.searchableText) + tickerHintScore(args.question, candidate)
+        score:
+          backendSearchScore(candidate) +
+          tokenOverlap(args.question, candidate.searchableText) +
+          tickerHintScore(args.question, candidate)
       }))
       .sort((a, b) => b.score - a.score);
     return ranked[0].candidate;

@@ -2,6 +2,7 @@ import type { Collection, Db, Document } from "mongodb";
 import type { FinqaCase } from "../../finqa/types.js";
 import { normalizeKey } from "../../finqa/normalize.js";
 import { getAtlasDb } from "./client.js";
+import { findSimilarFinqaCases, finqaCasesCollection, searchFinqaCases } from "./finqa_search.js";
 
 export type FinqaCasesBackend =
   | {
@@ -55,10 +56,6 @@ export type RevenueShareResult = {
   };
   evidence: unknown[];
 };
-
-function caseCollection(db: Db): Collection<FinqaCase> {
-  return db.collection<FinqaCase>("finqa_cases");
-}
 
 function tokenize(value: string): Set<string> {
   return new Set(
@@ -374,7 +371,7 @@ export function createFinqaCasesPrimitive(backend: FinqaCasesBackend): FinqaCase
         return backend.cases.filter((candidate) => matchesFilter(candidate, filter)).slice(0, limit);
       }
 
-      return caseCollection(backend.db).find(filter as Document).limit(limit).toArray();
+      return finqaCasesCollection(backend.db).find(filter as Document).limit(limit).toArray();
     },
 
     async search(query, opts = {}) {
@@ -388,30 +385,23 @@ export function createFinqaCasesPrimitive(backend: FinqaCasesBackend): FinqaCase
           .map((entry) => entry.candidate);
       }
 
-      const collection = caseCollection(backend.db);
-      try {
-        return await collection
-          .find(
-            { $text: { $search: query } },
-            { projection: { score: { $meta: "textScore" } } }
-          )
-          .sort({ score: { $meta: "textScore" } })
-          .limit(limit)
-          .toArray();
-      } catch {
-        return collection
-          .find({ searchableText: { $regex: query.split(/\s+/).filter(Boolean).join("|"), $options: "i" } })
-          .limit(limit)
-          .toArray();
-      }
+      return searchFinqaCases(backend.db, query, { limit });
     },
 
     async findSimilar(query, limit = 10) {
-      return this.search(query, { limit });
+      if (backend.kind === "local") {
+        return this.search(query, { limit });
+      }
+
+      return findSimilarFinqaCases(backend.db, query, limit);
     },
 
     async hybrid(query, opts = {}) {
-      return this.search(query, opts);
+      if (backend.kind === "local") {
+        return this.search(query, opts);
+      }
+
+      return findSimilarFinqaCases(backend.db, query, opts.limit ?? 10);
     },
 
     async runAveragePaymentVolumePerTransaction(args) {
@@ -419,7 +409,7 @@ export function createFinqaCasesPrimitive(backend: FinqaCasesBackend): FinqaCase
         return localAveragePaymentVolume(backend.cases, args);
       }
 
-      return mongoAveragePaymentVolume(caseCollection(backend.db), args);
+      return mongoAveragePaymentVolume(finqaCasesCollection(backend.db), args);
     },
 
     async runRevenueShare(args) {
@@ -431,7 +421,7 @@ export function createFinqaCasesPrimitive(backend: FinqaCasesBackend): FinqaCase
         return computeRevenueShare(filing, args);
       }
 
-      return mongoRevenueShare(caseCollection(backend.db), args);
+      return mongoRevenueShare(finqaCasesCollection(backend.db), args);
     }
   };
 }

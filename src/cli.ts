@@ -2,13 +2,14 @@ import { closeAtlasClient } from "./datafetch/db/client.js";
 import { createObserverRuntime } from "./datafetch/db/finqa_observe.js";
 import { createTaskAgentRuntime } from "./datafetch/db/finqa_agent.js";
 import { createOutlookAgentRuntime } from "./datafetch/db/finqa_outlook.js";
-import { loadFinqaToAtlas } from "./loader/loadFinqaToAtlas.js";
+import { loadAllFinqaToAtlas, loadFinqaToAtlas } from "./loader/loadFinqaToAtlas.js";
+import { getAtlasSearchStatus, setupAtlasSearch } from "./loader/setupAtlasSearch.js";
 import { endorseTrajectory, loadLocalDemoCases, reviewDraft, runQuery } from "./runner.js";
 
 function parseFlags(argv: string[]): { positionals: string[]; flags: Record<string, string | boolean> } {
   const positionals: string[] = [];
   const flags: Record<string, string | boolean> = {};
-  const booleanFlags = new Set(["local", "reset", "yes"]);
+  const booleanFlags = new Set(["all", "local", "no-wait", "reset", "yes"]);
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!arg.startsWith("--")) {
@@ -52,7 +53,9 @@ function usage(): void {
   console.log(`atlasfs local proof loop
 
 Commands:
-  pnpm atlasfs load-finqa [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
+  pnpm atlasfs load-finqa [--all] [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
+  pnpm atlasfs setup-search [--no-wait]
+  pnpm atlasfs atlas-status
   pnpm atlasfs run "question" [--tenant financial-analyst] [--local] [--observer fixture|anthropic|flue] [--task-agent fixture|flue] [--outlook-agent fixture|flue]
   pnpm atlasfs review <draft-id> --confirm "guidance"
   pnpm atlasfs review <draft-id> --specify "extra requirement" [--local]
@@ -76,6 +79,19 @@ async function main(): Promise<void> {
   }
 
   if (command === "load-finqa") {
+    if (flags.all) {
+      const result = await loadAllFinqaToAtlas({
+        reset: Boolean(flags.reset)
+      });
+      console.log(
+        `loaded ${result.cases} records and ${result.searchUnits} search units into ${result.dbName}`
+      );
+      console.log(
+        `collection counts: ${result.collectionCounts.cases} cases, ${result.collectionCounts.searchUnits} search units`
+      );
+      return;
+    }
+
     const result = await loadFinqaToAtlas({
       dataset: (flagString(flags, "dataset") as "dev" | "train" | "test" | "private_test" | undefined) ?? "dev",
       limit: flagNumber(flags, "limit"),
@@ -83,6 +99,21 @@ async function main(): Promise<void> {
       reset: Boolean(flags.reset)
     });
     console.log(`loaded ${result.cases} cases and ${result.searchUnits} search units into ${result.dbName}`);
+    return;
+  }
+
+  if (command === "setup-search") {
+    const result = await setupAtlasSearch({
+      wait: !flags["no-wait"],
+      timeoutMs: flagNumber(flags, "timeout-ms")
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "atlas-status") {
+    const result = await getAtlasSearchStatus();
+    console.log(JSON.stringify(result, null, 2));
     return;
   }
 

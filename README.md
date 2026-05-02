@@ -27,6 +27,22 @@ pnpm atlasfs load-finqa --filename V/2008/page_17.pdf --limit 2 --reset
 pnpm atlasfs load-finqa --dataset private_test --filename UNP/2016/page_52.pdf
 ```
 
+Load the full available FinQA corpus into Atlas and create the Atlas Search
+indexes:
+
+```sh
+pnpm atlasfs load-finqa --all --reset
+pnpm atlasfs setup-search --timeout-ms=240000
+pnpm atlasfs atlas-status
+```
+
+Current live proof target:
+
+- database: `atlasfs_hackathon`
+- collections: `finqa_cases`, `finqa_search_units`
+- search indexes: `finqa_cases_text`, `finqa_units_text`
+- gated live test: `RUN_ATLAS_TESTS=1 pnpm exec vitest run tests/atlas-search-live.test.ts`
+
 ## Local Proof Loop
 
 Run without Atlas, against the local FinQA fixture:
