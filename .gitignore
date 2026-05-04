@@ -1,5 +1,6 @@
 .atlasfs/
 .agent-trace/
+.datafetch/
 node_modules/
 dist/
 web/dist/
