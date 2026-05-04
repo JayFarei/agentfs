@@ -5,6 +5,9 @@ import type {
   ApiPrimitive,
   ApiStoredAgent,
   ApiLearnedFunction,
+  ApiHook,
+  ApiEvalMetric,
+  StateResponse,
 } from "@server/types";
 import { ProcPanel } from "./ProcPanel";
 import type { ProcEntry } from "./ProcPanel";
@@ -27,6 +30,9 @@ interface UserViewProps {
   primitives: ApiPrimitive[];
   agents: ApiStoredAgent[];
   learnedFunctions: ApiLearnedFunction[];
+  hooks: ApiHook[];
+  drift: NonNullable<StateResponse["drift"]>;
+  evalMetrics: ApiEvalMetric[];
   data: ApiDataCollection[];
   cluster: ApiClusterStatus | null;
   suggested: ApiSuggestedQuestion[];
@@ -59,6 +65,9 @@ export function UserView({
   primitives,
   agents,
   learnedFunctions,
+  hooks,
+  drift,
+  evalMetrics,
   data,
   cluster,
   suggested,
@@ -205,12 +214,15 @@ export function UserView({
           cluster={cluster}
           run={run}
           procedures={procedures}
+          drift={drift}
+          evalMetrics={evalMetrics}
           onEndorse={onEndorse}
         />
         <SystemPrimitivesPanel
           primitives={primitives}
           agents={agents}
           learnedFunctions={learnedFunctions}
+          hooks={hooks}
           openIntent={openIntent}
         />
       </div>

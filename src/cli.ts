@@ -6,11 +6,22 @@ import { loadAllFinqaToAtlas, loadFinqaToAtlas } from "./loader/loadFinqaToAtlas
 import { getAtlasSearchStatus, setupAtlasSearch } from "./loader/setupAtlasSearch.js";
 import { runLiveDemo } from "./demo.js";
 import { endorseTrajectory, loadLocalDemoCases, reviewDraft, runQuery } from "./runner.js";
+import { atlasfsHome } from "./trajectory/recorder.js";
+import { planAtlasHydration } from "./workspace/atlasAdapter.js";
+import {
+  budgetWorkspaceProcedure,
+  checkWorkspaceDrift,
+  evalWorkspace,
+  hasWorkspace,
+  initWorkspace,
+  reviewWorkspaceDraft,
+  runWorkspaceQuery
+} from "./workspace/runtime.js";
 
-function parseFlags(argv: string[]): { positionals: string[]; flags: Record<string, string | boolean> } {
+function parseFlags(argv: string[]): { positionals: string[]; flags: Record<string, string | boolean | string[]> } {
   const positionals: string[] = [];
-  const flags: Record<string, string | boolean> = {};
-  const booleanFlags = new Set(["all", "local", "no-wait", "reset", "skip-atlas-check", "yes"]);
+  const flags: Record<string, string | boolean | string[]> = {};
+  const booleanFlags = new Set(["all", "dry-run", "local", "no-wait", "reset", "skip-atlas-check", "yes"]);
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!arg.startsWith("--")) {
@@ -19,26 +30,48 @@ function parseFlags(argv: string[]): { positionals: string[]; flags: Record<stri
     }
     const key = arg.slice(2);
     if (booleanFlags.has(key)) {
-      flags[key] = true;
+      addFlag(flags, key, true);
       continue;
     }
     const next = argv[index + 1];
     if (!next || next.startsWith("--")) {
-      flags[key] = true;
+      addFlag(flags, key, true);
     } else {
-      flags[key] = next;
+      addFlag(flags, key, next);
       index += 1;
     }
   }
   return { positionals, flags };
 }
 
-function flagString(flags: Record<string, string | boolean>, key: string): string | undefined {
+function addFlag(flags: Record<string, string | boolean | string[]>, key: string, value: string | boolean): void {
+  const previous = flags[key];
+  if (previous === undefined) {
+    flags[key] = value;
+  } else if (Array.isArray(previous)) {
+    previous.push(String(value));
+  } else {
+    flags[key] = [String(previous), String(value)];
+  }
+}
+
+function flagString(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
   const value = flags[key];
+  if (Array.isArray(value)) {
+    return value.at(-1);
+  }
   return typeof value === "string" ? value : undefined;
 }
 
-function flagNumber(flags: Record<string, string | boolean>, key: string): number | undefined {
+function flagStrings(flags: Record<string, string | boolean | string[]>, key: string): string[] {
+  const value = flags[key];
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return typeof value === "string" ? [value] : [];
+}
+
+function flagNumber(flags: Record<string, string | boolean | string[]>, key: string): number | undefined {
   const value = flagString(flags, key);
   if (!value) {
     return undefined;
@@ -54,6 +87,7 @@ function usage(): void {
   console.log(`atlasfs local proof loop
 
 Commands:
+  pnpm atlasfs init [--fixture all]
   pnpm atlasfs load-finqa [--all] [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
   pnpm atlasfs setup-search [--no-wait]
   pnpm atlasfs atlas-status
@@ -64,6 +98,10 @@ Commands:
   pnpm atlasfs review <draft-id> --yes [--local] [--observer flue|anthropic|fixture]
   pnpm atlasfs review <draft-id> --refuse "reason"
   pnpm atlasfs endorse <trajectory-id-or-path>
+  pnpm atlasfs budget <procedure> [--tenant data-analyst]
+  pnpm atlasfs drift check
+  pnpm atlasfs eval --round 0 --tenant data-analyst --tenant support-analyst
+  pnpm atlasfs hydrate-atlas --dry-run [--db atlasfs_hackathon]
 
 Environment for Atlas:
   MONGODB_URI      MongoDB Atlas connection string for the Sandbox Project
@@ -81,6 +119,18 @@ async function main(): Promise<void> {
 
   if (!command || command === "help" || command === "--help") {
     usage();
+    return;
+  }
+
+  if (command === "init") {
+    const fixture = flagString(flags, "fixture") ?? "all";
+    if (fixture !== "all") {
+      throw new Error("Only --fixture all is supported for the local filesystem runtime");
+    }
+    const manifest = await initWorkspace({ baseDir: atlasfsHome(), fixture: "all" });
+    console.log(
+      `initialized ${atlasfsHome()} with ${manifest.datasets.length} fixture datasets and ${manifest.tenants.length} tenants`
+    );
     return;
   }
 
@@ -149,6 +199,15 @@ async function main(): Promise<void> {
       throw new Error('Usage: pnpm atlasfs run "question"');
     }
     const tenantId = flagString(flags, "tenant") ?? "financial-analyst";
+    if (flags.local && (await hasWorkspace(atlasfsHome()))) {
+      const result = await runWorkspaceQuery({
+        question,
+        tenantId,
+        baseDir: atlasfsHome()
+      });
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
     const backend = flags.local
       ? { kind: "local" as const, cases: await loadLocalDemoCases() }
       : { kind: "atlas" as const };
@@ -192,6 +251,15 @@ async function main(): Promise<void> {
     if (requested.length !== 1) {
       throw new Error("Review requires exactly one action: --confirm, --specify, --yes, or --refuse");
     }
+    if (flags.local && requested[0] === "yes" && (await hasWorkspace(atlasfsHome()))) {
+      const result = await reviewWorkspaceDraft({
+        draftIdOrPath,
+        tenantId: flagString(flags, "tenant"),
+        baseDir: atlasfsHome()
+      });
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
     const action = requested[0];
     const message =
       action === "confirm"
@@ -216,6 +284,52 @@ async function main(): Promise<void> {
       observerRuntime: observer ? createObserverRuntime(observer) : undefined
     });
     console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "budget") {
+    const procedureName = positionals[0];
+    if (!procedureName) {
+      throw new Error("Usage: pnpm atlasfs budget <procedure> [--tenant data-analyst]");
+    }
+    const result = await budgetWorkspaceProcedure({
+      procedureName,
+      tenantId: flagString(flags, "tenant") ?? "data-analyst",
+      baseDir: atlasfsHome()
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "drift") {
+    if (positionals[0] !== "check") {
+      throw new Error("Usage: pnpm atlasfs drift check");
+    }
+    const result = await checkWorkspaceDrift(atlasfsHome());
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "eval") {
+    const tenants = flagStrings(flags, "tenant");
+    const result = await evalWorkspace({
+      round: flagNumber(flags, "round") ?? 0,
+      tenants: tenants.length > 0 ? tenants : ["data-analyst", "support-analyst"],
+      baseDir: atlasfsHome()
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "hydrate-atlas") {
+    if (!flags["dry-run"]) {
+      throw new Error("hydrate-atlas currently supports --dry-run only for the local acceptance path");
+    }
+    const plan = await planAtlasHydration({
+      baseDir: atlasfsHome(),
+      dbName: flagString(flags, "db")
+    });
+    console.log(JSON.stringify(plan, null, 2));
     return;
   }
 

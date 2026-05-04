@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ApiPrimitive, ApiStoredAgent, ApiLearnedFunction } from "@server/types";
+import type { ApiPrimitive, ApiStoredAgent, ApiLearnedFunction, ApiHook } from "@server/types";
 
 interface IntentViewArg {
   name: string;
@@ -11,6 +11,7 @@ interface Props {
   primitives: ApiPrimitive[];
   agents: ApiStoredAgent[];
   learnedFunctions: ApiLearnedFunction[];
+  hooks: ApiHook[];
   openIntent: (i: IntentViewArg) => void;
 }
 
@@ -97,12 +98,6 @@ function badgeFor(impl: ApiPrimitive["implementation"]): { label: string; cls: s
 }
 
 const NAMESPACE_HINT: Record<string, string> = {
-  finqa_cases: "filings retrieval",
-  finqa_resolve: "selection over retrieval",
-  finqa_table_math: "table arithmetic",
-  finqa_outlook: "competitive-outlook scorer",
-  finqa_observe: "observer · codifies steps",
-  finqa_agent: "task-specific agent factory",
   document_units: "evidence chunking",
   arithmetic: "pure math",
 };
@@ -153,7 +148,25 @@ function useNewlyAdded<T>(items: T[], keyOf: (t: T) => string): Set<string> {
   return highlighted;
 }
 
-export function SystemPrimitivesPanel({ primitives, agents, learnedFunctions, openIntent }: Props) {
+function synthHookTs(hook: ApiHook): string {
+  return [
+    `// hook · ${hook.name}`,
+    `// intent: ${hook.intent}`,
+    `// collections: ${hook.collections.join(", ")}`,
+    ``,
+    `/**`,
+    ` * ${hook.description}`,
+    ` *`,
+    ` * Suggested route:`,
+    ...hook.route.map((step, index) => ` *   ${index + 1}. ${step}`),
+    ` */`,
+    `export interface ${pascalCase(hook.name)}Intent {`,
+    `  input: string;`,
+    `}`,
+  ].join("\n");
+}
+
+export function SystemPrimitivesPanel({ primitives, agents, learnedFunctions, hooks, openIntent }: Props) {
   const newAgents = useNewlyAdded(agents, (a) => a.agentName);
   const newLearnedFns = useNewlyAdded(learnedFunctions, (fn) => fn.name);
 
@@ -207,6 +220,34 @@ export function SystemPrimitivesPanel({ primitives, agents, learnedFunctions, op
               );
             })}
           </div>
+        ))}
+      </div>
+
+      <div className="v01-panel__sec v01-panel__sec--learned">
+        <div className="v01-panel__hd">
+          <span>hooks</span>
+          <span className="count">{hooks.length}</span>
+        </div>
+        <p className="v01-panel__sub">
+          shared scaffolds for novel intents before a tenant has endorsed a procedure.
+        </p>
+        {hooks.map((hook) => (
+          <button
+            key={hook.name}
+            className="v01-prim-row v01-prim-row--btn"
+            title={`${hook.description}\n\nclick to view as TypeScript`}
+            onClick={() =>
+              openIntent({
+                name: hook.name,
+                desc: hook.description,
+                source: synthHookTs(hook),
+              })
+            }
+          >
+            <span className="v01-prim-row__dot is-local" aria-hidden="true"></span>
+            <span className="v01-prim-row__name">{hook.name}</span>
+            <span className="v01-prim-row__badge is-local">hook</span>
+          </button>
         ))}
       </div>
 

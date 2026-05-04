@@ -94,7 +94,10 @@ export class FlueOutlookAgentRuntime implements OutlookAgentRuntime {
     target: string;
     lens: "competitive_outlook";
   }): Promise<OutlookScore> {
-    const result = await runFlueJson("finqa-outlook-scorer", args);
+    const result = await runFlueJson("tenant-agent-launcher", {
+      ...args,
+      launcher: { mode: "outlook-score" }
+    });
     return normalizeOutlookScore(result, args.unit);
   }
 }
@@ -271,7 +274,7 @@ function normalizeOutlookScore(value: unknown, unit: DocumentUnit): OutlookScore
     typeof (value as { text?: unknown }).text === "string"
   ) {
     return normalizeOutlookScore(
-      JSON.parse(extractJsonText((value as { text: string }).text, "finqa-outlook-scorer")),
+      JSON.parse(extractJsonText((value as { text: string }).text, "tenant-agent-launcher")),
       unit
     );
   }

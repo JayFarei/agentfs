@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { runQuery, loadLocalDemoCases } from "../runner.js";
 import { extractCompany } from "../procedures/matcher.js";
+import { hasWorkspace, runWorkspaceQuery, workspaceTenantForUi } from "../workspace/runtime.js";
 import type { RunRequest, RunResponse, ApiRunStep, ApiCall, PipelineStageKey, TenantId } from "./types.js";
 
 // Lazy cache for local demo cases
@@ -85,6 +86,49 @@ export async function runQuestion(
   const tenantId = opts?.tenantId ?? "alice";
 
   const t0 = performance.now();
+
+  if (await hasWorkspace()) {
+    try {
+      const workspaceTenantId = await workspaceTenantForUi(tenantId);
+      const rawResult = await runWorkspaceQuery({
+        question: req.question,
+        tenantId: workspaceTenantId
+      });
+      const wallMs = Math.round(performance.now() - t0);
+      const mode = rawResult.mode;
+      const procedureName = rawResult.procedureName;
+      const calls = rawResult.calls as Array<{ primitive: string; input: unknown; output: unknown }>;
+      const evidence = rawResult.evidence as unknown[];
+      const steps =
+        mode === "procedure"
+          ? buildProcedureSteps(procedureName ?? "unknown", "local")
+          : buildNovelSteps(calls.length, "local");
+      const answerStr = String(rawResult.roundedAnswer ?? rawResult.answer);
+      return {
+        mode,
+        trajectoryId: rawResult.trajectoryId,
+        procedureName,
+        answer: rawResult.answer,
+        roundedAnswer: rawResult.roundedAnswer,
+        steps,
+        calls: calls.map((c) => ({ primitive: c.primitive, input: c.input, output: c.output })),
+        evidence,
+        result: {
+          title: procedureName ?? "Workspace result",
+          answer: answerStr,
+          detail:
+            mode === "novel"
+              ? `${calls.length} primitive calls · ${rawResult.trajectoryId ?? "—"}`
+              : `via ${procedureName}`,
+          cite: "ATLASFS_HOME",
+          procedure: procedureName ?? "(novel · trajectory recorded)"
+        },
+        wallMs
+      };
+    } catch (err) {
+      return buildErrorResponse(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   let rawResult: Awaited<ReturnType<typeof runQuery>>;
   try {

@@ -101,7 +101,10 @@ export class FlueCliTaskAgentRuntime implements TaskAgentRuntime {
     question: string;
     documentText: string;
   }): Promise<SentimentResult> {
-    const result = await runFlueJson("finqa-task-agent", args);
+    const result = await runFlueJson("tenant-agent-launcher", {
+      ...args,
+      launcher: { mode: "sentiment" }
+    });
     return normalizeSentimentResult(result);
   }
 }

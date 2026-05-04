@@ -21,6 +21,13 @@ import type {
 } from "./types.js";
 import type { StoredProcedure } from "../procedures/types.js";
 import type { TrajectoryRecord } from "../trajectory/recorder.js";
+import {
+  checkWorkspaceDrift,
+  listWorkspaceProcedures,
+  readWorkspaceManifest,
+  workspaceTenantForUi,
+  type WorkspaceManifest
+} from "../workspace/runtime.js";
 
 const HARDCODED_INTENTS: ApiIntent[] = [
   { name: "average_payment_volume_per_transaction", desc: "Average payment volume per transaction for a named company", params: ["company"] },
@@ -250,13 +257,15 @@ async function buildClusterStatus(): Promise<ApiClusterStatus> {
 }
 
 export function resolveTenant(raw: string | undefined): TenantId {
-  if (raw === "alice" || raw === "bob") return raw;
-  if (raw === "financial-analyst") return "financial-analyst" as TenantId;
-  return "alice";
+  return raw || "alice";
 }
 
 export async function buildState(tenantId: TenantId): Promise<StateResponse> {
   const baseDir = atlasfsHome();
+  const manifest = await readWorkspaceManifest(baseDir);
+  if (manifest) {
+    return buildWorkspaceState(baseDir, await workspaceTenantForUi(tenantId, baseDir), manifest);
+  }
   const store = new LocalProcedureStore(baseDir);
 
   let rawProcedures: StoredProcedure[];
@@ -323,4 +332,164 @@ export async function buildState(tenantId: TenantId): Promise<StateResponse> {
     agents: storedAgents,
     learnedFunctions
   };
+}
+
+async function buildWorkspaceState(
+  baseDir: string,
+  tenantId: TenantId,
+  manifest: WorkspaceManifest
+): Promise<StateResponse> {
+  const procedures = (await listWorkspaceProcedures(baseDir))
+    .filter((procedure) => procedure.tenantId === tenantId)
+    .map((procedure): ApiProcedureSummary => ({
+      name: procedure.name,
+      description:
+        procedure.intent === "customer_total_revenue"
+          ? "Compute total order revenue for a named customer."
+          : "Count open support tickets for a named customer account.",
+      intent: procedure.intent,
+      sig:
+        procedure.intent === "customer_total_revenue"
+          ? `${procedure.name}(customer): number`
+          : `${procedure.name}(account): number`,
+      stage: procedure.optimisation?.status === "compiled" ? "compiled" : "endorsed",
+      hits: 0,
+      implementationKind: "planned_chain",
+      source: "",
+      createdAt: procedure.createdAt
+    }));
+
+  const hooks = await readWorkspaceHooks(baseDir);
+  const evalMetrics = await readEvalMetrics(baseDir);
+  const drift = await checkWorkspaceDrift(baseDir);
+  const fnStore = new LocalFunctionStore(baseDir);
+  const learnedFunctions = (await fnStore.list(tenantId)).map((fn) => ({
+    name: fn.name,
+    description: fn.description,
+    signature: fn.signature,
+    source: fn.source,
+    observer: fn.observer,
+    createdAt: fn.createdAt
+  }));
+
+  return {
+    agent: {
+      id: tenantId,
+      name: tenantId,
+      role: "Workspace tenant",
+      tenant: tenantId,
+      pathLabel: "Local filesystem workspace"
+    },
+    procedures,
+    intents: [
+      {
+        name: "customer_total_revenue",
+        desc: "Total order revenue for a named customer",
+        params: ["customer"]
+      },
+      {
+        name: "customer_open_tickets",
+        desc: "Open support tickets for a named customer account",
+        params: ["account"]
+      }
+    ],
+    cluster: {
+      backend: "local",
+      dbName: "ATLASFS_HOME",
+      connected: true,
+      collections: manifest.datasets.flatMap((dataset) =>
+        dataset.collections.map((collection) => ({
+          name: collection,
+          docs: "fixture",
+          size: "-",
+          kind: dataset.id
+        }))
+      )
+    },
+    suggested: [
+      {
+        label: "fixture · customer revenue",
+        question: "what is total revenue for acme?",
+        hint: "Runs through hook matching, review, verifier promotion, and procedure replay."
+      },
+      {
+        label: "fixture · open tickets",
+        question: "how many open support tickets for acme?",
+        hint: "Runs the same local runner over the fixture-support tickets collection."
+      }
+    ],
+    trajectories: await listTrajectories(baseDir, tenantId),
+    primitives: [
+      {
+        name: "orders.search",
+        signature: "search(query, opts?): Promise<Order[]>",
+        description: "Search local fixture orders.",
+        implementation: "local",
+        isAgent: false
+      },
+      {
+        name: "orders.sum",
+        signature: "sum(field): number",
+        description: "Sum a numeric field from matched orders.",
+        implementation: "pure",
+        isAgent: false
+      },
+      {
+        name: "tickets.search",
+        signature: "search(query, opts?): Promise<Ticket[]>",
+        description: "Search local fixture support tickets.",
+        implementation: "local",
+        isAgent: false
+      },
+      {
+        name: "tickets.count",
+        signature: "count(rows): number",
+        description: "Count matched ticket rows.",
+        implementation: "pure",
+        isAgent: false
+      }
+    ],
+    agents: [],
+    learnedFunctions,
+    hooks,
+    drift: drift.procedures,
+    evalMetrics,
+    demo: { showBob: false }
+  };
+}
+
+async function readWorkspaceHooks(baseDir: string): Promise<NonNullable<StateResponse["hooks"]>> {
+  const root = path.join(baseDir, "hooks");
+  let domains: string[];
+  try {
+    domains = await readdir(root);
+  } catch {
+    return [];
+  }
+  const hooks = [];
+  for (const domain of domains) {
+    const dir = path.join(root, domain);
+    let entries: string[];
+    try {
+      entries = await readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries.filter((file) => file.endsWith(".json"))) {
+      hooks.push(JSON.parse(await readFile(path.join(dir, entry), "utf8")));
+    }
+  }
+  return hooks;
+}
+
+async function readEvalMetrics(baseDir: string): Promise<NonNullable<StateResponse["evalMetrics"]>> {
+  try {
+    const text = await readFile(path.join(baseDir, "eval", "ledger.jsonl"), "utf8");
+    return text
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+  } catch {
+    return [];
+  }
 }

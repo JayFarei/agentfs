@@ -6,6 +6,7 @@ import { atlasfsHome } from "../trajectory/recorder.js";
 import { buildState, resolveTenant } from "./state.js";
 import { runQuestion } from "./runWrapper.js";
 import { resetTenant } from "./reset.js";
+import { hasWorkspace, reviewWorkspaceDraft, workspaceTenantForUi } from "../workspace/runtime.js";
 import type {
   RunRequest,
   EndorseRequest,
@@ -61,6 +62,34 @@ app.post("/api/endorse", async (c) => {
   const body = await c.req.json<EndorseRequest>();
   const tenantId = resolveTenant(c.req.query("tenant"));
   const baseDir = atlasfsHome();
+
+  if (await hasWorkspace(baseDir)) {
+    const workspaceTenantId = await workspaceTenantForUi(tenantId, baseDir);
+    const result = await reviewWorkspaceDraft({
+      draftIdOrPath: body.trajectoryId,
+      tenantId: workspaceTenantId,
+      baseDir
+    });
+    const state = await buildState(workspaceTenantId);
+    const procedure = state.procedures.find((p) => p.name === result.procedureName) ?? {
+      name: result.procedureName,
+      description: "Endorsed from workspace trajectory",
+      intent: result.procedureName,
+      sig: `${result.procedureName}(): number | string`,
+      stage: "endorsed" as const,
+      hits: 0,
+      implementationKind: "planned_chain" as const,
+      source: "",
+      createdAt: new Date().toISOString()
+    };
+
+    return c.json({
+      procedureName: result.procedureName,
+      jsonPath: result.jsonPath,
+      tsPath: result.jsonPath.replace(/\.json$/, ".ts"),
+      procedure
+    } satisfies EndorseResponse);
+  }
 
   const { jsonPath, tsPath } = await endorseTrajectory({
     trajectoryIdOrPath: body.trajectoryId,

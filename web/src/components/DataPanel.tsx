@@ -1,4 +1,4 @@
-import type { ApiDataCollection, ApiClusterStatus } from "@server/types";
+import type { ApiDataCollection, ApiClusterStatus, ApiEvalMetric, StateResponse } from "@server/types";
 import { CenterEmpty } from "./CenterEmpty";
 import { RunView } from "./RunView";
 import type { RunState } from "./RunView";
@@ -19,6 +19,8 @@ interface DataPanelProps {
   cluster: ApiClusterStatus | null;
   run: RunState | null;
   procedures: ProcEntry[];
+  drift: NonNullable<StateResponse["drift"]>;
+  evalMetrics: ApiEvalMetric[];
   onEndorse: (trajectoryId: string) => void;
 }
 
@@ -29,11 +31,15 @@ export function DataPanel({
   cluster,
   run,
   procedures,
+  drift,
+  evalMetrics,
   onEndorse,
 }: DataPanelProps) {
   const clusterName = cluster?.name ?? "atlas-prod-eu";
   const region = cluster?.region ?? "eu-west-1";
   const tier = cluster?.tier ?? "M40 · 3-node replica set";
+  const baselines = [...new Set(evalMetrics.map((metric) => metric.baseline))];
+  const latestAtlasfs = [...evalMetrics].reverse().find((metric) => metric.baseline === "atlasfs");
 
   return (
     <main
@@ -72,6 +78,22 @@ export function DataPanel({
             </li>
           ))}
         </ul>
+        {(drift.length > 0 || evalMetrics.length > 0) && (
+          <div className="v01-cluster-meta" style={{ marginTop: 10, alignItems: "flex-start" }}>
+            {drift.length > 0 && (
+              <span>
+                drift ·{" "}
+                {drift.map((item) => `${item.name}:${item.drift}`).join(", ")}
+              </span>
+            )}
+            {drift.length > 0 && evalMetrics.length > 0 && <span className="dot">·</span>}
+            {evalMetrics.length > 0 && (
+              <span>
+                eval · {baselines.join("/")} · L_n {latestAtlasfs?.L_n.toFixed(2) ?? "0.00"}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );

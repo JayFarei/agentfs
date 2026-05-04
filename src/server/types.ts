@@ -1,7 +1,7 @@
 export type ProcedureStage = "novel" | "endorsed" | "compiled" | "family";
 export type PipelineStageKey = "parse" | "match" | "plan" | "cluster" | "cursor" | "render";
 
-export type TenantId = "alice" | "bob" | "financial-analyst";
+export type TenantId = string;
 
 export type ApiProcedureSummary = {
   name: string;
@@ -83,7 +83,31 @@ export type StateResponse = {
   primitives?: ApiPrimitive[];
   agents?: ApiStoredAgent[];
   learnedFunctions?: ApiLearnedFunction[];
+  hooks?: ApiHook[];
+  drift?: Array<{ name: string; tenantId: string; drift: "current" | "drifted" }>;
+  evalMetrics?: ApiEvalMetric[];
   demo?: { showBob: boolean };
+};
+
+export type ApiHook = {
+  name: string;
+  intent: string;
+  description: string;
+  collections: string[];
+  route: string[];
+};
+
+export type ApiEvalMetric = {
+  baseline: "vanilla_rag" | "static_typed" | "atlasfs";
+  round: number;
+  tenant: string;
+  T_n: number;
+  D_n: number;
+  R_n: number;
+  I_n: number;
+  L_n: number;
+  correctness: boolean;
+  evidenceCompleteness: number;
 };
 
 export type ApiTrajectorySummary = {

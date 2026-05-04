@@ -1,7 +1,135 @@
 # AtlasFS Scenario And Live-App Interfaces
 
 This is the current executable scenario proven by the test suite and the
-interfaces we should expose to a Next.js app next.
+interfaces exposed to the local CLI/API. The product now has two executable
+surfaces:
+
+1. A self-contained `ATLASFS_HOME` filesystem runtime used for local acceptance.
+2. The legacy Atlas/FinQA live demo path used for the MongoDB/Flue showcase.
+
+## Local Filesystem Acceptance Path
+
+The local path starts from a blank directory:
+
+```sh
+ATLASFS_HOME=$(mktemp -d)
+ATLASFS_HOME=$ATLASFS_HOME pnpm atlasfs init --fixture all
+```
+
+`init` writes the complete runtime boundary under `ATLASFS_HOME`:
+
+```text
+workspace.json
+data/fixture-finance/orders.jsonl
+data/fixture-support/tickets.jsonl
+data/fixture-events/events.jsonl
+hooks/finance/customer_total_revenue.json
+hooks/support/customer_open_tickets.json
+```
+
+The first fixture query routes through hook match and planner-style primitive
+execution over the finance fixture:
+
+```text
+User: what is total revenue for acme?
+Chain:
+  hooks.finance.customer_total_revenue
+  orders.search
+  orders.sum
+Result: 425
+Artifacts:
+  trajectories/<id>.json
+  drafts/<id>.json
+```
+
+The second fixture corpus proves the same runner is not finance-only:
+
+```text
+User: how many open support tickets for acme?
+Chain:
+  hooks.support.customer_open_tickets
+  tickets.search
+  tickets.count
+Result: 1
+Artifacts:
+  trajectories/<id>.json
+  drafts/<id>.json
+```
+
+The typed bootstrap has a polymorphic fixture collection:
+
+```text
+readFile("/datafetch/db/events.ts")
+  -> export type EventsRow = DeployEvent | IncidentEvent
+  -> per-field @presence annotations
+```
+
+Hooks are also readable through the virtual TypeScript surface:
+
+```text
+readFile("/datafetch/hooks/support/customer_open_tickets.ts")
+  -> JSDoc route scaffold + CustomerOpenTicketsIntent
+```
+
+For an off-script statistic, the observer path mints a deterministic function
+under the tenant workspace and reuses it for sibling questions:
+
+```text
+User: what is the standard deviation of order amounts for acme?
+Chain:
+  orders.search
+  observer.codifyFunction
+  function_store.save
+  stats.stddev
+Artifacts:
+  functions/data-analyst/stats.stddev.{json,ts}
+
+User: what is the standard deviation of order amounts for beta?
+Chain:
+  orders.search
+  function_store.findReusable
+  stats.stddev
+```
+
+Promotion is explicit:
+
+```sh
+ATLASFS_HOME=$ATLASFS_HOME pnpm atlasfs review <draft-id> --yes --local
+```
+
+The verifier replays a shadow question, `what is total revenue for beta?`, and
+publishes `procedures/data-analyst/customer_total_revenue.{json,ts}` only when
+the shadow answer is `210`. A sibling query then replays through one call:
+
+```text
+User: what is total revenue for beta?
+Chain:
+  procedures.customer_total_revenue
+Result: 210
+```
+
+The local lifecycle also has concrete budget, drift, and eval commands:
+
+```sh
+ATLASFS_HOME=$ATLASFS_HOME pnpm atlasfs budget customer_total_revenue --tenant data-analyst
+ATLASFS_HOME=$ATLASFS_HOME pnpm atlasfs drift check
+ATLASFS_HOME=$ATLASFS_HOME pnpm atlasfs eval --round 0 --tenant data-analyst --tenant support-analyst
+ATLASFS_HOME=$ATLASFS_HOME pnpm atlasfs hydrate-atlas --dry-run --db atlasfs_hackathon
+```
+
+`drift check` compares the procedure's pinned collection fingerprint with the
+current fixture collection shape. Adding another row with the same fields keeps
+the procedure current; adding a row with a new field marks it drifted. `eval`
+writes append-only rows to `eval/ledger.jsonl` with `T_n`, `D_n`, `R_n`,
+`I_n`, `L_n`, simulated cost, wall time, correctness, evidence completeness,
+and a baseline facet (`vanilla_rag`, `static_typed`, `atlasfs`). `budget`
+writes a compiled local plan under `compiled/<tenant>/`.
+`hydrate-atlas --dry-run` emits the target Atlas collection mapping and document
+counts for every workspace collection without requiring Atlas credentials.
+
+The web/API state path detects `workspace.json`, maps the two demo panes onto
+workspace tenants, and returns dynamic workspace tenants, collections, hooks,
+learned functions, procedures, drift status, and eval metrics.
 
 ## System Shape
 

@@ -34,6 +34,7 @@ import {
 } from "./procedures/store.js";
 import {
   extractCompany,
+  isAveragePaymentVolumeIntent,
   isLargestAveragePaymentVolumeIntent,
   isDocumentSentimentIntent,
   isNegativeOutlookReferencesIntent,
@@ -401,6 +402,15 @@ export async function runQuery(args: {
     });
   }
 
+  if (isAveragePaymentVolumeIntent(args.question)) {
+    return runAveragePaymentVolumeQuery({
+      question: args.question,
+      tenantId,
+      baseDir,
+      finqaCases
+    });
+  }
+
   // Genuinely unmatched questions: hand off to the off-script loop.
   return runPlannedQuery({
     question: args.question,
@@ -409,6 +419,52 @@ export async function runQuery(args: {
     finqaCases,
     observerRuntime: args.observerRuntime
   });
+}
+
+async function runAveragePaymentVolumeQuery(args: {
+  question: string;
+  tenantId: string;
+  baseDir: string;
+  finqaCases: FinqaCasesPrimitive;
+}): Promise<RunQueryResult> {
+  const recorder = new TrajectoryRecorder({ tenantId: args.tenantId, question: args.question });
+  const candidates = await recorder.call("finqa_cases.findSimilar", { question: args.question, limit: 10 }, (input) =>
+    args.finqaCases.findSimilar(input.question, input.limit)
+  );
+  const filing = await recorder.call("finqa_resolve.pickFiling", { question: args.question, candidates }, (input) =>
+    finqa_resolve.pickFiling(input)
+  );
+  const numerator = await recorder.call(
+    "finqa_resolve.locateFigure",
+    { question: args.question, filing, role: "numerator" as const },
+    (input) => finqa_resolve.locateFigure(input)
+  );
+  const denominator = await recorder.call(
+    "finqa_resolve.locateFigure",
+    { question: args.question, filing, role: "denominator" as const },
+    (input) => finqa_resolve.locateFigure(input)
+  );
+  const quotient = await recorder.call(
+    "arithmetic.divide",
+    { numerator: numerator.value, denominator: denominator.value },
+    (input) => arithmetic.divide(input.numerator, input.denominator)
+  );
+  const result: AnswerResult = {
+    answer: quotient,
+    roundedAnswer: arithmetic.round(quotient, 2),
+    evidence: [numerator, denominator]
+  };
+  recorder.setResult(result);
+  await recorder.save(args.baseDir);
+
+  return {
+    mode: "novel",
+    answer: result.answer,
+    roundedAnswer: result.roundedAnswer,
+    trajectoryId: recorder.id,
+    calls: recorder.snapshot.calls,
+    evidence: result.evidence
+  };
 }
 
 function isUnsupportedStatIntent(question: string): boolean {

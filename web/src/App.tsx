@@ -6,6 +6,8 @@ import type {
   ApiPrimitive,
   ApiStoredAgent,
   ApiLearnedFunction,
+  ApiHook,
+  ApiEvalMetric,
 } from "@server/types";
 import {
   fetchState,
@@ -69,6 +71,9 @@ function viewFromState(state: StateResponse | null) {
     primitives: (state.primitives ?? []) as ApiPrimitive[],
     agents: (state.agents ?? []) as ApiStoredAgent[],
     learnedFunctions: (state.learnedFunctions ?? []) as ApiLearnedFunction[],
+    hooks: (state.hooks ?? []) as ApiHook[],
+    drift: state.drift ?? [],
+    evalMetrics: (state.evalMetrics ?? []) as ApiEvalMetric[],
     sourceMap: Object.fromEntries(
       state.procedures.map((p) => [p.name, p.source])
     ),
@@ -320,8 +325,8 @@ export default function App() {
         setActive={setActive}
         openHow={() => setHowOpen(true)}
         users={{
-          alice: { name: aliceView?.name ?? "Alice" },
-          bob: { name: bobView?.name ?? "Bob" },
+          alice: { name: aliceView?.name ?? "Tenant A" },
+          bob: { name: bobView?.name ?? "Tenant B" },
         }}
       />
 
@@ -380,7 +385,7 @@ export default function App() {
           const slot = slots[tenant];
           return (
             <UserView
-              name={view?.name ?? (tenant === "alice" ? "Alice" : "Bob")}
+              name={view?.name ?? (tenant === "alice" ? "Tenant A" : "Tenant B")}
               role={view?.role ?? ""}
               tenant={tenant}
               pathLabel={view?.pathLabel ?? ""}
@@ -388,6 +393,9 @@ export default function App() {
               primitives={view?.primitives ?? []}
               agents={view?.agents ?? []}
               learnedFunctions={view?.learnedFunctions ?? []}
+              hooks={view?.hooks ?? []}
+              drift={view?.drift ?? []}
+              evalMetrics={view?.evalMetrics ?? []}
               data={view?.data ?? []}
               cluster={view?.cluster ?? null}
               suggested={view?.suggested ?? []}
