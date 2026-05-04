@@ -26,6 +26,11 @@ import {
   type EmitResult,
   type EmitStageEvent,
 } from "../bootstrap/emit.js";
+import type { CollectionIdent } from "../bootstrap/idents.js";
+import {
+  getMountRuntimeRegistry,
+  makeMountRuntime,
+} from "./runtime.js";
 
 // --- Public types ----------------------------------------------------------
 
@@ -71,10 +76,20 @@ export type MountHandleEvents = {
   "family-promoted": (e: FamilyPromotedEvent) => void;
 };
 
+// Inventory returned from `MountHandle.inventory()`. Extends the SDK's
+// `MountInventory` (which only carries `collections: CollectionInventoryEntry[]`)
+// with the `identMap` field the snippet runtime needs to resolve
+// `df.db.<ident>` back to the substrate's collection name. The same data
+// is also persisted to `<baseDir>/mounts/<mountId>/_inventory.json` so an
+// off-disk reader can boot without going through publishMount.
+export type PublishedMountInventory = MountInventory & {
+  identMap: CollectionIdent[];
+};
+
 export type MountHandle = {
   readonly id: string;
   status(): AsyncIterable<MountStatusEvent>;
-  inventory(): Promise<MountInventory>;
+  inventory(): Promise<PublishedMountInventory>;
   read(relativePath: string): Promise<string>;
   on<K extends keyof MountHandleEvents>(
     event: K,
@@ -82,6 +97,7 @@ export type MountHandle = {
   ): void;
   // Adapter exit: closes the underlying substrate connection. Not part of
   // the personas.md spec but the MVP plumbing needs it for clean shutdown.
+  // Also unregisters the mount from the global MountRuntimeRegistry.
   close(): Promise<void>;
 };
 
@@ -113,12 +129,28 @@ export async function publishMount(
   // when warmup === "eager".
   let cachedResult: EmitResult | null = null;
   let resultError: Error | null = null;
+  let registered = false;
 
   const ensureDone = async (): Promise<EmitResult> => {
     if (cachedResult) return cachedResult;
     if (resultError) throw resultError;
     try {
       cachedResult = await stream.done();
+      // Register the live MountRuntime so the snippet runtime can bind
+      // `df.db.<ident>` against this adapter from inside `npx tsx`. The
+      // adapter stays open until `MountHandle.close()` is called.
+      if (!registered) {
+        const registry = getMountRuntimeRegistry();
+        registry.register(
+          args.id,
+          makeMountRuntime({
+            mountId: args.id,
+            adapter,
+            identMap: cachedResult.identMap,
+          }),
+        );
+        registered = true;
+      }
       return cachedResult;
     } catch (err) {
       resultError = err instanceof Error ? err : new Error(String(err));
@@ -137,9 +169,12 @@ export async function publishMount(
     status(): AsyncIterable<MountStatusEvent> {
       return stream.events();
     },
-    async inventory(): Promise<MountInventory> {
+    async inventory(): Promise<PublishedMountInventory> {
       const result = await ensureDone();
-      return result.inventory;
+      return {
+        collections: result.inventory.collections,
+        identMap: result.identMap,
+      };
     },
     async read(relativePath: string): Promise<string> {
       // Resolve relative to the mount root. Caller-relative paths (no
@@ -161,6 +196,18 @@ export async function publishMount(
       // MVP vs full SDK.
     },
     async close(): Promise<void> {
+      // Unregister first so any in-flight resolve calls fail fast rather
+      // than racing on a closing client. The registry's `unregister`
+      // returns the runtime; closing it closes the adapter exactly once.
+      if (registered) {
+        const registry = getMountRuntimeRegistry();
+        const removed = registry.unregister(args.id);
+        registered = false;
+        if (removed) {
+          await removed.close();
+          return;
+        }
+      }
       await adapter.close();
     },
   };

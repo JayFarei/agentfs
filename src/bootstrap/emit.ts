@@ -28,6 +28,7 @@ import { fingerprintDescriptor, inferShape } from "./infer.js";
 import { sampleCollection } from "./sample.js";
 import { synthesizeCollectionModule } from "./synthesize.js";
 import { synthesizeReadme } from "./readme.js";
+import { buildIdentMap, type CollectionIdent } from "./idents.js";
 
 // --- Stage events ----------------------------------------------------------
 
@@ -58,8 +59,13 @@ export type EmitResult = {
   mountId: string;
   baseDir: string;
   inventory: MountInventory;
+  // {ident, name} pairs in inventory order, one per collection. The snippet
+  // runtime uses this to map `df.db.<ident>` calls back to the substrate
+  // collection name. Persisted to `<baseDir>/mounts/<mountId>/_inventory.json`.
+  identMap: CollectionIdent[];
   collections: Array<{
     name: string;
+    ident: string;
     rows: number;
     fingerprint: string;
     sampleSize: number;
@@ -72,6 +78,22 @@ export type EmitResult = {
     };
   }>;
   readmePath: string;
+  inventoryPath: string;
+};
+
+// Shape of the on-disk inventory record.
+// Path: `<baseDir>/mounts/<mountId>/_inventory.json`.
+// Wave 3's snippet runtime reads this when binding `df.db.<ident>`.
+export type OnDiskInventory = {
+  mountId: string;
+  substrate: string;
+  generatedAt: string;
+  collections: Array<{
+    ident: string;
+    name: string;
+    rows: number;
+    fingerprint: string;
+  }>;
 };
 
 // --- Default base directory ------------------------------------------------
@@ -120,6 +142,11 @@ export function emitMount(args: EmitArgs): EmitStream {
       // --- Stage 1: probe -----------------------------------------------
       emit({ stage: "probing" });
       const inventory = await args.adapter.probe();
+
+      const identMap = buildIdentMap(
+        inventory.collections.map((c) => c.name),
+      );
+      const identByName = new Map(identMap.map((c) => [c.name, c.ident]));
 
       const collectionResults: EmitResult["collections"] = [];
 
@@ -190,6 +217,7 @@ export function emitMount(args: EmitArgs): EmitStream {
 
         collectionResults.push({
           name: entry.name,
+          ident: identByName.get(entry.name) ?? entry.name,
           rows: entry.rows,
           fingerprint,
           sampleSize: sampleResult.samples.length,
@@ -211,9 +239,31 @@ export function emitMount(args: EmitArgs): EmitStream {
           sampleSize: c.sampleSize,
         })),
       });
-      const readmePath = path.join(baseDir, "mounts", args.mountId, "README.md");
-      await fs.mkdir(path.dirname(readmePath), { recursive: true });
+      const mountRoot = path.join(baseDir, "mounts", args.mountId);
+      await fs.mkdir(mountRoot, { recursive: true });
+      const readmePath = path.join(mountRoot, "README.md");
       await fs.writeFile(readmePath, readme, "utf8");
+
+      // Persist the on-disk inventory so the snippet runtime can boot
+      // off-disk after a server restart without re-publishing the mount.
+      // Wave 3 reads this via `MountReader` to populate `df.db.*`.
+      const onDiskInventory: OnDiskInventory = {
+        mountId: args.mountId,
+        substrate: args.adapter.id,
+        generatedAt: new Date().toISOString(),
+        collections: collectionResults.map((c) => ({
+          ident: c.ident,
+          name: c.name,
+          rows: c.rows,
+          fingerprint: c.fingerprint,
+        })),
+      };
+      const inventoryPath = path.join(mountRoot, "_inventory.json");
+      await fs.writeFile(
+        inventoryPath,
+        JSON.stringify(onDiskInventory, null, 2),
+        "utf8",
+      );
 
       emit({ stage: "ready" });
 
@@ -228,8 +278,10 @@ export function emitMount(args: EmitArgs): EmitStream {
         mountId: args.mountId,
         baseDir,
         inventory,
+        identMap,
         collections: collectionResults,
         readmePath,
+        inventoryPath,
       };
     } catch (err) {
       finished = true;

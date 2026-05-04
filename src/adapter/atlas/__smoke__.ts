@@ -19,6 +19,7 @@ import { promises as fs } from "node:fs";
 import { atlasMount } from "../atlasMount.js";
 import { publishMount } from "../publishMount.js";
 import { resolveBaseDir } from "../../bootstrap/emit.js";
+import { getMountRuntimeRegistry } from "../runtime.js";
 
 async function main(): Promise<void> {
   const uri = process.env.ATLAS_URI ?? process.env.MONGODB_URI;
@@ -106,8 +107,60 @@ async function main(): Promise<void> {
     );
   }
 
+  // (e) on-disk inventory present and well-formed
+  const inventoryFile = path.join(mountRoot, "_inventory.json");
+  await fs.access(inventoryFile);
+  const inventoryDisk = JSON.parse(
+    await fs.readFile(inventoryFile, "utf8"),
+  ) as { mountId: string; collections: Array<{ ident: string; name: string }> };
+  if (
+    inventoryDisk.mountId !== mountId ||
+    !Array.isArray(inventoryDisk.collections) ||
+    inventoryDisk.collections.length === 0
+  ) {
+    throw new Error(`[smoke] malformed _inventory.json at ${inventoryFile}`);
+  }
+  if (!inventoryDisk.collections.every((c) => c.ident && c.name)) {
+    throw new Error(`[smoke] _inventory.json entries missing {ident,name}`);
+  }
+  console.log(
+    `[smoke] ok: _inventory.json (${inventoryDisk.collections.length} collections, idents: ${inventoryDisk.collections.map((c) => `${c.ident}→${c.name}`).join(", ")})`,
+  );
+
+  // (f) `inventory()` returns the same identMap shape
+  const inventoryHandle = await handle.inventory();
+  if (
+    !Array.isArray(inventoryHandle.identMap) ||
+    inventoryHandle.identMap.length !== inventoryDisk.collections.length
+  ) {
+    throw new Error(`[smoke] inventory().identMap mismatch with on-disk record`);
+  }
+
+  // (g) the registry returns a live MountRuntime; calling
+  //     `runtime.collection(name).findExact({}, 3)` returns rows.
+  const registry = getMountRuntimeRegistry();
+  const runtime = registry.get(mountId);
+  if (!runtime) {
+    throw new Error(`[smoke] MountRuntimeRegistry.get(${mountId}) returned null`);
+  }
+  if (runtime.identMap.length !== inventoryDisk.collections.length) {
+    throw new Error(`[smoke] runtime.identMap length mismatch`);
+  }
+  const liveColl = runtime.collection<Record<string, unknown>>(target.name);
+  const liveDocs = await liveColl.findExact({}, 3);
+  if (!Array.isArray(liveDocs) || liveDocs.length === 0) {
+    throw new Error(`[smoke] live runtime findExact returned no rows`);
+  }
+  console.log(
+    `[smoke] ok: registry.get(${mountId}).collection(${target.name}).findExact({}, 3) → ${liveDocs.length} rows`,
+  );
+
   console.log("[smoke] all assertions passed.");
   await handle.close();
+  // After close, the registry should no longer have the mount.
+  if (getMountRuntimeRegistry().get(mountId) !== null) {
+    throw new Error(`[smoke] expected unregister-on-close; mount still in registry`);
+  }
 }
 
 main().catch((err) => {

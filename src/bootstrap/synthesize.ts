@@ -24,6 +24,12 @@
 
 import type { MountDescriptor, PolymorphicVariant } from "../sdk/index.js";
 import type { InferenceOutput, JsType } from "./infer.js";
+import { toIdent } from "./idents.js";
+
+// Re-export so existing callers (and Wave 3's snippet runtime) can import
+// the helper from the synthesizer module too. The canonical home is
+// `./idents.ts` — both modules MUST use the same rule.
+export { toIdent } from "./idents.js";
 
 export type SynthesizeArgs = {
   mountId: string;
@@ -184,18 +190,6 @@ function jsTypeToTs(t: JsType): string {
 function capitalise(s: string): string {
   if (s.length === 0) return s;
   return s[0].toUpperCase() + s.slice(1);
-}
-
-function toIdent(s: string): string {
-  // Convert to a TS identifier: snake_case → camelCase, strip illegal chars,
-  // ensure leading char is alpha.
-  const cleaned = s
-    .replace(/[^a-zA-Z0-9_]+/g, "_")
-    .replace(/_+([a-zA-Z0-9])/g, (_, ch: string) => ch.toUpperCase())
-    .replace(/^_+/, "");
-  if (cleaned.length === 0) return "Item";
-  if (/^[0-9]/.test(cleaned)) return `_${cleaned}`;
-  return cleaned;
 }
 
 function quoteIfNeeded(field: string): string {

@@ -117,6 +117,10 @@ export type CompoundSearchOpts = {
   paths: SearchPaths;
   limit: number;
   indexName: string;
+  // When true, keep `_id` on the projected docs so the caller can rename
+  // it to `_mongoId`. Default false (strip-by-default; matches the
+  // existing FinQA behaviour).
+  preserveId?: boolean;
 };
 
 // Build the $search compound block. Mirrors the structure of
@@ -172,19 +176,20 @@ export async function runCompoundSearch<T extends Document>(
   opts: CompoundSearchOpts,
 ): Promise<T[]> {
   const compound = buildCompound(opts);
-  return collection
-    .aggregate<T>([
-      {
-        $search: {
-          index: opts.indexName,
-          compound,
-        },
+  const pipeline: Document[] = [
+    {
+      $search: {
+        index: opts.indexName,
+        compound,
       },
-      { $limit: opts.limit },
-      // Strip Mongo's internal _id; downstream consumers assume plain JSON.
-      { $project: { _id: 0 } },
-    ])
-    .toArray();
+    },
+    { $limit: opts.limit },
+  ];
+  if (!opts.preserveId) {
+    // Strip Mongo's internal _id; downstream consumers assume plain JSON.
+    pipeline.push({ $project: { _id: 0 } });
+  }
+  return collection.aggregate<T>(pipeline).toArray();
 }
 
 // Lightweight client-side fallback when no Atlas Search index exists. Builds
@@ -192,7 +197,12 @@ export async function runCompoundSearch<T extends Document>(
 // large collections but keeps the API contract honest during warm-up.
 export async function fallbackTextSearch<T extends Document>(
   collection: Collection<T>,
-  opts: { query: string; limit: number; textFields: string[] },
+  opts: {
+    query: string;
+    limit: number;
+    textFields: string[];
+    preserveId?: boolean;
+  },
 ): Promise<T[]> {
   if (opts.textFields.length === 0) {
     return [];
@@ -206,9 +216,10 @@ export async function fallbackTextSearch<T extends Document>(
       [field]: { $regex: escapeRegex(tok), $options: "i" },
     })),
   );
+  const projection = opts.preserveId ? {} : { _id: 0 };
   const docs = (await collection
     .find({ $or: orClauses } as Filter<T>)
-    .project({ _id: 0 })
+    .project(projection)
     .limit(opts.limit * 4)
     .toArray()) as T[];
 

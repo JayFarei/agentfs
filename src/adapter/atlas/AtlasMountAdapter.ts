@@ -12,7 +12,19 @@
 //     `runCompiled()` itself is unimplemented in MVP and throws.
 //   - probe() lists collections, counts rows, detects existing search indexes.
 //   - sample() uses $sample (note: Atlas $sample is NOT seedable; documented).
+//     `_id` is stripped at sample time so the inference doesn't classify
+//     Mongo's ObjectId as an `id` role on top of the dataset's own id field.
 //   - collection<T>() returns a CollectionHandle with the four-method contract.
+//
+// `_id` projection rule (per Wave 2 review):
+//   `findExact` / `search` strip `_id` by default. For collections whose
+//   inferred descriptor has NO field with `role: "id"`, the handle preserves
+//   `_id` and emits it as `_mongoId` (a stringified ObjectId) so downstream
+//   snippets can still address rows. The decision is made per-call from
+//   the descriptor cached on the adapter; bare-collection calls before
+//   bootstrap stay strip-by-default. FinQA collections all carry an `id`
+//   field so the live corpus is unaffected.
+//
 //   - runCompiled / watch / ensureIndex are declared for contract stability and
 //     throw "not implemented in MVP — adapter capability deferred" per scope.
 
@@ -197,19 +209,60 @@ function makeCollectionHandle<T>(args: HandleArgs): CollectionHandle<T> {
     return out;
   };
 
+  // Whether to preserve `_id` and emit it as `_mongoId` on returned rows.
+  // Triggered when the inferred descriptor has NO field with `role: "id"`.
+  // If the descriptor isn't known yet (pre-bootstrap), we strip by default
+  // (legacy behaviour; cheaper round-trip and matches FinQA shape).
+  const shouldPreserveId = (descriptor: MountDescriptor | null): boolean => {
+    if (!descriptor) return false;
+    for (const f of Object.values(descriptor.fields)) {
+      if (f.role === "id") return false;
+    }
+    return true;
+  };
+
+  // Stringify the Mongo ObjectId on `_id` into `_mongoId`. Drops the raw
+  // `_id` so the returned shape stays plain JSON.
+  const renameMongoId = (doc: Document): Document => {
+    const raw = doc._id;
+    if (raw === undefined || raw === null) return doc;
+    const stringified = stringifyId(raw);
+    const out: Document = { ...doc, _mongoId: stringified };
+    delete out._id;
+    return out;
+  };
+
+  const postProcess = (docs: Document[], descriptor: MountDescriptor | null): Document[] => {
+    if (shouldPreserveId(descriptor)) {
+      return docs.map(renameMongoId);
+    }
+    // Default: `_id` was already stripped at the projection stage; nothing
+    // to do. Defensive `delete` in case an upstream branch slipped one through.
+    return docs.map((d) => {
+      if ("_id" in d) {
+        const out = { ...d };
+        delete out._id;
+        return out;
+      }
+      return d;
+    });
+  };
+
   return {
     async findExact(filter: Partial<T>, limit?: number): Promise<T[]> {
       const db = await getDb();
       const coll = db.collection<Document>(name);
       const cap = limit ?? 10;
-      // Cast: Partial<T> against Document is structurally a Filter for
-      // the collection. Driver typings allow it through Document.
+      const descriptor = getDescriptor();
+      const preserve = shouldPreserveId(descriptor);
+      // Project `_id` only when we want to preserve it for the rename step.
+      const projection = preserve ? {} : { _id: 0 };
       const docs = await coll
         .find(filter as Document)
-        .project({ _id: 0 })
+        .project(projection)
         .limit(cap)
         .toArray();
-      return docs as T[];
+      return postProcess(docs, descriptor) as T[];
     },
 
     async search(query: string, opts?: { limit?: number }): Promise<T[]> {
@@ -227,14 +280,17 @@ function makeCollectionHandle<T>(args: HandleArgs): CollectionHandle<T> {
           paths.table.length >
         0;
 
+      const preserve = shouldPreserveId(descriptor);
+
       if (indexName && hasAnyPath) {
         const docs = await runCompoundSearch<Document>(coll, {
           query,
           paths,
           limit,
           indexName,
+          preserveId: preserve,
         });
-        return docs as T[];
+        return postProcess(docs, descriptor) as T[];
       }
 
       // No Atlas Search index OR no descriptor yet: fallback to a
@@ -244,8 +300,9 @@ function makeCollectionHandle<T>(args: HandleArgs): CollectionHandle<T> {
         query,
         limit,
         textFields,
+        preserveId: preserve,
       });
-      return docs as T[];
+      return postProcess(docs, descriptor) as T[];
     },
 
     async findSimilar(query: string, limit?: number): Promise<T[]> {
@@ -259,4 +316,28 @@ function makeCollectionHandle<T>(args: HandleArgs): CollectionHandle<T> {
       return this.search(query, { limit: opts?.limit ?? 10 });
     },
   };
+}
+
+// Stringify a Mongo `_id`. Handles ObjectId (via `.toString()`), string,
+// number, and falls back to JSON for anything exotic. Kept tiny so we
+// don't pull `bson` typings into the public surface.
+function stringifyId(raw: unknown): string {
+  if (raw === null || raw === undefined) return "";
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
+  if (typeof raw === "object") {
+    const obj = raw as { toString?: () => string };
+    if (typeof obj.toString === "function") {
+      const s = obj.toString();
+      // Default Object.prototype.toString returns "[object Object]" — fall
+      // through to JSON when toString didn't get overridden.
+      if (s !== "[object Object]") return s;
+    }
+    try {
+      return JSON.stringify(raw);
+    } catch {
+      return "[unstringifiable]";
+    }
+  }
+  return String(raw);
 }
