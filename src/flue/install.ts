@@ -11,8 +11,10 @@
 //
 // Seed-bundle copy: at install time we mirror the seed skills shipped with
 // the SDK from `<repo>/seeds/skills/*.md` into
-// `<baseDir>/skills/__seed__/<name>.md` so the disk skill loader can find
-// them. The mirror is best-effort; missing seeds are warned-but-tolerated.
+// `<baseDir>/lib/__seed__/skills/<name>.md` so the disk skill loader can
+// find them. `__seed__` is a reserved tenant id (the bash agent's library
+// listing excludes tenant ids matching `^__\w+__$`). The mirror is
+// best-effort; missing seeds are warned-but-tolerated.
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -84,10 +86,10 @@ export async function installFlueDispatcher(
 
 // --- Seed mirror -----------------------------------------------------------
 
-// Copy `<repo>/seeds/skills/*.md` into `<baseDir>/skills/__seed__/`. Walks
-// the package tree by following `import.meta.url`. If the seed bundle
-// can't be located (e.g. when running from a bundled deployment that
-// omits the seeds dir), this becomes a warn-only no-op.
+// Copy `<repo>/seeds/skills/*.md` into `<baseDir>/lib/__seed__/skills/`.
+// Walks the package tree by following `import.meta.url`. If the seed
+// bundle can't be located (e.g. when running from a bundled deployment
+// that omits the seeds dir), this becomes a warn-only no-op.
 async function mirrorSeedSkills(baseDir: string): Promise<void> {
   const sourceDir = await locateSeedDir();
   if (sourceDir === null) {
@@ -98,7 +100,7 @@ async function mirrorSeedSkills(baseDir: string): Promise<void> {
     );
     return;
   }
-  const targetDir = path.join(baseDir, "skills", "__seed__");
+  const targetDir = path.join(baseDir, "lib", "__seed__", "skills");
   await fs.mkdir(targetDir, { recursive: true });
   let entries: import("node:fs").Dirent[];
   try {

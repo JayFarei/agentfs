@@ -1,22 +1,26 @@
 // Skill markdown loader.
 //
 // Per design.md §6.3 + plan R3/R4 + acceptance criteria for Phase 4: skills
-// are optional markdown sidecars at `/lib/skills/<name>.md` (or, on the
-// host filesystem, `<DATAFETCH_HOME>/skills/<tenant>/<name>.md`). The
-// dispatcher loads the skill, parses its frontmatter, and uses the body
-// as the system instruction for an `agent({skill})` body call.
+// are optional markdown sidecars inside the agent's `/lib/skills/<name>.md`
+// namespace (skills are part of /lib/, not a sibling directory). On the
+// host filesystem this maps to `<baseDir>/lib/<tenantId>/skills/<name>.md`.
 //
 // ─── LibraryResolver vs SkillLoader ─────────────────────────────────────
 //
 // The Wave 1 LibraryResolver interface (src/sdk/runtime.ts) only knows how
-// to resolve a *function* by name (`/lib/<name>.ts`). Skills are a different
-// namespace (`/lib/skills/<name>.md`). Rather than mutate the Wave 1
-// contract, we keep skill loading as a side-channel here: the dispatcher
-// holds its own `SkillLoader` instance, defaulting to `DiskSkillLoader`.
+// to resolve a *function* by name (`/lib/<name>.ts`). Skills are a related
+// namespace under the same overlay tree (`/lib/<tenantId>/skills/<name>.md`).
+// Rather than mutate the Wave 1 contract, we keep skill loading as a
+// side-channel here: the dispatcher holds its own `SkillLoader` instance,
+// defaulting to `DiskSkillLoader`.
 //
-// Path layout the disk loader walks:
-//   <baseDir>/skills/<tenant>/<name>.md      (tenant overlay; preferred)
-//   <baseDir>/skills/__seed__/<name>.md      (seed fallback bundled with the SDK)
+// Path layout the disk loader walks (first hit wins):
+//   1. <baseDir>/lib/<tenantId>/skills/<name>.md      (tenant overlay)
+//   2. <baseDir>/lib/__seed__/skills/<name>.md         (seed fallback bundled with the SDK)
+//
+// `__seed__` is a reserved tenant id; the bash agent's library-listing
+// surfaces exclude tenant ids matching `^__\w+__$`, so the seed bundle
+// never leaks into per-tenant `man`/`apropos` output.
 //
 // The seed bundle is copied here by `installFlueDispatcher({...})` at boot.
 //
@@ -147,15 +151,15 @@ export type DiskSkillLoaderOpts = {
 };
 
 export class DiskSkillLoader implements SkillLoader {
-  private readonly skillsDir: string;
+  private readonly libDir: string;
 
   constructor(opts: DiskSkillLoaderOpts) {
-    this.skillsDir = path.join(opts.baseDir, "skills");
+    this.libDir = path.join(opts.baseDir, "lib");
   }
 
   async load(name: string, tenantId: string): Promise<Skill> {
-    const tenantPath = path.join(this.skillsDir, tenantId, `${name}.md`);
-    const seedPath = path.join(this.skillsDir, "__seed__", `${name}.md`);
+    const tenantPath = path.join(this.libDir, tenantId, "skills", `${name}.md`);
+    const seedPath = path.join(this.libDir, "__seed__", "skills", `${name}.md`);
 
     const candidates = [tenantPath, seedPath];
     for (const file of candidates) {

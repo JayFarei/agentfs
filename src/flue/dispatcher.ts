@@ -10,15 +10,21 @@
 //   - tier — max-observed (`ctx.cost.tier = Math.max(ctx.cost.tier, 3)`)
 //
 // Output validation: per the dual-validation policy in the SDK, the fn()
-// factory always validates `spec.output` after dispatch returns. If the
-// body carries its own `output` schema we ALSO pass it to Flue so the SDK
-// can fail fast on shape errors before the fn() factory's check; this
-// mirrors how the .flue/agents/finqa-agent-factory.ts file used a typed
-// `result:` option on `session.prompt`.
+// factory always validates `spec.output` after dispatch returns. We use
+// Flue's untyped path (`{ text }` envelope) for both LlmBody and AgentBody
+// and JSON-parse the text ourselves — Claude commonly returns the
+// response as a JSON object (sometimes inside a ```json ... ``` fence).
+// On parse failure we return the raw text and let the fn() factory's
+// outer schema produce a clean error.
+//
+// This is the "option 2" fix from the Wave 2 review: keep the SDK locked
+// (don't extend `DispatchContext` with an `expectedOutput` field that
+// `fn()` would have to populate) and instead recover structure on the
+// dispatcher side via JSON parsing. Routing both body kinds through the
+// same path also makes ```json``` fence handling consistent.
 
 import path from "node:path";
 
-import type { GenericSchema } from "valibot";
 import type { FlueSession } from "@flue/sdk/client";
 
 import type {
@@ -97,11 +103,16 @@ export class FlueBodyDispatcher implements BodyDispatcher {
   ): Promise<O> {
     const session = await this.pool.getSession(ctx.tenant);
     const promptText = renderLlmPrompt(body.prompt, input);
+    // Always go through the untyped + JSON-extract path. Even when
+    // `body.output` is present, the fn() factory re-validates against
+    // `spec.output` after we return, so Flue's typed-result fast-fail
+    // layer would be redundant. Routing both LLM and Agent bodies
+    // through the same path makes JSON-fence handling consistent.
     return runFlueCall<O>({
       session,
       prompt: promptText,
       model: body.model,
-      output: body.output,
+      output: undefined,
       ctx,
     });
   }
@@ -116,12 +127,14 @@ export class FlueBodyDispatcher implements BodyDispatcher {
     const skill = await this.skills.load(body.skill, ctx.tenant);
     const session = await this.pool.getSession(ctx.tenant);
     const promptText = renderAgentPrompt(skill, input);
+    // Same untyped path as dispatchLlm. The skill markdown is the system
+    // instruction; the input is appended as JSON; the response text is
+    // JSON-parsed (with ```json fence handling) so the fn() factory's
+    // schema validation sees a structured value.
     return runFlueCall<O>({
       session,
       prompt: promptText,
       model: body.model,
-      // Agent bodies don't carry a runtime schema. The fn() factory
-      // validates the result against `spec.output`; we forward unwrapped.
       output: undefined,
       ctx,
     });
@@ -165,40 +178,119 @@ function renderAgentPrompt(skill: Skill, input: unknown): string {
   ].join("\n");
 }
 
-type FlueCallArgs<O> = {
+type FlueCallArgs = {
   session: FlueSession;
   prompt: string;
   model: string;
-  output: GenericSchema<O> | undefined;
+  /**
+   * Reserved. Both `dispatchLlm` and `dispatchAgent` pass `undefined`
+   * today and rely on `extractStructuredOrText` + the fn() factory's
+   * outer validation. Keeping the field on the args shape so a future
+   * change can re-introduce Flue's typed-result fast-fail path without
+   * a signature break.
+   */
+  output: undefined;
   ctx: DispatchContext;
 };
 
 const TIER_LLM = 3 as CostTier;
 
-async function runFlueCall<O>(args: FlueCallArgs<O>): Promise<O> {
-  const { session, prompt, model, output, ctx } = args;
+async function runFlueCall<O>(args: FlueCallArgs): Promise<O> {
+  const { session, prompt, model, ctx } = args;
   const startedMs = Date.now();
   let result: O;
   try {
-    if (output !== undefined) {
-      // Typed result path: Flue parses + validates against the schema and
-      // returns the inferred output value directly.
-      result = (await session.prompt(prompt, {
-        model,
-        result: output,
-      })) as O;
-    } else {
-      // Untyped result path: Flue returns a `{ text }` envelope. The
-      // fn() factory's outer `spec.output` validation catches shape
-      // errors. For free-text llm bodies we expose the raw string as O.
-      const r = await session.prompt(prompt, { model });
-      result = r.text as unknown as O;
-    }
+    // Flue returns a `{ text }` envelope. Most skill / structured-LLM
+    // calls expect an object; try JSON-extract first (handles bare JSON
+    // and ```json fenced blocks), and fall back to the raw text if that
+    // fails. The fn() factory's outer schema validation produces a clean
+    // error either way.
+    const r = await session.prompt(prompt, { model });
+    result = extractStructuredOrText<O>(r.text);
   } finally {
     const elapsed = Date.now() - startedMs;
     chargeCost(ctx, elapsed);
   }
   return result;
+}
+
+// --- JSON extraction --------------------------------------------------------
+
+// Pull the first JSON object/array out of a free-text LLM response. Handles:
+//   - bare JSON ("{...}" or "[...]")
+//   - fenced ```json blocks
+//   - prose-prefixed JSON ("Here is the result: {...}")
+//
+// Returns the parsed value when extraction succeeds, otherwise the raw
+// text. The caller treats the result as `O` and lets the fn() factory's
+// schema validation reject mismatches.
+function extractStructuredOrText<O>(text: string): O {
+  const candidate = findJsonCandidate(text);
+  if (candidate !== null) {
+    try {
+      return JSON.parse(candidate) as O;
+    } catch {
+      // fall through to raw text
+    }
+  }
+  return text as unknown as O;
+}
+
+function findJsonCandidate(text: string): string | null {
+  // Prefer fenced ```json blocks; the model often wraps its answer.
+  const fenced = /```(?:json)?\s*\n([\s\S]*?)\n\s*```/i.exec(text);
+  if (fenced && fenced[1]) {
+    return fenced[1].trim();
+  }
+  // Otherwise, find the first balanced JSON value at the outermost
+  // brace/bracket. We scan for the first `{` or `[` and walk forward,
+  // tracking brace depth and string state to find its matching close.
+  const start = findFirstStructureStart(text);
+  if (start < 0) return null;
+  const end = findStructureEnd(text, start);
+  if (end < 0) return null;
+  return text.slice(start, end + 1);
+}
+
+function findFirstStructureStart(text: string): number {
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === "{" || ch === "[") return i;
+  }
+  return -1;
+}
+
+function findStructureEnd(text: string, start: number): number {
+  const open = text[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\\") {
+        escaped = true;
+      } else if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
 }
 
 // Charge the per-call cost into the dispatch context's accumulator per
