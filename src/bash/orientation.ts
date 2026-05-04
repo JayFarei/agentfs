@@ -104,6 +104,31 @@ callable immediately — no \`register\` or \`synthesize\` verb. See
 \`/usr/share/datafetch/skill/SKILL.md\` for the SDK conventions on body
 shapes and skill markdown sidecars.
 
+## Skill markdown sidecars
+
+When an LLM-backed body's prompt is long enough to externalise, write
+it as a markdown sidecar:
+
+\`\`\`bash
+cat > /lib/skills/score_narrative_tone.md <<'EOF'
+---
+name: score_narrative_tone
+input:  { text: string }
+output: { tone: "optimistic" | "neutral" | "cautious" | "defensive", confidence: number }
+---
+
+You score a paragraph for narrative tone. ...
+EOF
+\`\`\`
+
+Then reference the skill from a function body via
+\`agent({ skill: "score_narrative_tone", model: "..." })\`. Skills under
+\`/lib/skills/\` are tenant-private; the in-process LLM dispatcher reads
+them by skill name when the function is called. The on-disk path that
+the dispatcher resolves to is
+\`<DATAFETCH_HOME>/lib/<tenant>/skills/<name>.md\` — the same path your
+heredoc-written file lands at after the next \`npx tsx\` flush.
+
 ## Compose your full task in one snippet
 
 The data plane records what runs through \`df.*\`. If you extract data
@@ -202,6 +227,13 @@ body: agent({ skill: "score_narrative_tone", model: "anthropic/claude-haiku-4-5"
 
 Skills are an *optimisation*, not a required artefact. Inline \`llm({...})\`
 is the default; externalise only when the prompt deserves its own file.
+
+The agent writes skills inside the \`/lib/skills/\` namespace (i.e.
+alongside their referencing functions in \`/lib/\`); the runtime
+canonicalises the on-disk location to
+\`<DATAFETCH_HOME>/lib/<tenant>/skills/<name>.md\` and the in-process
+LLM dispatcher reads from there. There is no separate top-level
+\`/skills/\` directory.
 
 ### 4. Composition
 

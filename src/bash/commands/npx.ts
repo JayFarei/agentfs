@@ -17,6 +17,13 @@
 // Aliases that arrive as a leading word other than `npx` (`pnpm`, `yarn`)
 // are surfaced through their own defineCommand wrappers in the export
 // below.
+//
+// Wave 2 review (P0): before delegating to the SnippetRuntime, we MUST
+// flush /lib/ from the in-memory VFS to disk so the runtime can see the
+// agent's latest heredoc-authored functions. That flush is requested
+// through the injected `beforeRun` callback, which the BashSession
+// wires to `this.flushLib()`. The flush is mtime-tracked and cheap when
+// nothing changed.
 
 import { defineCommand, type Command, type CommandContext } from "just-bash";
 
@@ -27,6 +34,10 @@ import type { SessionCtx, SnippetRuntime } from "../snippetRuntime.js";
 export type NpxCommandDeps = {
   resolveSessionCtx: () => SessionCtx;
   resolveRuntime: () => SnippetRuntime;
+  // Called before every snippet dispatch. The session uses this to
+  // flush /lib/<tenant>/ to disk so the runtime can read the agent's
+  // latest authored functions.
+  beforeRun?: () => Promise<void>;
 };
 
 // --- Shared dispatch logic -------------------------------------------------
@@ -99,6 +110,22 @@ async function runTsx(
       };
     }
     source = read.source;
+  }
+
+  // Flush /lib/<tenant>/ to disk so the snippet runtime sees the
+  // agent's latest writes. Cheap when the agent isn't authoring (the
+  // session tracks mtimes per file).
+  if (deps.beforeRun) {
+    try {
+      await deps.beforeRun();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        stdout: "",
+        stderr: `tsx: failed to flush /lib/ before snippet: ${msg}\n`,
+        exitCode: 1,
+      };
+    }
   }
 
   const runtime = deps.resolveRuntime();

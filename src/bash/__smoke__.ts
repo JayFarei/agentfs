@@ -10,8 +10,21 @@
 //   - apropos <keyword>       expects the stub to surface
 //   - npx tsx -e "..."        expects the stub-runtime stderr to surface
 //
+// Wave 2 review (P0/P1) extensions:
+//   - heredoc-write /lib/double.ts then run `npx tsx -e ...`. Confirms
+//     the BashSession's pre-snippet flushLib() lands the file at
+//     <baseDir>/lib/<tenant>/double.ts before the snippet runtime is
+//     invoked. The StubSnippetRuntime still returns exit 1, but the
+//     check passes if the file is on disk after the npx invocation.
+//   - heredoc-write /lib/skills/sample.md and confirm it lands at
+//     <baseDir>/lib/<tenant>/skills/sample.md (the canonical path for
+//     the in-process Flue dispatcher).
+//
 // Prints PASS / FAIL per check and a final summary. Exit code 0 on all
 // pass; 1 otherwise.
+
+import { promises as fsp } from "node:fs";
+import path from "node:path";
 
 import * as v from "valibot";
 
@@ -211,6 +224,97 @@ async function main(): Promise<void> {
       pass: ok,
       stdout: r.stdout,
       stderr: r.stderr,
+    });
+  }
+
+  // 6. heredoc-write a /lib/<fn>.ts, run `npx tsx -e ...`, and confirm
+  //    the file lands on disk at <baseDir>/lib/<tenant>/double.ts before
+  //    the snippet runtime is called. (The runtime stub still returns
+  //    exit 1; the check is on the disk path only.)
+  {
+    const heredoc = [
+      "cat > /lib/double.ts <<'EOF'",
+      'import { fn } from "@datafetch/sdk";',
+      'import * as v from "valibot";',
+      "export const double = fn({",
+      '  intent: "double a number",',
+      "  examples: [{ input: { n: 1 }, output: 2 }],",
+      "  input:  v.object({ n: v.number() }),",
+      "  output: v.number(),",
+      "  body: ({ n }) => n * 2,",
+      "});",
+      "EOF",
+    ].join("\n");
+    const writeResult = await session.exec(heredoc);
+    const writeOk = writeResult.exitCode === 0;
+
+    // Trigger npx tsx — flushLib() runs before the runtime is invoked.
+    await session.exec(`npx tsx -e "console.log('trigger flush')"`);
+
+    const onDisk = path.join(baseDir, "lib", "smoke-tenant", "double.ts");
+    let landed = false;
+    let contents = "";
+    try {
+      contents = await fsp.readFile(onDisk, "utf8");
+      landed = contents.includes("export const double") && contents.includes("n * 2");
+    } catch {
+      landed = false;
+    }
+    results.push({
+      name: "heredoc /lib/double.ts → flushLib() lands on disk before snippet",
+      pass: writeOk && landed,
+      ...(writeOk && landed ? {} : {
+        detail: `writeOk=${writeOk}, onDisk=${onDisk}, landed=${landed}, contents.length=${contents.length}`,
+        stdout: writeResult.stdout,
+        stderr: writeResult.stderr,
+      }),
+    });
+  }
+
+  // 7. heredoc-write /lib/skills/sample.md, run `npx tsx -e ...`, and
+  //    confirm the skill markdown lands at the canonical on-disk path
+  //    <baseDir>/lib/<tenant>/skills/sample.md.
+  {
+    const heredoc = [
+      "mkdir -p /lib/skills",
+      "cat > /lib/skills/sample.md <<'EOF'",
+      "---",
+      "name: sample",
+      "input:  { text: string }",
+      "output: { score: number }",
+      "---",
+      "Score the text.",
+      "EOF",
+    ].join("\n");
+    const writeResult = await session.exec(heredoc);
+    const writeOk = writeResult.exitCode === 0;
+
+    await session.exec(`npx tsx -e "console.log('trigger flush 2')"`);
+
+    const onDisk = path.join(
+      baseDir,
+      "lib",
+      "smoke-tenant",
+      "skills",
+      "sample.md",
+    );
+    let landed = false;
+    let contents = "";
+    try {
+      contents = await fsp.readFile(onDisk, "utf8");
+      landed =
+        contents.includes("name: sample") && contents.includes("Score the text.");
+    } catch {
+      landed = false;
+    }
+    results.push({
+      name: "heredoc /lib/skills/sample.md → on-disk path <baseDir>/lib/<tenant>/skills/sample.md",
+      pass: writeOk && landed,
+      ...(writeOk && landed ? {} : {
+        detail: `writeOk=${writeOk}, onDisk=${onDisk}, landed=${landed}, contents.length=${contents.length}`,
+        stdout: writeResult.stdout,
+        stderr: writeResult.stderr,
+      }),
     });
   }
 

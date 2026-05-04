@@ -60,11 +60,25 @@ export function createBashApp(deps: BashAppDeps): Hono {
   const ttl = deps.sessionTtlMs ?? DEFAULT_TTL_MS;
   const sessions = new Map<string, CachedSession>();
 
+  // Drop expired sessions from the cache. Before forgetting a session,
+  // flush its /lib/ overlay so an agent that authored a function and
+  // then went silent for >TTL doesn't lose the work — flushLib() is
+  // mtime-tracked, so this is a no-op when nothing changed. The flush
+  // runs in the background; we deliberately don't await it so HTTP
+  // latency for the next call stays bounded. flushLib() has no shared
+  // mutable state with other sessions and any error is swallowed (the
+  // session is being dropped anyway).
   function evictExpired(): void {
     const now = Date.now();
     for (const [id, cached] of sessions) {
       if (now - cached.lastTouched > ttl) {
         sessions.delete(id);
+        void cached.session.flushLib().catch(() => {
+          // Logging surface lands later; for the MVP we accept that an
+          // eviction-time flush failure is silent. The agent's last
+          // active flush (the one before the most recent npx tsx) has
+          // already persisted the bulk of the work.
+        });
       }
     }
   }
