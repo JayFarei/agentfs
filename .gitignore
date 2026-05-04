@@ -1,6 +1,7 @@
 .atlasfs/
 .agent-trace/
 .datafetch/
+.snippet-cache/
 node_modules/
 dist/
 web/dist/
@@ -10,3 +11,4 @@ src/server/types.js
 .env
 .env.local
 data/
+.claude/settings.local.json

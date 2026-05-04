@@ -30,7 +30,7 @@
 
 import { promises as fsp } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type {
   Fn,
@@ -54,12 +54,86 @@ function defaultBaseDir(): string {
   );
 }
 
+// --- @datafetch/sdk import rewriter ----------------------------------------
+//
+// User-authored /lib/<tenant>/<name>.ts files use the documented
+// `import { fn, llm, agent } from "@datafetch/sdk"` form (per
+// /AGENTS.md and personas.md §3 Turn 6). There is no real npm package by
+// that name; the resolver rewrites those imports to the absolute
+// file:// URL of `<repo>/src/sdk/index.ts` before dynamic import. The
+// rewritten source is written into `<baseDir>/.snippet-cache/` with the
+// mtime baked into the filename so cache freshness piggybacks on the
+// disk file's own mtime.
+
+const SDK_PACKAGE_NAME = "@datafetch/sdk";
+const SDK_IMPORT_RE = /(\bfrom\s+|\bimport\s+)(['"])@datafetch\/sdk\2/g;
+
+let repoRootCache: string | null = null;
+let sdkIndexUrlCache: string | null = null;
+
+// Locate the repo root by walking up from this module looking for a
+// package.json that contains an "@datafetch/sdk"-style src/sdk dir. The
+// snippet cache lives under <repo-root>/.snippet-cache so user-authored
+// /lib files written there can resolve bare imports like `valibot` via
+// Node's normal upward-walk through the repo's node_modules.
+async function locateRepoRoot(): Promise<string> {
+  if (repoRootCache) return repoRootCache;
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  let cursor = here;
+  for (let i = 0; i < 6; i += 1) {
+    try {
+      const sdkStat = await fsp.stat(path.join(cursor, "src", "sdk", "index.ts"));
+      const pkgStat = await fsp.stat(path.join(cursor, "package.json"));
+      if (sdkStat.isFile() && pkgStat.isFile()) {
+        repoRootCache = cursor;
+        return cursor;
+      }
+    } catch {
+      // walk up
+    }
+    const parent = path.dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  repoRootCache = process.cwd();
+  return repoRootCache;
+}
+
+async function locateSdkIndexUrl(): Promise<string> {
+  if (sdkIndexUrlCache) return sdkIndexUrlCache;
+  const root = await locateRepoRoot();
+  sdkIndexUrlCache = pathToFileURL(
+    path.join(root, "src", "sdk", "index.ts"),
+  ).href;
+  return sdkIndexUrlCache;
+}
+
+async function rewriteSdkImports(
+  source: string,
+): Promise<{ rewritten: string; changed: boolean }> {
+  if (!source.includes(SDK_PACKAGE_NAME)) {
+    return { rewritten: source, changed: false };
+  }
+  const url = await locateSdkIndexUrl();
+  let changed = false;
+  const rewritten = source.replace(SDK_IMPORT_RE, (_m, kw, q) => {
+    changed = true;
+    return `${kw as string}${q as string}${url}${q as string}`;
+  });
+  return { rewritten, changed };
+}
+
 // --- Cache -----------------------------------------------------------------
 
 type CachedFn = {
   mtimeMs: number;
   fn: Fn<unknown, unknown>;
 };
+
+// Poison entries record the mtime at which the file last failed to load.
+// A different mtime invalidates the poison so heredoc-edited files get a
+// fresh attempt rather than being permanently shunned.
+type PoisonEntry = { mtimeMs: number };
 
 // --- DiskLibraryResolver ---------------------------------------------------
 
@@ -70,10 +144,10 @@ export type DiskLibraryResolverOpts = {
 export class DiskLibraryResolver implements LibraryResolver {
   private readonly baseDir: string;
   private readonly cache = new Map<string, CachedFn>();
-  // Files that already failed to load. Logged once; subsequent attempts are
-  // silent so we don't spam the logs when a malformed file is repeatedly
-  // resolved during a snippet run.
-  private readonly poison = new Set<string>();
+  // Files that already failed to load, keyed by mtime. A different mtime
+  // (e.g. after a heredoc edit fixes a bug) invalidates the entry so the
+  // resolver retries instead of permanently shunning the file.
+  private readonly poison = new Map<string, PoisonEntry>();
 
   constructor(opts: DiskLibraryResolverOpts = {}) {
     this.baseDir = opts.baseDir ?? defaultBaseDir();
@@ -152,16 +226,37 @@ export class DiskLibraryResolver implements LibraryResolver {
       return cached.fn;
     }
 
-    if (this.poison.has(file)) return null;
+    const poisoned = this.poison.get(file);
+    if (poisoned && poisoned.mtimeMs === mtimeMs) return null;
 
     let mod: unknown;
     try {
-      // Cache-buster query so re-imports after a heredoc edit pick up the
-      // new file content under Node's ESM loader.
-      const url = `${pathToFileURL(file).href}?mtime=${mtimeMs}`;
+      const source = await fsp.readFile(file, "utf8");
+      const { rewritten, changed } = await rewriteSdkImports(source);
+      let url: string;
+      if (changed) {
+        // The user-authored file referenced `@datafetch/sdk`. Write the
+        // rewritten source to a per-mtime cache file under
+        // `<repo-root>/.snippet-cache/` (NOT <baseDir>) so that bare
+        // imports like `valibot` resolve naturally via Node's module
+        // walk through the repo's `node_modules/`. A `.ts` extension
+        // keeps tsx's loader in the path so TypeScript syntax compiles.
+        const repoRoot = await locateRepoRoot();
+        const cacheDir = path.join(repoRoot, ".snippet-cache");
+        await fsp.mkdir(cacheDir, { recursive: true });
+        const safeBase = file.replace(/[^A-Za-z0-9_.-]+/g, "_");
+        const cachePath = path.join(
+          cacheDir,
+          `${safeBase}.${mtimeMs}.ts`,
+        );
+        await fsp.writeFile(cachePath, rewritten, "utf8");
+        url = pathToFileURL(cachePath).href;
+      } else {
+        url = `${pathToFileURL(file).href}?mtime=${mtimeMs}`;
+      }
       mod = await import(url);
     } catch (err) {
-      this.warnPoison(file, err);
+      this.warnPoison(file, mtimeMs, err);
       return null;
     }
 
@@ -169,6 +264,7 @@ export class DiskLibraryResolver implements LibraryResolver {
     if (!fnObj) {
       this.warnPoison(
         file,
+        mtimeMs,
         new Error(
           `module does not export a Fn named "${expectedName}" (or default Fn)`,
         ),
@@ -177,12 +273,14 @@ export class DiskLibraryResolver implements LibraryResolver {
     }
 
     this.cache.set(file, { mtimeMs, fn: fnObj });
+    this.poison.delete(file);
     return fnObj;
   }
 
-  private warnPoison(file: string, err: unknown): void {
-    if (this.poison.has(file)) return;
-    this.poison.add(file);
+  private warnPoison(file: string, mtimeMs: number, err: unknown): void {
+    const prior = this.poison.get(file);
+    this.poison.set(file, { mtimeMs });
+    if (prior && prior.mtimeMs === mtimeMs) return;
     const msg = err instanceof Error ? err.message : String(err);
     // eslint-disable-next-line no-console
     console.warn(`[snippet/library] failed to load ${file}: ${msg}`);
