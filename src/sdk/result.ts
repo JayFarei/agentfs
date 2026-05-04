@@ -24,7 +24,10 @@ export type Provenance = {
   mount: string;
   functionName?: string;
   trajectoryId: string;
-  pins?: Record<string, string>;
+  // Always present; `{}` when there are no content-addressable pins yet.
+  // Per `kb/prd/personas.md` §2: callers can read `provenance.pins[name]`
+  // without an `?? {}` guard.
+  pins: Record<string, string>;
 };
 
 export type Warning = {

@@ -44,6 +44,11 @@ export type Cardinality = {
   unique_keys?: Record<string, number>;
 };
 
+// The locked four-method retrieval contract. Mirrors the methods on
+// `CollectionHandle<T>` in `./adapter.ts`. The descriptor's `affordances`
+// field is typed against this enum so adapters cannot drift.
+export type Affordance = "findExact" | "search" | "findSimilar" | "hybrid";
+
 // A single polymorphic variant within a collection. Kept loose; the bootstrap
 // pipeline narrows this based on observed shapes.
 export type PolymorphicVariant = {
@@ -58,7 +63,7 @@ export type MountDescriptor = {
   kind: MountKind;
   cardinality: Cardinality;
   fields: Record<string, FieldDescriptor>;
-  affordances: string[];
+  affordances: Affordance[];
   polymorphic_variants: null | PolymorphicVariant[];
   // Shape-specific extensions. Graph adjacency stats, timeseries tick
   // intervals, etc. Opaque at this layer.

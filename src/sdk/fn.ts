@@ -49,7 +49,17 @@ export type FnSpec<I, O> = {
 };
 
 // A Fn is a typed callable plus an introspection sidecar.
-export type Fn<I, O> = ((input: I) => Promise<Result<O>>) & {
+//
+// The optional second argument is a `Partial<DispatchContext>` the snippet
+// runtime threads through every nested call so that tenant / mount /
+// trajectory / functionName / pins flow into the Result envelope and any
+// nested body dispatch shares the same cost accumulator. Direct one-off
+// calls outside a snippet may omit it; the factory falls back to safe
+// defaults.
+export type Fn<I, O> = ((
+  input: I,
+  ctx?: Partial<DispatchContext>,
+) => Promise<Result<O>>) & {
   spec: FnSpec<I, O>;
   name?: string;
 };
@@ -81,15 +91,35 @@ export class NoBodyDispatcherError extends Error {
 // --- Factory ----------------------------------------------------------------
 
 // Default dispatch context for direct one-off calls outside any snippet.
-// In production this is replaced by the snippet runtime, which threads its
-// own context through.
-function defaultDispatchContext(functionName?: string): DispatchContext {
+// In production the snippet runtime passes a fully populated context as
+// the optional second arg to the callable; the merge below combines the
+// two.
+function defaultDispatchContext(): DispatchContext {
   return {
     tenant: "anonymous",
     mount: "unknown",
     cost: costZero(),
-    functionName,
   };
+}
+
+// Merge a partial DispatchContext onto a base. The cost accumulator from
+// the partial wins when present (the snippet runtime owns the snippet-wide
+// accumulator); otherwise the base's fresh accumulator is used. All other
+// fields use simple "partial overrides base".
+function mergeDispatchContext(
+  base: DispatchContext,
+  partial?: Partial<DispatchContext>,
+): DispatchContext {
+  if (!partial) return base;
+  const merged: DispatchContext = {
+    tenant: partial.tenant ?? base.tenant,
+    mount: partial.mount ?? base.mount,
+    cost: partial.cost ?? base.cost,
+    trajectory: partial.trajectory ?? base.trajectory,
+    functionName: partial.functionName ?? base.functionName,
+    pins: partial.pins ?? base.pins,
+  };
+  return merged;
 }
 
 // Mode the runtime should report for a body dispatch, given the body kind.
@@ -136,7 +166,10 @@ export function fn<I, O>(init: FnInit<I, O>): Fn<I, O> {
     body: normaliseBody(init.body),
   };
 
-  const callable = async (input: I): Promise<Result<O>> => {
+  const callable = async (
+    input: I,
+    ctxOverride?: Partial<DispatchContext>,
+  ): Promise<Result<O>> => {
     // 1) Validate input.
     const inResult = await safeParseAsync(spec.input, input);
     if (!inResult.success) {
@@ -144,8 +177,13 @@ export function fn<I, O>(init: FnInit<I, O>): Fn<I, O> {
     }
     const validInput = inResult.output as I;
 
-    // 2) Dispatch body.
-    const ctx = defaultDispatchContext();
+    // 2) Build the dispatch context. The snippet runtime passes a partial
+    //    ctx with tenant / mount / trajectory / functionName / cost; ad-hoc
+    //    callers omit it and get safe defaults.
+    const ctx = mergeDispatchContext(defaultDispatchContext(), ctxOverride);
+    const ctxHadCost = ctxOverride?.cost !== undefined;
+
+    // 3) Dispatch body.
     const startedMs = Date.now();
     let raw: O;
     if (spec.body.kind === "pure") {
@@ -159,24 +197,31 @@ export function fn<I, O>(init: FnInit<I, O>): Fn<I, O> {
     }
     const elapsedMs = Date.now() - startedMs;
 
-    // 3) Validate output.
+    // 4) Validate output.
     const outResult = await safeParseAsync(spec.output, raw);
     if (!outResult.success) {
       throw new SchemaValidationError("output", outResult.issues);
     }
     const validOutput = outResult.output as O;
 
-    // 4) Build Result envelope. The dispatcher may have charged costs into
-    //    ctx.cost; if not, we fold elapsed wall-clock into ms.cold for the
-    //    novel path or ms.hot for the warm path. The fn() factory itself
-    //    cannot tell hot vs cold; default to cold for non-pure, hot for pure.
+    // 5) Build the per-call Cost block.
+    //
+    //    - If the caller injected its own cost accumulator (snippet runtime),
+    //      we surface that accumulator as-is in this Result envelope; the
+    //      caller is the one consuming the totals after the snippet ends.
+    //    - Otherwise we synthesise a fresh Cost: tier comes from the body
+    //      kind (max-observed contract; the dispatcher may have raised it),
+    //      ms.{hot,cold} fall back to wall-clock when the dispatcher didn't
+    //      charge them, and tokens / llmCalls reflect whatever the dispatcher
+    //      added to the ephemeral accumulator.
+    const baseTier = defaultTier(spec.body);
     const cost: Cost = {
-      tier: ctx.cost.tier !== 0 ? ctx.cost.tier : defaultTier(spec.body),
+      tier: (Math.max(ctx.cost.tier, baseTier) as Cost["tier"]),
       tokens: { ...ctx.cost.tokens },
       ms: { ...ctx.cost.ms },
       llmCalls: ctx.cost.llmCalls,
     };
-    if (cost.ms.hot === 0 && cost.ms.cold === 0) {
+    if (!ctxHadCost && cost.ms.hot === 0 && cost.ms.cold === 0) {
       if (spec.body.kind === "pure") {
         cost.ms.hot = elapsedMs;
       } else {
@@ -184,6 +229,8 @@ export function fn<I, O>(init: FnInit<I, O>): Fn<I, O> {
       }
     }
 
+    // 6) Build the Result envelope. `pins` is always present (defaults to
+    //    `{}` per the personas.md §2 contract).
     return makeResult<O>({
       value: validOutput,
       mode: defaultModeForBody(spec.body),
@@ -193,7 +240,7 @@ export function fn<I, O>(init: FnInit<I, O>): Fn<I, O> {
         mount: ctx.mount,
         trajectoryId: ctx.trajectory?.id ?? "no-trajectory",
         functionName: ctx.functionName,
-        pins: ctx.pins,
+        pins: ctx.pins ?? {},
       },
       escalations: 0,
     });

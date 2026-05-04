@@ -49,6 +49,7 @@ export type {
   FieldDescriptor,
   FieldRole,
   IndexableAs,
+  Affordance,
   PolymorphicVariant,
   MountStats,
   MountSamples,

@@ -7,6 +7,35 @@
 // used by the snippet runtime when binding `df.lib.<name>`.
 //
 // This file is types + setters/getters. No business logic.
+//
+// ============================================================================
+// Cost-accumulation contract
+// ============================================================================
+//
+// `DispatchContext.cost` is a mutable accumulator. Every dispatcher (and any
+// nested call below it) MUST follow these rules so the cost panel in Wave 6
+// and the trajectory envelope in Wave 4 don't double-count or under-report.
+//
+//   tokens.{hot,cold}, ms.{hot,cold}, llmCalls
+//     Additive. The dispatcher does:
+//       ctx.cost.tokens.cold += tokensSpent;
+//       ctx.cost.ms.cold     += msElapsed;
+//       ctx.cost.llmCalls    += 1;
+//     Nested calls add into the same accumulator; the outer fn() reads the
+//     final totals when it builds the Result envelope.
+//
+//   tier
+//     Max-observed. The dispatcher does:
+//       ctx.cost.tier = Math.max(ctx.cost.tier, thisTier) as CostTier;
+//     Rationale: a composition that touches a tier-3 LLM call should report
+//     tier 3 in its envelope, not the average. The most expensive tier
+//     touched is the one the user pays for cold-start-wise.
+//
+// The fn() factory only falls back to wall-clock `elapsedMs` when both
+// `ms.hot` and `ms.cold` are still zero after dispatch returned. Any
+// dispatcher that charges ms itself takes precedence over that fallback.
+//
+// ============================================================================
 
 import type { Body } from "./body.js";
 import type { Cost, Provenance } from "./result.js";
@@ -19,19 +48,30 @@ import type { FnSpec, Fn } from "./fn.js";
 // non-pure body. Mutable accumulator-style fields (`cost`) are intentional:
 // the dispatcher charges to them; the fn() callable folds them into the
 // final Result envelope.
+//
+// The snippet runtime (Wave 3) constructs one DispatchContext per snippet
+// and threads it through every `df.lib.<name>(input, ctx)` call so that
+// trajectory + cost + provenance flow through nested compositions.
 export type DispatchContext = {
   tenant: string;
   mount: string;
   // The active trajectory recorder, if a snippet is being recorded.
   // For one-off direct calls outside a snippet, this MAY be undefined.
   trajectory?: TrajectoryRecorder;
-  // Mutable cost accumulator. The dispatcher SHOULD add tokens / ms /
-  // llmCalls into this object as work progresses.
+  /**
+   * Mutable cost accumulator. See the cost-accumulation contract at the top
+   * of this file:
+   *   - tokens / ms / llmCalls — additive (`ctx.cost.tokens.cold += ...`)
+   *   - tier — max-observed
+   *     (`ctx.cost.tier = Math.max(ctx.cost.tier, thisTier) as CostTier`)
+   */
   cost: Cost;
   // Optional. The function being executed, if known. Surfaces in
   // provenance.functionName.
   functionName?: string;
-  // Optional pins block to thread through to the result envelope.
+  // Optional pins block to thread through to the result envelope. The
+  // fn() factory defaults this to `{}` when absent so `Provenance.pins`
+  // is always populated.
   pins?: Record<string, string>;
 };
 
