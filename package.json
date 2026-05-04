@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "atlasfs": "tsx src/cli.ts",
-    "test": "vitest run",
+    "datafetch": "tsx src/cli.ts",
+    "demo": "tsx src/cli.ts demo",
+    "test": "tsx src/snippet/__smoke__.ts && tsx src/observer/__smoke__.ts",
     "typecheck": "tsc --noEmit",
     "api": "tsx watch src/server/server.ts",
     "api:once": "tsx src/server/server.ts",
     "web": "pnpm --dir web dev",
-    "web:install": "pnpm --dir web install",
-    "demo": "pnpm api & pnpm web; kill %1 2>/dev/null"
+    "web:install": "pnpm --dir web install"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

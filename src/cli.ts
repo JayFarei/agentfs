@@ -1,346 +1,295 @@
-import { closeAtlasClient } from "./datafetch/db/client.js";
-import { createObserverRuntime } from "./datafetch/db/finqa_observe.js";
-import { createTaskAgentRuntime } from "./datafetch/db/finqa_agent.js";
-import { createOutlookAgentRuntime } from "./datafetch/db/finqa_outlook.js";
-import { loadAllFinqaToAtlas, loadFinqaToAtlas } from "./loader/loadFinqaToAtlas.js";
-import { getAtlasSearchStatus, setupAtlasSearch } from "./loader/setupAtlasSearch.js";
-import { runLiveDemo } from "./demo.js";
-import { endorseTrajectory, loadLocalDemoCases, reviewDraft, runQuery } from "./runner.js";
-import { atlasfsHome } from "./trajectory/recorder.js";
-import { planAtlasHydration } from "./workspace/atlasAdapter.js";
-import {
-  budgetWorkspaceProcedure,
-  checkWorkspaceDrift,
-  evalWorkspace,
-  hasWorkspace,
-  initWorkspace,
-  reviewWorkspaceDraft,
-  runWorkspaceQuery
-} from "./workspace/runtime.js";
+// datafetch CLI — four subcommands.
+//
+//   pnpm datafetch publish <mount-id> [--uri <atlas>] [--db <name>]
+//     Publishes a mount via publishMount({source: atlasMount({...})}) and
+//     streams stage events to stdout. Returns the inventory at the end.
+//
+//   pnpm datafetch connect [--tenant <id>]
+//     Stub for the tenant handshake. Prints the tenant token and the live
+//     mount inventory. Real tenant tokens land post-MVP; today this is a
+//     courtesy command for the demo flow.
+//
+//   pnpm datafetch agent [--tenant <id>] [--mount <id>]
+//     Interactive bash session against the registered mounts. Reads stdin
+//     line-by-line, sends each line through BashSession.exec, and prints
+//     stdout/stderr/exitCode.
+//
+//   pnpm datafetch demo [--mount finqa-2024] [--tenant demo-tenant] [--no-cache]
+//     Runs the headline two-question scenario via runDemo({...}).
 
-function parseFlags(argv: string[]): { positionals: string[]; flags: Record<string, string | boolean | string[]> } {
+import * as readline from "node:readline";
+import { stdin as input, stdout as output } from "node:process";
+import path from "node:path";
+
+import { atlasMount } from "./adapter/atlasMount.js";
+import { publishMount } from "./adapter/publishMount.js";
+import { closeAllMounts, getMountRuntimeRegistry } from "./adapter/runtime.js";
+import { BashSession } from "./bash/session.js";
+import { DiskMountReader } from "./bash/mountReader.js";
+import { runDemo } from "./demo/index.js";
+import { loadProjectEnv } from "./env.js";
+import { installFlueDispatcher } from "./flue/install.js";
+import { installObserver } from "./observer/install.js";
+import { getLibraryResolver } from "./sdk/index.js";
+import { installSnippetRuntime } from "./snippet/install.js";
+
+loadProjectEnv();
+
+// --- Flag parsing ----------------------------------------------------------
+
+type Flags = Record<string, string | boolean | string[]>;
+
+function parseFlags(argv: string[]): { positionals: string[]; flags: Flags } {
   const positionals: string[] = [];
-  const flags: Record<string, string | boolean | string[]> = {};
-  const booleanFlags = new Set(["all", "dry-run", "local", "no-wait", "reset", "skip-atlas-check", "yes"]);
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
+  const flags: Flags = {};
+  const booleanFlags = new Set(["no-cache", "help"]);
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (!arg) continue;
     if (!arg.startsWith("--")) {
       positionals.push(arg);
       continue;
     }
     const key = arg.slice(2);
     if (booleanFlags.has(key)) {
-      addFlag(flags, key, true);
+      flags[key] = true;
       continue;
     }
-    const next = argv[index + 1];
-    if (!next || next.startsWith("--")) {
-      addFlag(flags, key, true);
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith("--")) {
+      flags[key] = true;
     } else {
-      addFlag(flags, key, next);
-      index += 1;
+      flags[key] = next;
+      i += 1;
     }
   }
   return { positionals, flags };
 }
 
-function addFlag(flags: Record<string, string | boolean | string[]>, key: string, value: string | boolean): void {
-  const previous = flags[key];
-  if (previous === undefined) {
-    flags[key] = value;
-  } else if (Array.isArray(previous)) {
-    previous.push(String(value));
-  } else {
-    flags[key] = [String(previous), String(value)];
-  }
+function flagString(flags: Flags, key: string): string | undefined {
+  const v = flags[key];
+  return typeof v === "string" ? v : undefined;
 }
 
-function flagString(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
-  const value = flags[key];
-  if (Array.isArray(value)) {
-    return value.at(-1);
-  }
-  return typeof value === "string" ? value : undefined;
-}
-
-function flagStrings(flags: Record<string, string | boolean | string[]>, key: string): string[] {
-  const value = flags[key];
-  if (Array.isArray(value)) {
-    return value;
-  }
-  return typeof value === "string" ? [value] : [];
-}
-
-function flagNumber(flags: Record<string, string | boolean | string[]>, key: string): number | undefined {
-  const value = flagString(flags, key);
-  if (!value) {
-    return undefined;
-  }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`--${key} must be a number`);
-  }
-  return parsed;
-}
+// --- Usage ----------------------------------------------------------------
 
 function usage(): void {
-  console.log(`atlasfs local proof loop
-
-Commands:
-  pnpm atlasfs init [--fixture all]
-  pnpm atlasfs load-finqa [--all] [--dataset dev] [--limit 100] [--filename V/2008/page_17.pdf] [--reset]
-  pnpm atlasfs setup-search [--no-wait]
-  pnpm atlasfs atlas-status
-  pnpm atlasfs demo [--project ./demo-project] [--reset] [--tenant financial-analyst]
-  pnpm atlasfs run "question" [--tenant financial-analyst] [--local] [--observer fixture|anthropic|flue] [--task-agent fixture|flue] [--outlook-agent fixture|flue]
-  pnpm atlasfs review <draft-id> --confirm "guidance"
-  pnpm atlasfs review <draft-id> --specify "extra requirement" [--local]
-  pnpm atlasfs review <draft-id> --yes [--local] [--observer flue|anthropic|fixture]
-  pnpm atlasfs review <draft-id> --refuse "reason"
-  pnpm atlasfs endorse <trajectory-id-or-path>
-  pnpm atlasfs budget <procedure> [--tenant data-analyst]
-  pnpm atlasfs drift check
-  pnpm atlasfs eval --round 0 --tenant data-analyst --tenant support-analyst
-  pnpm atlasfs hydrate-atlas --dry-run [--db atlasfs_hackathon]
-
-Environment for Atlas:
-  MONGODB_URI      MongoDB Atlas connection string for the Sandbox Project
-  ATLAS_DB_NAME    Database name, defaults to atlasfs_hackathon
-
-Live demo:
-  Uses MongoDB Atlas plus live Flue agents by default. It refuses fixture fallback.
-  Requires ANTHROPIC_API_KEY or ANTHROPIC_KEY.
-`);
+  // eslint-disable-next-line no-console
+  console.log(
+    [
+      "datafetch — bash workspace over a mounted dataset",
+      "",
+      "Commands:",
+      "  pnpm datafetch publish <mount-id> [--uri <atlas-uri>] [--db <db-name>]",
+      "    Publish a mount; stream warm-up stage events to stdout.",
+      "",
+      "  pnpm datafetch connect [--tenant <id>]",
+      "    Print the tenant token and current mount inventory.",
+      "",
+      "  pnpm datafetch agent [--tenant <id>] [--mount <id>]",
+      "    Open an interactive bash session in the registered mount(s).",
+      "",
+      "  pnpm datafetch demo [--mount finqa-2024] [--tenant demo-tenant] [--no-cache]",
+      "    Run the two-question Q1/Q2 demo end-to-end.",
+      "",
+      "Environment:",
+      "  DATAFETCH_HOME     baseDir for /db/, /lib/, trajectories",
+      "  ATLAS_URI          MongoDB Atlas connection string",
+      "  PORT               HTTP server port (server.ts only)",
+    ].join("\n"),
+  );
 }
+
+// --- Subcommands -----------------------------------------------------------
+
+async function cmdPublish(positionals: string[], flags: Flags): Promise<void> {
+  const id = positionals[0];
+  if (!id) {
+    throw new Error("publish: <mount-id> is required");
+  }
+  const uri = flagString(flags, "uri") ?? process.env["ATLAS_URI"];
+  if (!uri) {
+    throw new Error(
+      "publish: --uri or ATLAS_URI environment variable is required",
+    );
+  }
+  const db = flagString(flags, "db") ?? "finqa";
+
+  // The publish CLI runs against a fresh in-process boot; if the user is
+  // also running a long-lived server (server.ts), they'll want to publish
+  // through the HTTP API instead. For the local CLI path we install the
+  // snippet runtime so seeds mirror to disk.
+  const { baseDir } = await installSnippetRuntime({});
+  await installFlueDispatcher({ baseDir });
+
+  const handle = await publishMount({
+    id,
+    source: atlasMount({ uri, db }),
+    baseDir,
+    warmup: "lazy",
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(`[publish] mount=${id} db=${db} baseDir=${baseDir}`);
+  for await (const evt of handle.status()) {
+    // Some stages carry collection / progress; render whatever fields are
+    // present without poking at fields the discriminated union doesn't
+    // declare for that variant.
+    const { stage, ...rest } = evt as { stage: string; [k: string]: unknown };
+    const tail = Object.keys(rest).length > 0 ? " " + JSON.stringify(rest) : "";
+    // eslint-disable-next-line no-console
+    console.log(`[publish] ${stage}${tail}`);
+  }
+  const inventory = await handle.inventory();
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify(inventory, null, 2));
+  await handle.close();
+}
+
+async function cmdConnect(_positionals: string[], flags: Flags): Promise<void> {
+  const tenant = flagString(flags, "tenant") ?? "demo-tenant";
+  const reg = getMountRuntimeRegistry();
+  const mounts = reg.list().map((r) => ({
+    mountId: r.mountId,
+    adapterId: r.adapter.id,
+    collections: r.identMap.map((m) => ({ ident: m.ident, name: m.name })),
+  }));
+  // The MVP carries only a tenant token; opaque opaque-prefixed string is
+  // sufficient until real auth lands.
+  const token = `dft_${tenant}_${Date.now().toString(36)}`;
+  // eslint-disable-next-line no-console
+  console.log(JSON.stringify({ tenant, token, mounts }, null, 2));
+}
+
+async function cmdAgent(_positionals: string[], flags: Flags): Promise<void> {
+  const tenant = flagString(flags, "tenant") ?? "demo-tenant";
+  // Default to all currently registered mounts; if none are registered, the
+  // user is expected to have run `publish` first (or to point --mount at a
+  // pre-bootstrapped mount on disk under `<baseDir>/mounts/<id>/`).
+  const explicitMount = flagString(flags, "mount");
+  const { snippetRuntime, baseDir } = await installSnippetRuntime({});
+  await installFlueDispatcher({ baseDir });
+  installObserver({ baseDir, tenantId: tenant, snippetRuntime });
+
+  const reg = getMountRuntimeRegistry();
+  const mountIds = explicitMount
+    ? [explicitMount]
+    : reg.list().map((r) => r.mountId);
+  if (mountIds.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[agent] no mounts registered. Run `datafetch publish <id> --uri <atlas>` first " +
+        "or pass --mount <id> to read a pre-bootstrapped mount from disk.",
+    );
+  }
+
+  const session = new BashSession({
+    tenantId: tenant,
+    mountIds,
+    mountReader: new DiskMountReader({ baseDir }),
+    snippetRuntime,
+    libraryResolver: getLibraryResolver(),
+    baseDir,
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[agent] tenant=${tenant} mounts=${JSON.stringify(mountIds)} baseDir=${baseDir}`,
+  );
+  // eslint-disable-next-line no-console
+  console.log("[agent] type bash commands; ^D / ^C to exit");
+
+  const rl = readline.createInterface({ input, output, prompt: "$ " });
+  rl.prompt();
+  rl.on("line", async (line) => {
+    const command = line.trim();
+    if (!command) {
+      rl.prompt();
+      return;
+    }
+    try {
+      const result = await session.exec(command);
+      if (result.stdout) process.stdout.write(result.stdout);
+      if (result.stderr) process.stderr.write(result.stderr);
+      if (result.exitCode !== 0) {
+        // eslint-disable-next-line no-console
+        console.log(`[agent] exit=${result.exitCode}`);
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[agent] exec failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    rl.prompt();
+  });
+  rl.on("close", () => {
+    void session.flushLib().catch(() => undefined);
+    void closeAllMounts().catch(() => undefined);
+    // eslint-disable-next-line no-console
+    console.log("\n[agent] bye");
+    process.exit(0);
+  });
+}
+
+async function cmdDemo(_positionals: string[], flags: Flags): Promise<void> {
+  const opts: Parameters<typeof runDemo>[0] = {
+    mount: flagString(flags, "mount") ?? "finqa-2024",
+    tenant: flagString(flags, "tenant") ?? "demo-tenant",
+    noCache: Boolean(flags["no-cache"]),
+  };
+  const atlasUri = flagString(flags, "uri") ?? process.env["ATLAS_URI"];
+  if (atlasUri) opts.atlasUri = atlasUri;
+  const atlasDb = flagString(flags, "db") ?? process.env["ATLAS_DB_NAME"];
+  if (atlasDb) opts.atlasDb = atlasDb;
+  const baseDirFlag = flagString(flags, "base-dir");
+  if (baseDirFlag) opts.baseDir = path.resolve(baseDirFlag);
+
+  await runDemo(opts);
+}
+
+// --- Main ------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
   const { positionals, flags } = parseFlags(rest);
 
-  if (!command || command === "help" || command === "--help") {
+  if (!command || command === "help" || command === "--help" || flags["help"]) {
     usage();
     return;
   }
 
-  if (command === "init") {
-    const fixture = flagString(flags, "fixture") ?? "all";
-    if (fixture !== "all") {
-      throw new Error("Only --fixture all is supported for the local filesystem runtime");
-    }
-    const manifest = await initWorkspace({ baseDir: atlasfsHome(), fixture: "all" });
-    console.log(
-      `initialized ${atlasfsHome()} with ${manifest.datasets.length} fixture datasets and ${manifest.tenants.length} tenants`
-    );
-    return;
-  }
-
-  if (command === "load-finqa") {
-    if (flags.all) {
-      const result = await loadAllFinqaToAtlas({
-        reset: Boolean(flags.reset)
-      });
-      console.log(
-        `loaded ${result.cases} records and ${result.searchUnits} search units into ${result.dbName}`
-      );
-      console.log(
-        `collection counts: ${result.collectionCounts.cases} cases, ${result.collectionCounts.searchUnits} search units`
-      );
+  switch (command) {
+    case "publish":
+      await cmdPublish(positionals, flags);
       return;
-    }
-
-    const result = await loadFinqaToAtlas({
-      dataset: (flagString(flags, "dataset") as "dev" | "train" | "test" | "private_test" | undefined) ?? "dev",
-      limit: flagNumber(flags, "limit"),
-      filename: flagString(flags, "filename"),
-      reset: Boolean(flags.reset)
-    });
-    console.log(`loaded ${result.cases} cases and ${result.searchUnits} search units into ${result.dbName}`);
-    return;
-  }
-
-  if (command === "setup-search") {
-    const result = await setupAtlasSearch({
-      wait: !flags["no-wait"],
-      timeoutMs: flagNumber(flags, "timeout-ms")
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (command === "atlas-status") {
-    const result = await getAtlasSearchStatus();
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (command === "demo") {
-    const observer = flagString(flags, "observer") ?? "flue";
-    const outlookAgent = flagString(flags, "outlook-agent") ?? "flue";
-    if (observer !== "flue" && observer !== "anthropic") {
-      throw new Error("Live demo observer must be --observer flue or --observer anthropic; fixture is not allowed.");
-    }
-    if (outlookAgent !== "flue") {
-      throw new Error("Live demo outlook agent must be --outlook-agent flue; fixture is not allowed.");
-    }
-    await runLiveDemo({
-      projectDir: flagString(flags, "project") ?? "atlasfs-live-demo",
-      tenantId: flagString(flags, "tenant") ?? "financial-analyst",
-      reset: Boolean(flags.reset),
-      observer,
-      outlookAgent,
-      skipAtlasCheck: Boolean(flags["skip-atlas-check"])
-    });
-    return;
-  }
-
-  if (command === "run") {
-    const question = positionals.join(" ").trim();
-    if (!question) {
-      throw new Error('Usage: pnpm atlasfs run "question"');
-    }
-    const tenantId = flagString(flags, "tenant") ?? "financial-analyst";
-    if (flags.local && (await hasWorkspace(atlasfsHome()))) {
-      const result = await runWorkspaceQuery({
-        question,
-        tenantId,
-        baseDir: atlasfsHome()
-      });
-      console.log(JSON.stringify(result, null, 2));
+    case "connect":
+      await cmdConnect(positionals, flags);
       return;
-    }
-    const backend = flags.local
-      ? { kind: "local" as const, cases: await loadLocalDemoCases() }
-      : { kind: "atlas" as const };
-    const observer = flagString(flags, "observer");
-    const taskAgent = flagString(flags, "task-agent");
-    const outlookAgent = flagString(flags, "outlook-agent");
-    const result = await runQuery({
-      question,
-      tenantId,
-      backend,
-      observerRuntime: observer ? createObserverRuntime(observer) : undefined,
-      taskAgentRuntime: taskAgent ? createTaskAgentRuntime(taskAgent) : undefined,
-      outlookAgentRuntime: outlookAgent ? createOutlookAgentRuntime(outlookAgent) : undefined
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (command === "endorse") {
-    const trajectoryIdOrPath = positionals[0];
-    if (!trajectoryIdOrPath) {
-      throw new Error("Usage: pnpm atlasfs endorse <trajectory-id-or-path>");
-    }
-    const result = await endorseTrajectory({ trajectoryIdOrPath });
-    console.log(`wrote ${result.jsonPath}`);
-    console.log(`wrote ${result.tsPath}`);
-    return;
-  }
-
-  if (command === "review") {
-    const draftIdOrPath = positionals[0];
-    if (!draftIdOrPath) {
-      throw new Error("Usage: pnpm atlasfs review <draft-id> --confirm|--specify|--yes|--refuse");
-    }
-    const requested = [
-      flags.confirm ? "confirm" : null,
-      flags.specify ? "specify" : null,
-      flags.yes ? "yes" : null,
-      flags.refuse ? "refuse" : null
-    ].filter(Boolean) as Array<"confirm" | "specify" | "yes" | "refuse">;
-    if (requested.length !== 1) {
-      throw new Error("Review requires exactly one action: --confirm, --specify, --yes, or --refuse");
-    }
-    if (flags.local && requested[0] === "yes" && (await hasWorkspace(atlasfsHome()))) {
-      const result = await reviewWorkspaceDraft({
-        draftIdOrPath,
-        tenantId: flagString(flags, "tenant"),
-        baseDir: atlasfsHome()
-      });
-      console.log(JSON.stringify(result, null, 2));
+    case "agent":
+      await cmdAgent(positionals, flags);
       return;
-    }
-    const action = requested[0];
-    const message =
-      action === "confirm"
-        ? flagString(flags, "confirm")
-        : action === "specify"
-          ? flagString(flags, "specify")
-          : action === "refuse"
-            ? flagString(flags, "refuse")
-            : undefined;
-    const needsBackend = action === "specify" || action === "yes";
-    const backend = needsBackend
-      ? flags.local
-        ? { kind: "local" as const, cases: await loadLocalDemoCases() }
-        : { kind: "atlas" as const }
-      : undefined;
-    const observer = action === "yes" ? flagString(flags, "observer") ?? "flue" : undefined;
-    const result = await reviewDraft({
-      draftIdOrPath,
-      action,
-      message,
-      backend,
-      observerRuntime: observer ? createObserverRuntime(observer) : undefined
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
+    case "demo":
+      await cmdDemo(positionals, flags);
+      return;
+    default:
+      throw new Error(`Unknown command: ${command}`);
   }
-
-  if (command === "budget") {
-    const procedureName = positionals[0];
-    if (!procedureName) {
-      throw new Error("Usage: pnpm atlasfs budget <procedure> [--tenant data-analyst]");
-    }
-    const result = await budgetWorkspaceProcedure({
-      procedureName,
-      tenantId: flagString(flags, "tenant") ?? "data-analyst",
-      baseDir: atlasfsHome()
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (command === "drift") {
-    if (positionals[0] !== "check") {
-      throw new Error("Usage: pnpm atlasfs drift check");
-    }
-    const result = await checkWorkspaceDrift(atlasfsHome());
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (command === "eval") {
-    const tenants = flagStrings(flags, "tenant");
-    const result = await evalWorkspace({
-      round: flagNumber(flags, "round") ?? 0,
-      tenants: tenants.length > 0 ? tenants : ["data-analyst", "support-analyst"],
-      baseDir: atlasfsHome()
-    });
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-
-  if (command === "hydrate-atlas") {
-    if (!flags["dry-run"]) {
-      throw new Error("hydrate-atlas currently supports --dry-run only for the local acceptance path");
-    }
-    const plan = await planAtlasHydration({
-      baseDir: atlasfsHome(),
-      dbName: flagString(flags, "db")
-    });
-    console.log(JSON.stringify(plan, null, 2));
-    return;
-  }
-
-  throw new Error(`Unknown command: ${command}`);
 }
 
 main()
-  .catch((error) => {
-    console.error(error instanceof Error ? error.message : error);
+  .catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error(err instanceof Error ? err.message : err);
     process.exitCode = 1;
   })
   .finally(async () => {
-    await closeAtlasClient();
+    // Best-effort: close any leftover mounts. The agent subcommand handles
+    // this in its readline 'close' hook; the others publish/close mount
+    // handles in-line.
+    try {
+      await closeAllMounts();
+    } catch {
+      // ignore
+    }
   });
