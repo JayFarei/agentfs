@@ -6,7 +6,8 @@
   "scripts": {
     "datafetch": "tsx src/cli.ts",
     "demo": "tsx src/cli.ts demo",
-    "test": "tsx src/snippet/__smoke__.ts && tsx src/observer/__smoke__.ts",
+    "test": "tsx src/snippet/__smoke__.ts && tsx src/snippet/__sdk_import_smoke__.ts && tsx src/observer/__smoke__.ts && tsx src/bash/__smoke__.ts && vitest run",
+    "test:unit": "vitest run",
     "typecheck": "tsc --noEmit",
     "api": "tsx watch src/server/server.ts",
     "api:once": "tsx src/server/server.ts",
