@@ -13,6 +13,23 @@
 //   - `policy` is accepted but unenforced in MVP (no allow-listing yet).
 //   - `on("drift" | "family-promoted")` registers handlers but they never
 //     fire in MVP — drift detection and cross-tenant promotion are deferred.
+//
+// LIFETIME CONTRACT:
+//   The mount runtime is registered with `MountRuntimeRegistry` once
+//   `emit()` finishes and lives for as long as the dataset is published.
+//   `MountHandle.close()` is the EXPLICIT teardown path — calling it
+//   unregisters the mount AND closes the underlying substrate client.
+//
+//   In-process callers (tests, the Wave 6 demo CLI) call `close()`
+//   themselves when they want teardown. HTTP callers via `/v1/mounts`
+//   MUST NOT call `close()` automatically when the SSE stream completes
+//   (the route is the publish action; the registry owns lifetime). The
+//   server-side equivalent of `close()` is `DELETE /v1/mounts/:id`,
+//   which routes to `closeMount(id)` from `./runtime.js`.
+//
+//   On server shutdown, wire `closeAllMounts()` (also from `./runtime.js`)
+//   into the SIGINT/SIGTERM handler so every registered mount releases
+//   its Mongo client.
 
 import path from "node:path";
 import { promises as fs } from "node:fs";

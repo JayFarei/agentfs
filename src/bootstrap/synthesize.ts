@@ -38,6 +38,13 @@ export type SynthesizeArgs = {
   fingerprint: string;
   substrate: string; // e.g. "atlas"
   sampleSize: number;
+  // Optional: the canonical ident from `buildIdentMap` so the synthesised
+  // module's `export declare const <ident>` matches what `_inventory.json`
+  // records. When omitted we fall back to `toIdent(collectionName)` per
+  // module — fine for collision-free corpora (FinQA), unsafe when two
+  // substrate names collapse to the same camelCase ident. `emit.ts`
+  // always passes this; ad-hoc callers MAY omit it.
+  ident?: string;
 };
 
 export type SynthesizedModule = {
@@ -52,7 +59,10 @@ export function synthesizeCollectionModule(
   args: SynthesizeArgs,
 ): SynthesizedModule {
   const { collectionName, inference, fingerprint, substrate, sampleSize } = args;
-  const interfaceName = capitalise(toIdent(collectionName));
+  // Canonical ident comes from buildIdentMap when emit.ts drives us; raw
+  // toIdent is the fallback for direct callers without an ident map.
+  const ident = args.ident ?? toIdent(collectionName);
+  const interfaceName = capitalise(ident);
   const lines: string[] = [];
 
   // --- Header --------------------------------------------------------------
@@ -90,7 +100,7 @@ export function synthesizeCollectionModule(
   lines.push("");
   lines.push("// Bound by the snippet runtime; declared here for typing only.");
   lines.push(
-    `export declare const ${toIdent(collectionName)}: {`,
+    `export declare const ${ident}: {`,
   );
   lines.push(
     `  findExact(filter: Partial<${interfaceName}>, limit?: number): Promise<${interfaceName}[]>;`,

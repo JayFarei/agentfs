@@ -1,4 +1,5 @@
 // POST /v1/mounts — provider publishes a mount.
+// DELETE /v1/mounts/:id — explicit teardown of a published mount.
 //
 // Per kb/plans/004-datafetch-bash-mvp.md Phase 2 architecture:
 //   "/v1/mounts          provider publishes a mount; SSE stream of warm-up"
@@ -7,6 +8,13 @@
 // validate with valibot, run the bootstrap pipeline, and stream stage
 // events over SSE. Once the pipeline reaches the "ready" stage we emit a
 // final `inventory` event carrying the mount inventory.
+//
+// LIFETIME — the mount runtime stays registered after publish so the
+// snippet runtime can call `df.db.<ident>.findExact(...)` against the
+// live Atlas connection. The HTTP route is the publish action, NOT a
+// scoped session: closing the SSE stream does not close the mount.
+// Use `DELETE /v1/mounts/:id` for explicit teardown. On server shutdown,
+// the host should wire `closeAllMounts()` into its SIGINT/SIGTERM hook.
 //
 // This file does NOT touch `src/server/server.ts` or `src/server/routes.ts`.
 // Wave 5 wires `createMountsApp` into the top-level server under
@@ -21,6 +29,7 @@ import {
   type WarmupMode,
   type MountPolicy,
 } from "../adapter/publishMount.js";
+import { closeMount, getMountRuntimeRegistry } from "../adapter/runtime.js";
 
 // --- App factory inputs ----------------------------------------------------
 
@@ -119,11 +128,11 @@ export function createMountsApp(deps: MountsAppDeps = {}): Hono {
           const msg = err instanceof Error ? err.message : String(err);
           writeEvent("error", { message: msg });
         } finally {
-          // Close the underlying substrate connection on stream end so we
-          // don't leak the Mongo client.
-          await handle.close().catch(() => {
-            /* best-effort cleanup */
-          });
+          // Do NOT call handle.close() here. The mount runtime stays
+          // registered so subsequent /v1/snippets calls can query it.
+          // Explicit teardown happens through DELETE /v1/mounts/:id
+          // (or closeAllMounts() on server shutdown). See the LIFETIME
+          // note in publishMount.ts and the route doc above.
           controller.close();
         }
       },
@@ -135,6 +144,35 @@ export function createMountsApp(deps: MountsAppDeps = {}): Hono {
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
       },
+    });
+  });
+
+  // DELETE /v1/mounts/:id — explicit teardown. Unregisters the mount and
+  // closes its underlying substrate client. Returns 404 when the mount
+  // isn't currently registered (already torn down or never published).
+  app.delete("/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!id) {
+      return c.json({ error: "missing_mount_id" }, 400);
+    }
+    const closed = await closeMount(id);
+    if (!closed) {
+      return c.json({ error: "not_found", mountId: id }, 404);
+    }
+    return c.json({ ok: true, mountId: id });
+  });
+
+  // GET /v1/mounts — list currently registered mounts. Useful for the
+  // demo CLI and for debugging; not strictly required by the plan but
+  // costs ~10 lines and exercises the registry's `list()` shape.
+  app.get("/", async (c) => {
+    const runtimes = getMountRuntimeRegistry().list();
+    return c.json({
+      mounts: runtimes.map((r) => ({
+        mountId: r.mountId,
+        adapterId: r.adapter.id,
+        collections: r.identMap.map((m) => ({ ident: m.ident, name: m.name })),
+      })),
     });
   });
 

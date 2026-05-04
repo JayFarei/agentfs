@@ -113,6 +113,23 @@ export function getMountRuntimeRegistry(): MountRuntimeRegistry {
   return _registry;
 }
 
+// Convenience for server-shutdown wiring (Wave 5 owns SIGINT). Closes
+// every registered mount runtime, releasing its substrate client. Safe to
+// call multiple times (the registry is empty after the first call).
+export async function closeAllMounts(): Promise<void> {
+  await _registry.closeAll();
+}
+
+// Unregister + close one mount by id. Returns true if the mount was
+// registered, false if not. Used by the `DELETE /v1/mounts/:id` route
+// to provide explicit teardown without closing the in-process handle.
+export async function closeMount(mountId: string): Promise<boolean> {
+  const runtime = _registry.unregister(mountId);
+  if (!runtime) return false;
+  await runtime.close();
+  return true;
+}
+
 // --- Helper: build a MountRuntime from an adapter -------------------------
 
 // Constructor used by `publishMount` after `emit()` finishes. The runtime

@@ -20,6 +20,7 @@ import { atlasMount } from "../atlasMount.js";
 import { publishMount } from "../publishMount.js";
 import { resolveBaseDir } from "../../bootstrap/emit.js";
 import { getMountRuntimeRegistry } from "../runtime.js";
+import { createMountsApp } from "../../server/v1mounts.js";
 
 async function main(): Promise<void> {
   const uri = process.env.ATLAS_URI ?? process.env.MONGODB_URI;
@@ -155,12 +156,130 @@ async function main(): Promise<void> {
     `[smoke] ok: registry.get(${mountId}).collection(${target.name}).findExact({}, 3) → ${liveDocs.length} rows`,
   );
 
-  console.log("[smoke] all assertions passed.");
+  // (h) Synthesised module's `export declare const <ident>` matches the
+  //     ident in `_inventory.json`. Guards against synthesize/inventory
+  //     drift when `buildIdentMap` disambiguates collisions.
+  for (const c of inventoryDisk.collections) {
+    const moduleSrc = await fs.readFile(
+      path.join(mountRoot, `${c.name}.ts`),
+      "utf8",
+    );
+    const re = new RegExp(`export declare const ${c.ident}\\s*:`);
+    if (!re.test(moduleSrc)) {
+      throw new Error(
+        `[smoke] synthesised module for ${c.name} missing 'export declare const ${c.ident}'`,
+      );
+    }
+  }
+  console.log("[smoke] ok: synthesised modules export idents matching inventory");
+
+  console.log("[smoke] all in-process assertions passed.");
   await handle.close();
   // After close, the registry should no longer have the mount.
   if (getMountRuntimeRegistry().get(mountId) !== null) {
     throw new Error(`[smoke] expected unregister-on-close; mount still in registry`);
   }
+  console.log("[smoke] ok: handle.close() unregistered the mount");
+
+  // --- HTTP route smoke ---------------------------------------------------
+  // POST /v1/mounts streams SSE; after the stream completes the registry
+  // MUST still hold the mount (the route does not auto-close). DELETE
+  // /v1/mounts/:id tears it down explicitly.
+  await runHttpRouteSmoke({ uri, dbName, mountId, baseDir });
+}
+
+async function runHttpRouteSmoke(args: {
+  uri: string;
+  dbName: string;
+  mountId: string;
+  baseDir: string;
+}): Promise<void> {
+  const routeMountId = `${args.mountId}-route`;
+  const app = createMountsApp({ baseDir: args.baseDir });
+
+  console.log(`[smoke:http] POST /v1/mounts (id=${routeMountId})`);
+  const postRes = await app.request("/", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      id: routeMountId,
+      source: { kind: "atlas", uri: args.uri, db: args.dbName },
+      warmup: "lazy",
+    }),
+  });
+  if (postRes.status !== 200) {
+    const text = await postRes.text();
+    throw new Error(
+      `[smoke:http] POST /v1/mounts returned ${postRes.status}: ${text}`,
+    );
+  }
+
+  // Drain the SSE stream to completion.
+  const sseText = await postRes.text();
+  if (!sseText.includes('event: done')) {
+    throw new Error(
+      `[smoke:http] SSE stream missing done event; got:\n${sseText.slice(0, 500)}`,
+    );
+  }
+  console.log("[smoke:http] ok: SSE stream completed (saw stage/inventory/done events)");
+
+  // The route MUST NOT have auto-closed the mount.
+  const stillRegistered = getMountRuntimeRegistry().get(routeMountId);
+  if (!stillRegistered) {
+    throw new Error(
+      `[smoke:http] FAIL: registry no longer holds ${routeMountId} after SSE; route auto-closed`,
+    );
+  }
+  // And it should be queryable.
+  const liveColl = stillRegistered.collection<Record<string, unknown>>(
+    "finqa_cases",
+  );
+  const liveDocs = await liveColl.findExact({}, 3);
+  if (!Array.isArray(liveDocs) || liveDocs.length === 0) {
+    throw new Error(
+      `[smoke:http] FAIL: registry has ${routeMountId} but findExact returned 0 rows`,
+    );
+  }
+  console.log(
+    `[smoke:http] ok: registry survived SSE; findExact({}, 3) → ${liveDocs.length} rows`,
+  );
+
+  // GET /v1/mounts lists what's registered.
+  const listRes = await app.request("/", { method: "GET" });
+  if (listRes.status !== 200) {
+    throw new Error(`[smoke:http] GET /v1/mounts returned ${listRes.status}`);
+  }
+  const listed = (await listRes.json()) as {
+    mounts: Array<{ mountId: string }>;
+  };
+  if (!listed.mounts.some((m) => m.mountId === routeMountId)) {
+    throw new Error(
+      `[smoke:http] GET /v1/mounts did not include ${routeMountId}`,
+    );
+  }
+  console.log("[smoke:http] ok: GET /v1/mounts lists the published mount");
+
+  // DELETE /v1/mounts/:id tears it down.
+  const delRes = await app.request(`/${routeMountId}`, { method: "DELETE" });
+  if (delRes.status !== 200) {
+    throw new Error(`[smoke:http] DELETE /v1/mounts/:id returned ${delRes.status}`);
+  }
+  if (getMountRuntimeRegistry().get(routeMountId) !== null) {
+    throw new Error(
+      `[smoke:http] FAIL: DELETE did not unregister ${routeMountId}`,
+    );
+  }
+  console.log("[smoke:http] ok: DELETE /v1/mounts/:id unregistered the mount");
+
+  // DELETE on a missing mount returns 404.
+  const missingRes = await app.request(`/${routeMountId}`, { method: "DELETE" });
+  if (missingRes.status !== 404) {
+    throw new Error(
+      `[smoke:http] DELETE on missing mount returned ${missingRes.status}, expected 404`,
+    );
+  }
+  console.log("[smoke:http] ok: DELETE on already-torn-down mount returns 404");
+  console.log("[smoke:http] all HTTP route assertions passed.");
 }
 
 main().catch((err) => {

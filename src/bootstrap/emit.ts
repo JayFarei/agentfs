@@ -177,6 +177,12 @@ export function emitMount(args: EmitArgs): EmitStream {
         const tsModule = synthesizeCollectionModule({
           mountId: args.mountId,
           collectionName: entry.name,
+          // Pass the canonical ident from the precomputed ident map so
+          // the synthesised module's `export declare const <ident>` is
+          // the same string that `_inventory.json` records. Guarantees
+          // alignment when collisions disambiguate (e.g. `foo_bar` and
+          // `foo-bar` both raw-collapse to `fooBar`).
+          ident: identByName.get(entry.name),
           inference,
           fingerprint,
           substrate: args.adapter.id,
