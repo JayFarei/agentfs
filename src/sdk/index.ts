@@ -8,7 +8,7 @@
 export { fn, SchemaValidationError, NoBodyDispatcherError } from "./fn.js";
 export type { FnInit, FnSpec, Fn, FnExample } from "./fn.js";
 
-export { llm, agent, normaliseBody, isPureFn } from "./body.js";
+export { llm, agent } from "./body.js";
 export type {
   Body,
   PureTSBody,

@@ -30,29 +30,15 @@
 
 import { promises as fsp } from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import type {
   Fn,
   LibraryEntry,
   LibraryResolver,
 } from "../sdk/index.js";
-
-// --- Defaults --------------------------------------------------------------
-
-const RESERVED_TENANT_RE = /^__\w+__$/;
-
-function isReservedTenantId(tenantId: string): boolean {
-  return RESERVED_TENANT_RE.test(tenantId);
-}
-
-function defaultBaseDir(): string {
-  return (
-    process.env["DATAFETCH_HOME"] ??
-    process.env["ATLASFS_HOME"] ??
-    path.join(process.cwd(), ".atlasfs")
-  );
-}
+import { defaultBaseDir, isReservedTenantId, locateRepoRoot } from "../paths.js";
+import { enforceMapCap } from "../util/bounded.js";
 
 // --- @datafetch/sdk import rewriter ----------------------------------------
 //
@@ -70,36 +56,7 @@ function defaultBaseDir(): string {
 const SDK_PACKAGE_NAME = "@datafetch/sdk";
 const SDK_IMPORT_RE = /(\bfrom\s+|\bimport\s+)(['"])@datafetch\/sdk\2/g;
 
-let repoRootCache: string | null = null;
 let sdkIndexUrlCache: string | null = null;
-
-// Locate the repo root by walking up from this module looking for a
-// package.json that contains an "@datafetch/sdk"-style src/sdk dir. The
-// snippet cache lives under <repo-root>/.snippet-cache so user-authored
-// /lib files written there can resolve bare imports like `valibot` via
-// Node's normal upward-walk through the repo's node_modules.
-async function locateRepoRoot(): Promise<string> {
-  if (repoRootCache) return repoRootCache;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  let cursor = here;
-  for (let i = 0; i < 6; i += 1) {
-    try {
-      const sdkStat = await fsp.stat(path.join(cursor, "src", "sdk", "index.ts"));
-      const pkgStat = await fsp.stat(path.join(cursor, "package.json"));
-      if (sdkStat.isFile() && pkgStat.isFile()) {
-        repoRootCache = cursor;
-        return cursor;
-      }
-    } catch {
-      // walk up
-    }
-    const parent = path.dirname(cursor);
-    if (parent === cursor) break;
-    cursor = parent;
-  }
-  repoRootCache = process.cwd();
-  return repoRootCache;
-}
 
 async function locateSdkIndexUrl(): Promise<string> {
   if (sdkIndexUrlCache) return sdkIndexUrlCache;
@@ -142,6 +99,14 @@ type PoisonEntry = { mtimeMs: number };
 export type DiskLibraryResolverOpts = {
   baseDir?: string;
 };
+
+// Caps on the in-memory caches. Long-lived data planes accumulate one
+// resolver entry per /lib/ file ever loaded; without a cap the working
+// set grows unboundedly. 512 covers a realistic tenant + seed surface
+// with headroom; FIFO eviction is enough since repeated callers re-cache
+// on resolve.
+const RESOLVER_CACHE_CAP = 512;
+const RESOLVER_POISON_CAP = 512;
 
 export class DiskLibraryResolver implements LibraryResolver {
   private readonly baseDir: string;
@@ -275,6 +240,7 @@ export class DiskLibraryResolver implements LibraryResolver {
     }
 
     this.cache.set(file, { mtimeMs, fn: fnObj });
+    enforceMapCap(this.cache, RESOLVER_CACHE_CAP);
     this.poison.delete(file);
     return fnObj;
   }
@@ -282,6 +248,7 @@ export class DiskLibraryResolver implements LibraryResolver {
   private warnPoison(file: string, mtimeMs: number, err: unknown): void {
     const prior = this.poison.get(file);
     this.poison.set(file, { mtimeMs });
+    enforceMapCap(this.poison, RESOLVER_POISON_CAP);
     if (prior && prior.mtimeMs === mtimeMs) return;
     const msg = err instanceof Error ? err.message : String(err);
     // eslint-disable-next-line no-console

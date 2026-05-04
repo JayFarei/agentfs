@@ -25,6 +25,8 @@
 
 import path from "node:path";
 
+import { defaultBaseDir } from "../paths.js";
+
 import type { FlueSession } from "@flue/sdk/client";
 
 import type {
@@ -70,11 +72,7 @@ export class FlueBodyDispatcher implements BodyDispatcher {
     if (opts.skills !== undefined) {
       this.skills = opts.skills;
     } else {
-      const baseDir =
-        opts.baseDir ??
-        process.env["DATAFETCH_HOME"] ??
-        process.env["ATLASFS_HOME"] ??
-        path.join(process.cwd(), ".datafetch");
+      const baseDir = opts.baseDir ?? defaultBaseDir();
       this.skills = new DiskSkillLoader({ baseDir });
     }
   }

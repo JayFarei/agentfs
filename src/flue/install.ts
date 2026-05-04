@@ -18,7 +18,8 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { defaultBaseDir, locateRepoSubdir } from "../paths.js";
 
 import {
   getBodyDispatcher,
@@ -55,11 +56,7 @@ export type InstallResult = {
 export async function installFlueDispatcher(
   opts: InstallFlueDispatcherOpts = {},
 ): Promise<InstallResult> {
-  const baseDir =
-    opts.baseDir ??
-    process.env["DATAFETCH_HOME"] ??
-    process.env["ATLASFS_HOME"] ??
-    path.join(process.cwd(), ".datafetch");
+  const baseDir = opts.baseDir ?? defaultBaseDir();
 
   const pool = opts.pool ?? new FlueSessionPool();
   const dispatcher = new FlueBodyDispatcher({
@@ -91,7 +88,7 @@ export async function installFlueDispatcher(
 // bundle can't be located (e.g. when running from a bundled deployment
 // that omits the seeds dir), this becomes a warn-only no-op.
 async function mirrorSeedSkills(baseDir: string): Promise<void> {
-  const sourceDir = await locateSeedDir();
+  const sourceDir = await locateRepoSubdir(path.join("seeds", "skills"));
   if (sourceDir === null) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -115,25 +112,4 @@ async function mirrorSeedSkills(baseDir: string): Promise<void> {
     const content = await fs.readFile(src, "utf8");
     await fs.writeFile(dst, content, "utf8");
   }
-}
-
-// Walk up from this file's location looking for a `seeds/skills/`
-// directory. Works for both source-tree (`src/flue/install.ts`) and any
-// bundled location that preserves the seeds dir alongside the package.
-async function locateSeedDir(): Promise<string | null> {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  let cursor = here;
-  for (let i = 0; i < 6; i += 1) {
-    const candidate = path.join(cursor, "seeds", "skills");
-    try {
-      const stat = await fs.stat(candidate);
-      if (stat.isDirectory()) return candidate;
-    } catch {
-      // not here; walk up
-    }
-    const parent = path.dirname(cursor);
-    if (parent === cursor) break;
-    cursor = parent;
-  }
-  return null;
 }

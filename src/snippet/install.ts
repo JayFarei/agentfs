@@ -20,10 +20,10 @@
 
 import { promises as fsp } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { setLibraryResolver } from "../sdk/index.js";
 
+import { defaultBaseDir, locateRepoSubdir } from "../paths.js";
 import { DiskLibraryResolver } from "./library.js";
 import { DiskSnippetRuntime } from "./runtime.js";
 
@@ -45,11 +45,7 @@ export type InstallSnippetRuntimeResult = {
 export async function installSnippetRuntime(
   opts: InstallSnippetRuntimeOpts = {},
 ): Promise<InstallSnippetRuntimeResult> {
-  const baseDir =
-    opts.baseDir ??
-    process.env["DATAFETCH_HOME"] ??
-    process.env["ATLASFS_HOME"] ??
-    path.join(process.cwd(), ".atlasfs");
+  const baseDir = opts.baseDir ?? defaultBaseDir();
 
   if (!opts.skipSeedMirror) {
     await mirrorSeedShims(baseDir);
@@ -68,29 +64,8 @@ export async function installSnippetRuntime(
 
 // --- Seed shim mirror -------------------------------------------------------
 
-// Locate `<repo>/seeds/lib/`. The resolver walks up from this file's
-// directory looking for `seeds/lib`, mirroring the pattern in
-// `src/flue/install.ts:locateSeedDir()`.
-async function locateSeedLibDir(): Promise<string | null> {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  let cursor = here;
-  for (let i = 0; i < 6; i += 1) {
-    const candidate = path.join(cursor, "seeds", "lib");
-    try {
-      const stat = await fsp.stat(candidate);
-      if (stat.isDirectory()) return candidate;
-    } catch {
-      // not here; walk up
-    }
-    const parent = path.dirname(cursor);
-    if (parent === cursor) break;
-    cursor = parent;
-  }
-  return null;
-}
-
 async function mirrorSeedShims(baseDir: string): Promise<void> {
-  const seedDir = await locateSeedLibDir();
+  const seedDir = await locateRepoSubdir(path.join("seeds", "lib"));
   if (!seedDir) {
     // eslint-disable-next-line no-console
     console.warn(

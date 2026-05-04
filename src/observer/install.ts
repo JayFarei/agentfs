@@ -7,8 +7,7 @@
 // The snippet runtime exposed by `installSnippetRuntime({...})` has an
 // optional `onTrajectorySaved` field. We set it here.
 
-import path from "node:path";
-
+import { defaultBaseDir } from "../paths.js";
 import { DiskSnippetRuntime } from "../snippet/runtime.js";
 
 import { Observer, type ObserverOpts, type ObserveResult } from "./worker.js";
@@ -28,11 +27,7 @@ export type InstallObserverResult = {
 export function installObserver(
   opts: InstallObserverOpts = {},
 ): InstallObserverResult {
-  const baseDir =
-    opts.baseDir ??
-    process.env["DATAFETCH_HOME"] ??
-    process.env["ATLASFS_HOME"] ??
-    path.join(process.cwd(), ".atlasfs");
+  const baseDir = opts.baseDir ?? defaultBaseDir();
 
   const observerOpts: ObserverOpts = { baseDir };
   if (opts.tenantId !== undefined) observerOpts.tenantId = opts.tenantId;

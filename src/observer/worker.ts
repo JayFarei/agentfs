@@ -15,6 +15,9 @@
 
 import path from "node:path";
 
+import { defaultBaseDir } from "../paths.js";
+import { enforceMapCap } from "../util/bounded.js";
+
 import {
   getLibraryResolver,
   readTrajectory,
@@ -59,6 +62,12 @@ export type ObserverOpts = {
 
 // --- Observer --------------------------------------------------------------
 
+// Cap the in-flight-promise map so a long-lived data plane doesn't
+// accumulate trajectory ids forever. 256 covers a realistic burst with
+// headroom; FIFO eviction is fine since callers grab the promise at
+// observation time.
+const OBSERVER_PROMISE_CAP = 256;
+
 export class Observer {
   private readonly baseDir: string;
   private readonly tenantId: string | null;
@@ -67,9 +76,9 @@ export class Observer {
 
   // Test-friendly: every `observe(id)` call records its in-flight Promise
   // here so smoke tests can `await observer.observerPromise.get(id)`.
-  // We do NOT remove entries when they settle; the map stays as a
-  // history record for the duration of the Observer's lifetime. Tests
-  // can clear it via `observer.observerPromise.delete(id)` if they care.
+  // Bounded with FIFO eviction (`OBSERVER_PROMISE_CAP`) so a long-lived
+  // data plane doesn't accumulate one entry per snippet forever; tests
+  // settle within the cap and aren't affected.
   readonly observerPromise: Map<string, Promise<ObserveResult>> = new Map();
 
   constructor(opts: ObserverOpts = {}) {
@@ -82,6 +91,7 @@ export class Observer {
   async observe(trajectoryId: string): Promise<ObserveResult> {
     const inFlight = this.runObserve(trajectoryId);
     this.observerPromise.set(trajectoryId, inFlight);
+    enforceMapCap(this.observerPromise, OBSERVER_PROMISE_CAP);
     return inFlight;
   }
 
@@ -162,12 +172,3 @@ export class Observer {
   }
 }
 
-// --- Defaults --------------------------------------------------------------
-
-function defaultBaseDir(): string {
-  return (
-    process.env["DATAFETCH_HOME"] ??
-    process.env["ATLASFS_HOME"] ??
-    path.join(process.cwd(), ".atlasfs")
-  );
-}

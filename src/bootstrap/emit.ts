@@ -98,13 +98,10 @@ export type OnDiskInventory = {
 
 // --- Default base directory ------------------------------------------------
 
-export function resolveBaseDir(): string {
-  return (
-    process.env.DATAFETCH_HOME ??
-    process.env.ATLASFS_HOME ??
-    path.join(process.cwd(), ".atlasfs")
-  );
-}
+// Re-exported for callers that historically imported the helper from this
+// module; the canonical implementation now lives in `src/paths.ts`.
+export { defaultBaseDir as resolveBaseDir } from "../paths.js";
+import { defaultBaseDir as resolveBaseDir } from "../paths.js";
 
 // --- Orchestrator ----------------------------------------------------------
 

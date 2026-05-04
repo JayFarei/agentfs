@@ -63,35 +63,9 @@ import {
 import type { MountReader } from "./mountReader.js";
 import type { SessionCtx, SnippetRuntime } from "./snippetRuntime.js";
 import type { LibraryResolver } from "../sdk/index.js";
+import { defaultBaseDir, isReservedTenantId } from "../paths.js";
 
-// --- Defaults --------------------------------------------------------------
-
-// `$DATAFETCH_HOME` (preferred) or `$ATLASFS_HOME` (legacy fallback) or
-// `<cwd>/.atlasfs`. Mirrors the env handling in `src/sdk/trajectory.ts`'s
-// `atlasfsHome()` so trajectory + lib + mount roots line up under one
-// directory.
-function defaultBaseDir(): string {
-  return (
-    process.env.DATAFETCH_HOME ??
-    process.env.ATLASFS_HOME ??
-    path.join(process.cwd(), ".atlasfs")
-  );
-}
-
-// --- Reserved tenant ids ---------------------------------------------------
-
-// The Flue agent mirrors seed skills to `<baseDir>/lib/__seed__/skills/`
-// (note the `__seed__` reserved tenant id). Anything matching the
-// `^__\w+__$` pattern is reserved and MUST NOT be surfaced as a tenant
-// from a future tenant-listing helper. The bash workspace itself does
-// not enumerate tenants today (each session is single-tenant per its
-// constructor argument), so this predicate is exported for the wider
-// surface to use (CLI listing, observer worker, admin tools).
-const RESERVED_TENANT_RE = /^__\w+__$/;
-
-export function isReservedTenantId(tenantId: string): boolean {
-  return RESERVED_TENANT_RE.test(tenantId);
-}
+export { isReservedTenantId };
 
 // --- Public types ----------------------------------------------------------
 

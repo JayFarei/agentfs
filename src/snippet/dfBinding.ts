@@ -21,7 +21,6 @@ import { performance } from "node:perf_hooks";
 
 import { getMountRuntimeRegistry } from "../adapter/runtime.js";
 import {
-  costZero,
   getLibraryResolver,
   makeResult,
   type CollectionHandle,
@@ -273,7 +272,6 @@ function chargeSubstrate(ctx: DispatchContext, elapsedMs: number): void {
   ctx.cost.tier = Math.max(ctx.cost.tier, TIER_SUBSTRATE) as CostTier;
   ctx.cost.ms.cold += Math.round(elapsedMs);
   // tokens / llmCalls left alone — substrate calls don't spend either.
-  void costZero; // silence unused if the import path drops.
 }
 
 // --- Ident index ------------------------------------------------------------

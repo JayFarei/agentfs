@@ -24,6 +24,7 @@
 
 import { promises as fsp } from "node:fs";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import {
   getMountRuntimeRegistry,
@@ -34,6 +35,7 @@ import { publishMount, type MountHandle } from "../adapter/publishMount.js";
 import { installFlueDispatcher } from "../flue/install.js";
 import { installObserver, type InstallObserverResult } from "../observer/install.js";
 import { installSnippetRuntime } from "../snippet/install.js";
+import { readTrajectory } from "../sdk/index.js";
 import type {
   CollectionHandle,
   Cost,
@@ -191,7 +193,7 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
     println("");
     printCostPanel({ q1, q2, crystallised });
     println("");
-    printCallChains({ q1, q2, crystallised });
+    printCallChains({ q1, q2 });
 
     return {
       q1,
@@ -332,20 +334,14 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
   let functionName: string | undefined;
   let callPrimitives: string[] = [];
   if (result.trajectoryId) {
-    const traj = await readTrajectoryRecord({
-      trajectoryId: result.trajectoryId,
-      baseDir: args.sessionCtx.baseDir,
-    });
-    if (traj) {
-      mode = typeof traj["mode"] === "string" ? traj["mode"] : undefined;
-      const prov = traj["provenance"] as
-        | { functionName?: string }
-        | undefined;
-      functionName = prov?.functionName;
-      const calls = traj["calls"] as
-        | Array<{ primitive: string }>
-        | undefined;
-      callPrimitives = (calls ?? []).map((c) => c.primitive);
+    try {
+      const traj = await readTrajectory(
+        result.trajectoryId,
+        args.sessionCtx.baseDir,
+      );
+      mode = traj.mode;
+      functionName = traj.provenance?.functionName;
+      callPrimitives = traj.calls.map((c) => c.primitive);
       // Walk the call list — when no provenance.functionName was set,
       // the LAST lib.* call is the outermost df.lib invocation (nested
       // sub-calls complete first per TrajectoryRecorder.call's
@@ -359,6 +355,8 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
           functionName = lastLib.slice("lib.".length);
         }
       }
+    } catch {
+      // Trajectory file missing or unreadable — leave fields undefined.
     }
   }
 
@@ -373,23 +371,6 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
     stdout: result.stdout,
     stderr: result.stderr,
   };
-}
-
-async function readTrajectoryRecord(args: {
-  trajectoryId: string;
-  baseDir: string;
-}): Promise<Record<string, unknown> | null> {
-  const file = path.join(
-    args.baseDir,
-    "trajectories",
-    `${args.trajectoryId}.json`,
-  );
-  try {
-    const raw = await fsp.readFile(file, "utf8");
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
 }
 
 async function awaitCrystallisation(args: {
@@ -415,9 +396,6 @@ async function awaitCrystallisation(args: {
   return null;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // --- Cost panel ------------------------------------------------------------
 
@@ -498,7 +476,6 @@ function printCostPanel(args: {
 function printCallChains(args: {
   q1: SnippetSummary;
   q2: SnippetSummary;
-  crystallised: { name: string; path: string } | null;
 }): void {
   println("=== Call-Graph =============================================");
   println("Q1 — top-level chain (novel composition):");
@@ -551,9 +528,7 @@ function findWrapperIndex(callPrimitives: string[]): number {
   // (post-await push order). If none, return -1.
   for (let i = callPrimitives.length - 1; i >= 0; i -= 1) {
     const p = callPrimitives[i]!;
-    if (p.startsWith("lib.crystallise_") || p.startsWith("lib.crystallise")) {
-      return i;
-    }
+    if (p.startsWith("lib.crystallise")) return i;
   }
   return -1;
 }
