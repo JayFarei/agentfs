@@ -4,8 +4,14 @@
 // session's `npx tsx` custom command delegates to it whenever the agent
 // runs `npx tsx <file>` / `npx tsx -e "..."` / `npx tsx -`.
 //
-// In Phase 1 we ship `StubSnippetRuntime` so the bash plumbing is
-// end-to-end testable without the real evaluator.
+// In Phase 1 we shipped `StubSnippetRuntime` so the bash plumbing was
+// end-to-end testable without the real evaluator. Wave 3 widens the
+// return type to surface the trajectory id and the per-snippet cost
+// snapshot so the demo CLI (Wave 6) can render the cost panel without
+// re-reading the trajectory file. The Stub still satisfies the wider
+// type by leaving both fields undefined.
+
+import type { Cost } from "../sdk/index.js";
 
 // --- Session context -------------------------------------------------------
 
@@ -22,11 +28,21 @@ export type SessionCtx = {
 
 // --- Runtime interface ------------------------------------------------------
 
+export type SnippetRunResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  // Wave 3 additions. Both optional so StubSnippetRuntime and any future
+  // implementation that doesn't track them can still satisfy the type.
+  trajectoryId?: string;
+  cost?: Cost;
+};
+
 export type SnippetRuntime = {
   run(args: {
     source: string;
     sessionCtx: SessionCtx;
-  }): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  }): Promise<SnippetRunResult>;
 };
 
 // --- Stub implementation ----------------------------------------------------
@@ -39,7 +55,7 @@ export class StubSnippetRuntime implements SnippetRuntime {
   async run(_args: {
     source: string;
     sessionCtx: SessionCtx;
-  }): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  }): Promise<SnippetRunResult> {
     return {
       stdout: "",
       stderr: "snippet runtime not yet wired (Wave 3)\n",
