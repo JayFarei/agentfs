@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import type { Cost, ResultMode } from "../sdk/result.js";
+
 export type PrimitiveCallRecord = {
   index: number;
   primitive: string;
@@ -8,16 +10,37 @@ export type PrimitiveCallRecord = {
   output: unknown;
   startedAt: string;
   durationMs: number;
+  // Optional content-addressable pin for the artefact this call resolved
+  // against. Populated by the snippet runtime once content-addressing lands;
+  // safe to leave unset in earlier phases.
+  pin?: string;
+};
+
+// Per-trajectory provenance block. Intentionally a subset of the SDK
+// `Provenance` type — the trajectory file lives next to the data and
+// references the originating tenant + mount + (optional) function.
+export type TrajectoryProvenance = {
+  tenant: string;
+  mount: string;
+  functionName?: string;
 };
 
 export type TrajectoryRecord = {
   id: string;
   tenantId: string;
   question: string;
-  mode: "novel";
+  // Widened from the prototype's `"novel"`-only literal to the full
+  // ResultMode union so trajectories can record interpreted / llm-backed
+  // / cache hits as well.
+  mode: ResultMode;
   calls: PrimitiveCallRecord[];
   result?: unknown;
   createdAt: string;
+  // The fields below are optional in the envelope. They are populated
+  // by the snippet runtime once a snippet completes; the legacy code
+  // path (which writes `mode: "novel"` only) leaves them undefined.
+  cost?: Cost;
+  provenance?: TrajectoryProvenance;
 };
 
 export function atlasfsHome(): string {
@@ -70,6 +93,18 @@ export class TrajectoryRecorder {
 
   setResult(result: unknown): void {
     this.record.result = result;
+  }
+
+  setMode(mode: ResultMode): void {
+    this.record.mode = mode;
+  }
+
+  setCost(cost: Cost): void {
+    this.record.cost = cost;
+  }
+
+  setProvenance(provenance: TrajectoryProvenance): void {
+    this.record.provenance = provenance;
   }
 
   async save(baseDir = atlasfsHome()): Promise<string> {
