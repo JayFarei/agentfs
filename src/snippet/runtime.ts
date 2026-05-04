@@ -52,11 +52,22 @@ export type DiskSnippetRuntimeOpts = {
   // size limits, custom temp dir).
 };
 
+// Optional callback fired (fire-and-forget) after a trajectory is saved
+// to disk. Wave 4's `installObserver({...})` registers a handler here so
+// the observer can mine completed trajectories asynchronously without
+// blocking the snippet's return.
+export type TrajectorySavedCallback = (trajectoryId: string) => void;
+
 // --- Implementation --------------------------------------------------------
 
 export class DiskSnippetRuntime implements SnippetRuntime {
   // Sequence id for unique temp filenames within one process.
   private seq = 0;
+
+  // Wave 4 hook: invoked fire-and-forget after a trajectory is saved.
+  // The observer registers itself here. Errors thrown by the callback
+  // are swallowed (this is the snippet runtime; the observer is async).
+  onTrajectorySaved?: TrajectorySavedCallback;
 
   constructor(_opts: DiskSnippetRuntimeOpts = {}) {
     void _opts;
@@ -100,6 +111,21 @@ export class DiskSnippetRuntime implements SnippetRuntime {
     });
     try {
       await recorder.save(sessionCtx.baseDir);
+      // Notify the observer (Wave 4). Fire-and-forget; any thrown error
+      // from the callback is swallowed — the snippet's return must not
+      // depend on the observer's success.
+      if (this.onTrajectorySaved) {
+        try {
+          this.onTrajectorySaved(recorder.id);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `[snippet/runtime] onTrajectorySaved callback threw: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
     } catch (err) {
       // Best-effort; saving the trajectory must not crash the runtime.
       // eslint-disable-next-line no-console

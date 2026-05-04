@@ -1,0 +1,210 @@
+// Crystallisation gate.
+//
+// Conservative heuristic deciding whether a saved trajectory should be
+// crystallised into a /lib/<tenant>/<name>.ts file. Phase 5 (R6) wants
+// the observer to "only propose crystallisation when the trajectory looks
+// complete and the call graph is plausible".
+//
+// The gate is intentionally simple — it errs on the side of skipping. A
+// permissive observer would write garbage /lib/ files; a strict one only
+// crystallises shapes the runtime can mechanically replay. Per the plan's
+// Architecture and design.md §8.3, the production form requires N >= 3
+// convergent trajectories before promotion. The MVP collapses N to 1
+// (every qualifying trajectory crystallises immediately) so the demo
+// shows turn 5 of personas.md §3 ("Coming back the next day"). The
+// shape-hash de-dup below means re-running the same snippet doesn't
+// produce a second crystallised copy.
+//
+// Heuristics applied (all must pass):
+//   1. >= 2 distinct primitive calls in the trajectory.
+//   2. No call has a thrown-error output (no `error`/`errors`/`stack`
+//      key on its output, and the run finished with `mode != "novel"` — a
+//      novel mode in the saved record indicates an error path through
+//      the snippet runtime).
+//   3. Mode is "interpreted" (compositions over primitives + lib seeds).
+//      LLM-backed trajectories are excluded per D-015 — the observer
+//      crystallises composition patterns, not standalone LLM functions.
+//   4. The first call is a substrate retrieval (`db.*`) returning a list,
+//      and at least one subsequent call is a `lib.*` whose input
+//      references the first call's output (data-flow check).
+//   5. The shape-hash isn't already represented in the on-disk
+//      /lib/<tenant>/ overlay (avoid re-crystallising).
+
+import type { TrajectoryRecord } from "../sdk/index.js";
+
+import type { LibrarySnapshot } from "./template.js";
+
+export type GateOutcome =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+export type ShouldCrystalliseArgs = {
+  trajectory: TrajectoryRecord;
+  // Pre-computed shape hash from the template extractor. Used to check
+  // against `existingHashes` so we don't re-crystallise the same shape.
+  shapeHash: string;
+  existing: LibrarySnapshot;
+};
+
+export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
+  const { trajectory, shapeHash, existing } = args;
+
+  // 1. >= 2 distinct primitive calls.
+  if (trajectory.calls.length < 2) {
+    return {
+      ok: false,
+      reason: `trajectory has ${trajectory.calls.length} call(s); need at least 2`,
+    };
+  }
+  const distinctPrimitives = new Set(trajectory.calls.map((c) => c.primitive));
+  if (distinctPrimitives.size < 2) {
+    return {
+      ok: false,
+      reason: `trajectory has ${distinctPrimitives.size} distinct primitive(s); need at least 2`,
+    };
+  }
+
+  // 2. No call has an error-shaped output, and the snippet didn't fall
+  //    back to novel-mode (which indicates an error path).
+  if (trajectory.mode === "novel") {
+    return {
+      ok: false,
+      reason: `trajectory.mode is "novel" (snippet errored or no body executed)`,
+    };
+  }
+  for (const call of trajectory.calls) {
+    if (looksLikeErrorOutput(call.output)) {
+      return {
+        ok: false,
+        reason: `call #${call.index} (${call.primitive}) output looks like an error`,
+      };
+    }
+  }
+
+  // 3. Mode is "interpreted".
+  if (trajectory.mode !== "interpreted") {
+    return {
+      ok: false,
+      reason: `trajectory.mode is "${trajectory.mode}"; observer only crystallises composition patterns (mode "interpreted"). Per D-015 the agent authors LLM-backed functions directly.`,
+    };
+  }
+
+  // 4. db.* call producing a list; at least one lib.* call after it whose
+  //    input cites the prior call's output (loose data-flow heuristic).
+  const firstDbIdx = trajectory.calls.findIndex((c) =>
+    c.primitive.startsWith("db."),
+  );
+  if (firstDbIdx === -1) {
+    return {
+      ok: false,
+      reason: "no db.* call present; observer requires a substrate-rooted chain",
+    };
+  }
+  if (!Array.isArray(trajectory.calls[firstDbIdx]?.output)) {
+    return {
+      ok: false,
+      reason: `first db.* call (#${firstDbIdx}) did not return a list`,
+    };
+  }
+  const downstreamLib = trajectory.calls.slice(firstDbIdx + 1).find((c) =>
+    c.primitive.startsWith("lib."),
+  );
+  if (!downstreamLib) {
+    return {
+      ok: false,
+      reason: "no lib.* call after the first db.* call",
+    };
+  }
+  if (!consumesEarlierOutput(trajectory.calls, firstDbIdx)) {
+    return {
+      ok: false,
+      reason: "no downstream call appears to consume the substrate output (data-flow check failed)",
+    };
+  }
+
+  // 5. Shape-hash de-dup. The existing snapshot is built from the on-disk
+  //    /lib/<tenant>/*.ts files; any file whose body comment carries the
+  //    same `@shape-hash:` tag means we already crystallised this shape.
+  if (existing.shapeHashes.has(shapeHash)) {
+    return {
+      ok: false,
+      reason: `call shape already crystallised (shapeHash=${shapeHash})`,
+    };
+  }
+
+  return { ok: true };
+}
+
+// --- Helpers ---------------------------------------------------------------
+
+// A call's output shape that "looks like an error" — defensive check; the
+// trajectory recorder doesn't store thrown exceptions per se (it bubbles
+// them up to the snippet runtime which records mode "novel"), but a
+// pure-TS body that returns `{error: "..."}` is something the gate
+// should refuse.
+function looksLikeErrorOutput(output: unknown): boolean {
+  if (output === null || typeof output !== "object" || Array.isArray(output)) {
+    return false;
+  }
+  const rec = output as Record<string, unknown>;
+  if (typeof rec["error"] === "string") return true;
+  if (Array.isArray(rec["errors"]) && rec["errors"].length > 0) return true;
+  if (typeof rec["stack"] === "string") return true;
+  return false;
+}
+
+// Returns true if any call after `firstDbIdx` has an input that
+// references a value present somewhere in an earlier call's output.
+// "References" is checked structurally: serialise both, walk the
+// downstream input looking for any object/array whose JSON encoding
+// matches any sub-tree of the upstream output.
+function consumesEarlierOutput(
+  calls: TrajectoryRecord["calls"],
+  firstDbIdx: number,
+): boolean {
+  const upstream = calls[firstDbIdx]?.output;
+  if (!Array.isArray(upstream) || upstream.length === 0) return false;
+  // Quick serialise-and-substring check. This is a loose heuristic but
+  // covers the common case where the output of findSimilar(...) flows in
+  // as `{candidates: cands}` to pickFiling.
+  const upstreamJson = safeJson(upstream);
+  if (upstreamJson === null) return false;
+  // Use a feature of the upstream payload that is unlikely to collide
+  // with literal arguments: pick the first element's first string-valued
+  // field as a signature.
+  const signature = pickSignature(upstream);
+  if (signature === null) return false;
+  for (let i = firstDbIdx + 1; i < calls.length; i += 1) {
+    const downstream = calls[i];
+    if (!downstream) continue;
+    const downstreamJson = safeJson(downstream.input);
+    if (downstreamJson === null) continue;
+    if (downstreamJson.includes(signature)) return true;
+  }
+  return false;
+}
+
+function safeJson(value: unknown): string | null {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
+function pickSignature(arr: unknown[]): string | null {
+  for (const item of arr) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const rec = item as Record<string, unknown>;
+    for (const key of Object.keys(rec)) {
+      const v = rec[key];
+      if (typeof v === "string" && v.length >= 4) {
+        // Plain string that's distinctive enough.
+        return JSON.stringify(v);
+      }
+    }
+  }
+  return null;
+}
