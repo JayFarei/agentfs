@@ -61,9 +61,11 @@ function defaultBaseDir(): string {
 // /AGENTS.md and personas.md §3 Turn 6). There is no real npm package by
 // that name; the resolver rewrites those imports to the absolute
 // file:// URL of `<repo>/src/sdk/index.ts` before dynamic import. The
-// rewritten source is written into `<baseDir>/.snippet-cache/` with the
-// mtime baked into the filename so cache freshness piggybacks on the
-// disk file's own mtime.
+// rewritten source is written into `<repo-root>/.snippet-cache/` (NOT
+// `<baseDir>/.snippet-cache/`) so bare imports the user-authored file
+// references (e.g. `valibot`) resolve via Node's normal upward walk
+// through the repo's `node_modules/`. The mtime is baked into the
+// cache filename so freshness piggybacks on the disk file's own mtime.
 
 const SDK_PACKAGE_NAME = "@datafetch/sdk";
 const SDK_IMPORT_RE = /(\bfrom\s+|\bimport\s+)(['"])@datafetch\/sdk\2/g;

@@ -68,6 +68,7 @@ export type SnippetSummary = {
   cost: Cost | undefined;
   mode: string | undefined;
   functionName: string | undefined;
+  callPrimitives: string[];
   stdout: string;
   stderr: string;
 };
@@ -185,9 +186,12 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
       label: "Q2",
     });
 
-    // 6. Cost panel.
+    // 6. Cost panel + call-chain panel (the call-chain panel is the visible
+    //    proof of the call-graph-collapse property locked in by R7).
     println("");
     printCostPanel({ q1, q2, crystallised });
+    println("");
+    printCallChains({ q1, q2, crystallised });
 
     return {
       q1,
@@ -321,10 +325,12 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
 
-  // Read the trajectory back to harvest mode + functionName (the demo
-  // reports both in the cost panel).
+  // Read the trajectory back to harvest mode + functionName + call list
+  // (the cost panel reports the first two; the chain panel reports the
+  // call list to make the call-graph collapse property visible).
   let mode: string | undefined;
   let functionName: string | undefined;
+  let callPrimitives: string[] = [];
   if (result.trajectoryId) {
     const traj = await readTrajectoryRecord({
       trajectoryId: result.trajectoryId,
@@ -336,6 +342,10 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
         | { functionName?: string }
         | undefined;
       functionName = prov?.functionName;
+      const calls = traj["calls"] as
+        | Array<{ primitive: string }>
+        | undefined;
+      callPrimitives = (calls ?? []).map((c) => c.primitive);
       // Walk the call list — when no provenance.functionName was set,
       // the LAST lib.* call is the outermost df.lib invocation (nested
       // sub-calls complete first per TrajectoryRecorder.call's
@@ -343,13 +353,10 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
       // primitive (e.g. `executeTableMath`); for an interpreted replay
       // this is the crystallised wrapper.
       if (!functionName) {
-        const calls = traj["calls"] as
-          | Array<{ primitive: string }>
-          | undefined;
-        const libCalls = calls?.filter((c) => c.primitive.startsWith("lib.")) ?? [];
+        const libCalls = callPrimitives.filter((p) => p.startsWith("lib."));
         const lastLib = libCalls[libCalls.length - 1];
         if (lastLib) {
-          functionName = lastLib.primitive.slice("lib.".length);
+          functionName = lastLib.slice("lib.".length);
         }
       }
     }
@@ -362,6 +369,7 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
     cost: result.cost,
     mode,
     functionName,
+    callPrimitives,
     stdout: result.stdout,
     stderr: result.stderr,
   };
@@ -474,6 +482,80 @@ function printCostPanel(args: {
     println(`Crystallised: ${args.crystallised.name}`);
     println(`             ${args.crystallised.path}`);
   }
+}
+
+// Render the recorded call lists for Q1 and Q2 side-by-side. The visible
+// property (call-graph collapse) is:
+//   - Q1 has one top-level chain of N df.* calls (no crystallised wrapper).
+//   - Q2 has a single top-level wrapper call (`lib.crystallise_*`) whose
+//     body re-fans-out to the same N inner calls. Trajectory-wise both
+//     contain N+1 entries (Q2's last entry is the wrapper) but the user-
+//     visible top-level surface collapses from N to 1.
+//
+// We label Q2's last `lib.*` entry as the wrapper and indent the earlier
+// entries as its children when the wrapper name starts with
+// `crystallise_`. Otherwise we render flat.
+function printCallChains(args: {
+  q1: SnippetSummary;
+  q2: SnippetSummary;
+  crystallised: { name: string; path: string } | null;
+}): void {
+  println("=== Call-Graph =============================================");
+  println("Q1 — top-level chain (novel composition):");
+  if (args.q1.callPrimitives.length === 0) {
+    println("  (no calls recorded)");
+  } else {
+    for (let i = 0; i < args.q1.callPrimitives.length; i += 1) {
+      println(`  ${i + 1}. ${args.q1.callPrimitives[i]}`);
+    }
+  }
+
+  println("");
+
+  const q2Calls = args.q2.callPrimitives;
+  const wrapperIdx = findWrapperIndex(q2Calls);
+  if (wrapperIdx >= 0) {
+    const wrapper = q2Calls[wrapperIdx]!;
+    const inner = q2Calls.filter((_, i) => i !== wrapperIdx);
+    println("Q2 — top-level chain (interpreted replay):");
+    println(`  1. ${wrapper}`);
+    if (inner.length > 0) {
+      println(`     (internally invokes ${inner.length} sub-call${inner.length === 1 ? "" : "s"}:)`);
+      for (let i = 0; i < inner.length; i += 1) {
+        const branch = i === inner.length - 1 ? "└── " : "├── ";
+        println(`     ${branch}${inner[i]}`);
+      }
+    }
+  } else {
+    println("Q2 — top-level chain:");
+    if (q2Calls.length === 0) {
+      println("  (no calls recorded)");
+    } else {
+      for (let i = 0; i < q2Calls.length; i += 1) {
+        println(`  ${i + 1}. ${q2Calls[i]}`);
+      }
+    }
+  }
+
+  // Property summary line.
+  const q1Top = args.q1.callPrimitives.length;
+  const q2Top = wrapperIdx >= 0 ? 1 : q2Calls.length;
+  println("");
+  println(
+    `Top-level surface: Q1 has ${q1Top} call${q1Top === 1 ? "" : "s"}; Q2 has ${q2Top} call${q2Top === 1 ? "" : "s"} (collapse: ${q1Top - q2Top >= 0 ? q1Top - q2Top : 0}).`,
+  );
+}
+
+function findWrapperIndex(callPrimitives: string[]): number {
+  // The wrapper is the LAST `lib.crystallise_*` entry in the trajectory
+  // (post-await push order). If none, return -1.
+  for (let i = callPrimitives.length - 1; i >= 0; i -= 1) {
+    const p = callPrimitives[i]!;
+    if (p.startsWith("lib.crystallise_") || p.startsWith("lib.crystallise")) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 function str(v: unknown): string {
