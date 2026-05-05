@@ -67,9 +67,19 @@ export async function createServer(
     opts.baseDir !== undefined ? { baseDir: opts.baseDir } : {},
   );
   await installFlueDispatcher({ baseDir });
+  // Multi-tenant: don't pin a tenantId at install time. The observer
+  // worker routes crystallised /lib/ writes by trajectory.tenantId
+  // (which the snippet runtime sets from sessionCtx). Pinning here
+  // silently filters out every trajectory whose session tenant differs
+  // from the boot-time default. An explicit override via opts.tenantId
+  // or DATAFETCH_TENANT env still works for single-tenant deployments.
+  const observerTenantOverride =
+    opts.tenantId ?? process.env["DATAFETCH_TENANT"];
   installObserver({
     baseDir,
-    tenantId: opts.tenantId ?? process.env["DATAFETCH_TENANT"] ?? "demo-tenant",
+    ...(observerTenantOverride !== undefined
+      ? { tenantId: observerTenantOverride }
+      : {}),
     snippetRuntime,
   });
 
