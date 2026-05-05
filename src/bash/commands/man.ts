@@ -20,9 +20,12 @@
 // On miss: `No manual entry for <name>` to stderr, exit 1 (matches `man`).
 
 import { defineCommand, type Command } from "just-bash";
-import type { GenericSchema } from "valibot";
 
 import type { Fn, FnSpec, LibraryResolver } from "../../sdk/index.js";
+import {
+  renderSchemaBlock,
+  renderSynopsisArg,
+} from "../../sdk/schemaRender.js";
 
 // --- Inputs needed at construction -----------------------------------------
 
@@ -35,112 +38,8 @@ export type ManCommandDeps = {
 
 // Render a valibot schema as a one-line type string for the man-page body.
 // We don't try to render every valibot construct; we cover the shapes
-// `fn({...})` authors actually use in personas.md (object, string, number,
-// boolean, array, optional, picklist, literal, unknown). Anything else
-// falls back to the schema's `expects` string.
-//
-// The schema runtime shape we read:
-//   { type, kind, expects, entries?, item?, wrapped?, options?, literal? }
-type SchemaShape = {
-  type?: string;
-  kind?: string;
-  expects?: string;
-  entries?: Record<string, SchemaShape>;
-  item?: SchemaShape;
-  wrapped?: SchemaShape;
-  options?: unknown[];
-  literal?: unknown;
-};
-
-function renderSchemaInline(schema: GenericSchema<unknown>): string {
-  const s = schema as unknown as SchemaShape;
-  switch (s.type) {
-    case "string":
-      return "string";
-    case "number":
-      return "number";
-    case "boolean":
-      return "boolean";
-    case "unknown":
-      return "unknown";
-    case "any":
-      return "any";
-    case "null":
-      return "null";
-    case "undefined":
-      return "undefined";
-    case "literal":
-      return JSON.stringify(s.literal);
-    case "picklist": {
-      const opts = (s.options ?? []) as unknown[];
-      return opts.map((o) => JSON.stringify(o)).join(" | ");
-    }
-    case "array": {
-      const inner = s.item
-        ? renderSchemaInline(s.item as unknown as GenericSchema<unknown>)
-        : "unknown";
-      return `${inner}[]`;
-    }
-    case "optional": {
-      const inner = s.wrapped
-        ? renderSchemaInline(s.wrapped as unknown as GenericSchema<unknown>)
-        : "unknown";
-      return `${inner}?`;
-    }
-    case "object": {
-      const entries = s.entries ?? {};
-      const fields = Object.keys(entries).map((key) => {
-        const child = entries[key]!;
-        const inner = renderSchemaInline(child as unknown as GenericSchema<unknown>);
-        // Strip trailing ? on field type and apply it to the field name.
-        if (inner.endsWith("?")) {
-          return `${key}?: ${inner.slice(0, -1)}`;
-        }
-        return `${key}: ${inner}`;
-      });
-      return `{ ${fields.join(", ")} }`;
-    }
-    default:
-      return s.expects ?? "unknown";
-  }
-}
-
-// Render the body of an INPUT SCHEMA / OUTPUT block. Object schemas render
-// as one line per top-level field; non-object schemas render as a single
-// `<inline>` line.
-function renderSchemaBlock(schema: GenericSchema<unknown>): string[] {
-  const s = schema as unknown as SchemaShape;
-  if (s.type === "object" && s.entries) {
-    const lines: string[] = [];
-    for (const [key, child] of Object.entries(s.entries)) {
-      const inner = renderSchemaInline(child as unknown as GenericSchema<unknown>);
-      if (inner.endsWith("?")) {
-        lines.push(`       ${key}?: ${inner.slice(0, -1)}`);
-      } else {
-        lines.push(`       ${key}: ${inner}`);
-      }
-    }
-    return lines;
-  }
-  return [`       ${renderSchemaInline(schema)}`];
-}
-
-// Render the SYNOPSIS line. For object input we list field names with `?`
-// suffix on optional fields (matches `df.lib.pickFiling({ question,
-// candidates, priorTickers? })`). For non-object inputs we render the
-// inline type.
-function renderSynopsisArg(schema: GenericSchema<unknown>): string {
-  const s = schema as unknown as SchemaShape;
-  if (s.type === "object" && s.entries) {
-    const fields = Object.keys(s.entries).map((key) => {
-      const child = s.entries![key]!;
-      const inner = renderSchemaInline(child as unknown as GenericSchema<unknown>);
-      return inner.endsWith("?") ? `${key}?` : key;
-    });
-    return `{ ${fields.join(", ")} }`;
-  }
-  return renderSchemaInline(schema);
-}
+// Schema renderers are shared with the CLI's man verb and the server's
+// df.d.ts manifest generator. See src/sdk/schemaRender.ts.
 
 // --- Page rendering --------------------------------------------------------
 

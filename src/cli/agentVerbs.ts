@@ -13,10 +13,14 @@
 import { promises as fsp } from "node:fs";
 import path from "node:path";
 
-import type { GenericSchema } from "valibot";
-
 import { defaultBaseDir } from "../paths.js";
-import type { Fn, FnSpec, LibraryEntry } from "../sdk/index.js";
+import { readFrontmatterHead } from "../sdk/frontmatter.js";
+import type { FnSpec, LibraryEntry } from "../sdk/index.js";
+import {
+  renderSchemaBlock,
+  renderSchemaInline,
+  renderSynopsisArg,
+} from "../sdk/schemaRender.js";
 import { DiskLibraryResolver } from "../snippet/library.js";
 
 import { jsonRequest, resolveServerUrl } from "./httpClient.js";
@@ -63,31 +67,25 @@ async function fetchSessionRecord(
 // the affordance signal: `name`, `description`, plus a "Use when..." clause
 // the agent reads to decide whether to call directly vs compose.
 //
-// Anything without that frontmatter is a "primitive" — a building block
-// shipped in /lib/__seed__/ or hand-authored. Primitives compose into tools.
-//
-// Detection: read the first ~256 bytes; if the file opens with `/* ---` or
-// `/*---` (the YAML-in-comment frontmatter marker), it's a tool.
+// Anything without that frontmatter is a "primitive". Detection lives in
+// the shared `readFrontmatterHead` helper (one bounded read; same logic
+// the manifest generator uses).
 
 async function isTool(
   baseDir: string,
   tenantId: string,
   name: string,
 ): Promise<boolean> {
-  const candidates = [
+  // Tenant overlay first; if absent, fall back to seeds. Seeds never
+  // carry frontmatter so the seed read normally returns false fast.
+  const tenantHead = await readFrontmatterHead(
     path.join(baseDir, "lib", tenantId, `${name}.ts`),
+  );
+  if (tenantHead.isTool) return true;
+  const seedHead = await readFrontmatterHead(
     path.join(baseDir, "lib", "__seed__", `${name}.ts`),
-  ];
-  for (const file of candidates) {
-    try {
-      const head = await fsp.readFile(file, { encoding: "utf8" });
-      const trimmed = head.slice(0, 32).trimStart();
-      return trimmed.startsWith("/* ---") || trimmed.startsWith("/*---");
-    } catch {
-      // try the next candidate
-    }
-  }
-  return false;
+  );
+  return seedHead.isTool;
 }
 
 // --- tsx -------------------------------------------------------------------
@@ -231,10 +229,10 @@ export async function cmdApropos(
       isTool: await isTool(baseDir, record.tenantId, m.name),
     })),
   );
-  scored.sort(
-    (a, b) =>
-      (a.isTool === b.isTool ? 0 : a.isTool ? -1 : 1) || b.score - a.score,
-  );
+  scored.sort((a, b) => {
+    if (a.isTool !== b.isTool) return a.isTool ? -1 : 1;
+    return b.score - a.score;
+  });
 
   if (jsonFlag(flags)) {
     process.stdout.write(`${JSON.stringify({ matches: scored })}\n`);
@@ -256,100 +254,10 @@ export async function cmdApropos(
   }
 }
 
-// --- Schema rendering (lifted from src/bash/commands/man.ts) ---------------
-
-type SchemaShape = {
-  type?: string;
-  kind?: string;
-  expects?: string;
-  entries?: Record<string, SchemaShape>;
-  item?: SchemaShape;
-  wrapped?: SchemaShape;
-  options?: unknown[];
-  literal?: unknown;
-};
-
-function renderSchemaInline(schema: GenericSchema<unknown>): string {
-  const s = schema as unknown as SchemaShape;
-  switch (s.type) {
-    case "string":
-      return "string";
-    case "number":
-      return "number";
-    case "boolean":
-      return "boolean";
-    case "unknown":
-      return "unknown";
-    case "any":
-      return "any";
-    case "null":
-      return "null";
-    case "undefined":
-      return "undefined";
-    case "literal":
-      return JSON.stringify(s.literal);
-    case "picklist": {
-      const opts = (s.options ?? []) as unknown[];
-      return opts.map((o) => JSON.stringify(o)).join(" | ");
-    }
-    case "array": {
-      const inner = s.item
-        ? renderSchemaInline(s.item as unknown as GenericSchema<unknown>)
-        : "unknown";
-      return `${inner}[]`;
-    }
-    case "optional": {
-      const inner = s.wrapped
-        ? renderSchemaInline(s.wrapped as unknown as GenericSchema<unknown>)
-        : "unknown";
-      return `${inner}?`;
-    }
-    case "object": {
-      const entries = s.entries ?? {};
-      const fields = Object.keys(entries).map((key) => {
-        const child = entries[key]!;
-        const inner = renderSchemaInline(child as unknown as GenericSchema<unknown>);
-        if (inner.endsWith("?")) {
-          return `${key}?: ${inner.slice(0, -1)}`;
-        }
-        return `${key}: ${inner}`;
-      });
-      return `{ ${fields.join(", ")} }`;
-    }
-    default:
-      return s.expects ?? "unknown";
-  }
-}
-
-function renderSchemaBlock(schema: GenericSchema<unknown>): string[] {
-  const s = schema as unknown as SchemaShape;
-  if (s.type === "object" && s.entries) {
-    const lines: string[] = [];
-    for (const [key, child] of Object.entries(s.entries)) {
-      const inner = renderSchemaInline(child as unknown as GenericSchema<unknown>);
-      if (inner.endsWith("?")) {
-        lines.push(`       ${key}?: ${inner.slice(0, -1)}`);
-      } else {
-        lines.push(`       ${key}: ${inner}`);
-      }
-    }
-    return lines;
-  }
-  return [`       ${renderSchemaInline(schema)}`];
-}
-
-function renderSynopsisArg(schema: GenericSchema<unknown>): string {
-  const s = schema as unknown as SchemaShape;
-  if (s.type === "object" && s.entries) {
-    const fields = Object.keys(s.entries).map((key) => {
-      const child = s.entries![key]!;
-      const inner = renderSchemaInline(child as unknown as GenericSchema<unknown>);
-      return inner.endsWith("?") ? `${key}?` : key;
-    });
-    return `{ ${fields.join(", ")} }`;
-  }
-  return renderSchemaInline(schema);
-}
+// --- Man-page rendering ----------------------------------------------------
+//
+// Schema renderers live in src/sdk/schemaRender.ts (shared with the bash
+// in-VFS man command and the server's df.d.ts manifest generator).
 
 function renderManPage(name: string, spec: FnSpec<unknown, unknown>): string {
   const lines: string[] = [];
@@ -466,7 +374,3 @@ function scoreEntry(entry: LibraryEntry, queryTokens: Set<string>): number {
 }
 
 const SCORE_THRESHOLD = 0.25;
-
-// `Fn` import is only needed for type hint; suppress unused warning by
-// touching the type alias here.
-export type _ManFn = Fn<unknown, unknown>;

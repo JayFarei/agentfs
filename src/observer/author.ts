@@ -15,7 +15,7 @@
 // fn export, schema parse), it deletes the file and returns the failure
 // so the observer can surface a clean `kind: "skipped"`.
 
-import { promises as fsp, readFileSync } from "node:fs";
+import { promises as fsp } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -509,78 +509,19 @@ function sdkIndexUrl(): string {
   return `file://${target.replace(/\\/g, "/")}`;
 }
 
-// Locate valibot's ESM entry as a file:// URL. The crystallised file
-// lives at <baseDir>/lib/<tenantId>/<name>.ts (outside the repo tree)
-// so the bare `valibot` specifier doesn't resolve at import time. The
-// absolute URL form lets Node skip the package-name resolver. We walk
-// up from this file looking for the first `node_modules/valibot/` dir
-// that has a `package.json` we can read for the `main` / `exports`
-// field.
+// Locate valibot's ESM entry as a file:// URL. The crystallised wrapper
+// lives at <baseDir>/lib/<tenantId>/<name>.ts (outside the repo tree),
+// so the bare `valibot` specifier wouldn't resolve at import time. We
+// embed the absolute URL in the generated source instead. Node 20.6+
+// gives us this resolution synchronously via `import.meta.resolve`,
+// honouring the package's exports field.
 function valibotEntryUrl(): string {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  // First try the standard hoisted layout
-  // (`<repo>/node_modules/valibot/`); fall back to walking parents.
-  let cursor = here;
-  for (let i = 0; i < 8; i += 1) {
-    const candidate = path.join(cursor, "node_modules", "valibot");
-    const pkgJson = path.join(candidate, "package.json");
-    let raw: string;
-    try {
-      raw = readFileSync(pkgJson, "utf8");
-    } catch {
-      const parent = path.dirname(cursor);
-      if (parent === cursor) break;
-      cursor = parent;
-      continue;
-    }
-    const main = pickValibotMain(raw);
-    if (main !== null) {
-      const target = path.resolve(candidate, main);
-      return `file://${target.replace(/\\/g, "/")}`;
-    }
-    const parent = path.dirname(cursor);
-    if (parent === cursor) break;
-    cursor = parent;
-  }
-  // Fallback: bare specifier. Will fail at import time outside a
-  // repo-rooted node_modules tree. The smoke test runs in-repo so this
-  // path is unreachable for us today.
-  return "valibot";
-}
-
-function pickValibotMain(rawJson: string): string | null {
-  let pkg: Record<string, unknown>;
-  try {
-    pkg = JSON.parse(rawJson) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-  // Prefer `exports["."]["import"]` if present.
-  const exp = pkg["exports"];
-  if (exp !== null && typeof exp === "object") {
-    const dot = (exp as Record<string, unknown>)["."];
-    if (dot !== null && typeof dot === "object") {
-      const dotRec = dot as Record<string, unknown>;
-      const imp = dotRec["import"];
-      if (typeof imp === "string") return imp;
-      if (imp !== null && typeof imp === "object") {
-        const impRec = imp as Record<string, unknown>;
-        for (const k of ["default", "node", "import"]) {
-          const v = impRec[k];
-          if (typeof v === "string") return v;
-        }
-      }
-      const def = dotRec["default"];
-      if (typeof def === "string") return def;
-    } else if (typeof dot === "string") {
-      return dot;
-    }
-  }
-  const mod = pkg["module"];
-  if (typeof mod === "string") return mod;
-  const main = pkg["main"];
-  if (typeof main === "string") return main;
-  return null;
+  // `import.meta.resolve` is sync since Node 20.6; not yet in the
+  // default lib types in some configs, so cast through `unknown`.
+  const resolve = (
+    import.meta as unknown as { resolve: (specifier: string) => string }
+  ).resolve;
+  return resolve("valibot");
 }
 
 // --- Codifier-skill fallback -----------------------------------------------
