@@ -117,6 +117,21 @@ export async function authorFunction(
     };
   }
 
+  // Refresh the typed API manifest so the newly-crystallised tool shows
+  // up in df.d.ts on the next read. Lazy import so the observer module
+  // doesn't pull a server dependency at load time (the observer also
+  // runs from runDemo and the in-process __smoke__ harness).
+  void (async () => {
+    try {
+      const { regenerateManifest } = await import(
+        "../server/manifest.js"
+      );
+      await regenerateManifest({ baseDir, tenantId });
+    } catch {
+      // best-effort
+    }
+  })();
+
   return { kind: "authored", name: template.name, path: file, source };
 }
 

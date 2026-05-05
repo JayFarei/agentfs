@@ -290,21 +290,48 @@ claude_cmd() {
     printf '[FAIL] claude_cmd: ANTHROPIC_API_KEY (or ANTHROPIC_KEY) is required\n' >&2
     return 1
   fi
+
+  # Inject the datafetch SKILL.md into the system prompt. `--bare` mode
+  # disables skill auto-discovery (skills only resolve via `/skill-name`),
+  # so without this the model never reads our skill.
+  #
+  # NOTE: We intentionally do NOT inject the typed `df.d.ts` manifest into
+  # the system prompt. Earlier experiment showed it had the opposite of the
+  # intended effect: with the full typed surface in context, the agent
+  # constructed plausible inputs from JSDoc/examples and bypassed the
+  # substrate entirely (no `df.db.*` calls). The manifest is still
+  # generated on disk at $DATAFETCH_HOME/df.d.ts; the agent can `cat` it
+  # on demand. Forcing it preemptively into context invites hallucination.
+  local skill_path="${DATAFETCH_SKILL_PATH:-$HOME/.claude/skills/datafetch/SKILL.md}"
+  local skill_content=""
+  if [[ -f "$skill_path" ]]; then
+    skill_content=$(cat "$skill_path")
+  else
+    printf '[warn] skill not found at %s; running without skill context\n' "$skill_path" >&2
+  fi
+  local context="Active datafetch session: ${SESSION_ID:-}. Datafetch home: ${DATAFETCH_HOME:-}. The datafetch CLI is on PATH."
+  local sys_prompt="${skill_content}
+
+${context}"
+
+  # Default to Haiku 4.5 for cost; override with DF_TEST_MODEL.
   # Note: Bash() patterns sit on separate argv entries. The `--` before the
   # prompt prevents Claude Code's flag parser from eating an arg starting
   # with `-` or `--` as the prompt's first word.
   claude --print --bare \
+    --model "${DF_TEST_MODEL:-claude-haiku-4-5}" \
     --allowedTools \
       'Bash(datafetch *)' \
       'Bash(cat *)' \
       'Bash(ls *)' \
+      'Bash(head *)' \
       'Bash(jq *)' \
       'Bash(grep *)' \
       'Bash(find *)' \
       'Bash(echo *)' \
       'Bash(test *)' \
       'Bash(mkdir *)' \
-    --append-system-prompt "Active datafetch session: ${SESSION_ID:-}. Datafetch home: ${DATAFETCH_HOME:-}. The datafetch CLI is on PATH; run \`cat \$DATAFETCH_HOME/AGENTS.md\` first if it exists, then \`datafetch apropos <kw>\` to discover existing functions, then \`datafetch tsx -e '<source>'\` to compose a snippet. Compose the full task in one tsx snippet so the trajectory is contiguous." \
+    --append-system-prompt "$sys_prompt" \
     -- "$prompt"
 }
 

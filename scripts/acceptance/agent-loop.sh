@@ -204,13 +204,38 @@ else
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
+# Substrate-grounding check: verify the agent's trajectories actually
+# touched the data plane via `df.db.*`. Prior runs showed Haiku fabricating
+# filing data when given enough context, so a numeric match against the
+# expected answer is meaningless without proof the substrate was queried.
+step "Q1: assert at least one trajectory invokes df.db.* (substrate grounding)"
+Q1_DB_HITS=0
+for f in "$DATAFETCH_HOME/trajectories/"*.json; do
+  if [[ -f "$f" ]] && jq -e '[.calls[]? | select(.primitive | startswith("db."))] | length > 0' "$f" >/dev/null 2>&1; then
+    Q1_DB_HITS=$((Q1_DB_HITS + 1))
+  fi
+done
+if (( Q1_DB_HITS > 0 )); then
+  printf '[PASS] %d Q1 trajectory(ies) invoked df.db.* — agent grounded in substrate\n' "$Q1_DB_HITS"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  printf '[FAIL] no Q1 trajectory invoked df.db.* — agent may have fabricated input data\n' >&2
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
 # Q1 gold answer: 700 (chemicals revenue range 2014-2018, FinQA fixture).
-# Match against the LAST line of stdout that is a bare number, OR look for
-# the canonical "answer=700" suffix.
+# Conditional on substrate grounding: a 700 match without df.db.* calls is
+# meaningless (likely hallucinated). Only treat it as a real PASS if the
+# substrate was actually touched.
 step "Q1: assert gold answer 700 appears in the response"
 if [[ -f "$Q1_OUT" ]] && grep -Eq '(^|[^0-9.])700([^0-9.]|$)' "$Q1_OUT"; then
-  printf '[PASS] Q1 response contains "700"\n'
-  PASS_COUNT=$((PASS_COUNT + 1))
+  if (( Q1_DB_HITS > 0 )); then
+    printf '[PASS] Q1 response contains "700" (and substrate was queried)\n'
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    printf '[FAIL] Q1 response contains "700" but NO df.db.* call — likely hallucinated\n' >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
 else
   printf '[FAIL] Q1 response does NOT contain "700"\n' >&2
   if [[ "${DEBUG:-0}" == "1" && -f "$Q1_OUT" ]]; then
@@ -293,10 +318,34 @@ if [[ -n "$LATEST_Q2" && "$LATEST_Q2" != "$LATEST_Q1" ]]; then
   fi
 fi
 
+step "Q2: assert at least one trajectory invokes df.db.* (substrate grounding)"
+Q2_DB_HITS=0
+# Q2-era trajectories are the (POST - PRE) most recent files in the dir.
+Q2_NEW=$((POST_Q2_TRAJ_COUNT - PRE_Q2_TRAJ_COUNT))
+if (( Q2_NEW > 0 )); then
+  while IFS= read -r f; do
+    if jq -e '[.calls[]? | select(.primitive | startswith("db."))] | length > 0' "$f" >/dev/null 2>&1; then
+      Q2_DB_HITS=$((Q2_DB_HITS + 1))
+    fi
+  done < <(ls -t "$DATAFETCH_HOME/trajectories"/*.json 2>/dev/null | head -n "$Q2_NEW")
+fi
+if (( Q2_DB_HITS > 0 )); then
+  printf '[PASS] %d Q2 trajectory(ies) invoked df.db.* — agent grounded in substrate\n' "$Q2_DB_HITS"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  printf '[FAIL] no Q2 trajectory invoked df.db.* — agent may have fabricated input data\n' >&2
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
 step "Q2: assert gold answer 1000 appears in the response"
 if [[ -f "$Q2_OUT" ]] && grep -Eq '(^|[^0-9.])1000([^0-9.]|$)' "$Q2_OUT"; then
-  printf '[PASS] Q2 response contains "1000"\n'
-  PASS_COUNT=$((PASS_COUNT + 1))
+  if (( Q2_DB_HITS > 0 )); then
+    printf '[PASS] Q2 response contains "1000" (and substrate was queried)\n'
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    printf '[FAIL] Q2 response contains "1000" but NO df.db.* call — likely hallucinated\n' >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
 else
   printf '[FAIL] Q2 response does NOT contain "1000"\n' >&2
   if [[ "${DEBUG:-0}" == "1" && -f "$Q2_OUT" ]]; then

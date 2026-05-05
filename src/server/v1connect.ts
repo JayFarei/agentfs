@@ -11,7 +11,9 @@ import { Hono } from "hono";
 import * as v from "valibot";
 
 import { getMountRuntimeRegistry } from "../adapter/runtime.js";
+import { defaultBaseDir } from "../paths.js";
 
+import { regenerateManifest } from "./manifest.js";
 import { SessionStore } from "./sessionStore.js";
 
 export type ConnectAppDeps = {
@@ -61,6 +63,14 @@ export function createConnectApp(deps: ConnectAppDeps = {}): Hono {
       tenantId: parsed.output.tenantId,
       mountIds,
     });
+
+    // Regenerate the typed API manifest for this tenant. Best-effort;
+    // never blocks the connect response if it fails.
+    void regenerateManifest({
+      baseDir: deps.baseDir ?? defaultBaseDir(),
+      tenantId: parsed.output.tenantId,
+    });
+
     return c.json(record);
   });
 
