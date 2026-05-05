@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "bin": {
+    "datafetch": "./bin/datafetch.mjs"
+  },
   "scripts": {
     "datafetch": "tsx src/cli.ts",
     "demo": "tsx src/cli.ts demo",

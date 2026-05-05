@@ -18,6 +18,7 @@ function buildTrajectory(
     mode: partial.mode ?? "interpreted",
     calls: partial.calls,
     createdAt: partial.createdAt ?? new Date().toISOString(),
+    ...(partial.errored !== undefined ? { errored: partial.errored } : {}),
     ...(partial.cost !== undefined ? { cost: partial.cost } : {}),
     ...(partial.provenance !== undefined ? { provenance: partial.provenance } : {}),
     ...(partial.result !== undefined ? { result: partial.result } : {}),
@@ -85,15 +86,29 @@ describe("shouldCrystallise", () => {
     if (!out.ok) expect(out.reason).toContain("distinct primitive");
   });
 
-  it("rejects mode='novel' trajectories (errored snippet)", () => {
+  it("approves mode='novel' trajectories (first-time successful composition)", () => {
     const traj = buildTrajectory({ calls: VALID_CALLS, mode: "novel" });
+    const out = shouldCrystallise({
+      trajectory: traj,
+      shapeHash: "fresh-novel",
+      existing: EMPTY_LIB,
+    });
+    expect(out).toEqual({ ok: true });
+  });
+
+  it("rejects errored trajectories regardless of mode", () => {
+    const traj = buildTrajectory({
+      calls: VALID_CALLS,
+      mode: "novel",
+      errored: true,
+    });
     const out = shouldCrystallise({
       trajectory: traj,
       shapeHash: "x",
       existing: EMPTY_LIB,
     });
     expect(out.ok).toBe(false);
-    if (!out.ok) expect(out.reason).toContain('"novel"');
+    if (!out.ok) expect(out.reason).toContain("errored");
   });
 
   it("rejects mode='llm-backed' (D-015: agent authors LLM-backed functions)", () => {

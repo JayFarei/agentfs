@@ -13,6 +13,11 @@
 //   DELETE /v1/mounts/:id    explicit teardown.
 //   GET /v1/mounts           list registered mounts.
 //   POST /v1/bash            run one bash command in a persistent session.
+//   POST /v1/connect         create a session; persists to disk.
+//   GET /v1/sessions         list persisted sessions.
+//   GET /v1/sessions/:id     fetch one session record.
+//   DELETE /v1/sessions/:id  delete one session record.
+//   POST /v1/snippets        run a TS snippet against a session.
 //
 // Graceful shutdown closes every published mount via `closeAllMounts()`.
 
@@ -28,19 +33,47 @@ import { getLibraryResolver } from "../sdk/index.js";
 import { installSnippetRuntime } from "../snippet/install.js";
 
 import { createBashApp } from "./v1bash.js";
+import { createConnectApp } from "./v1connect.js";
 import { createMountsApp } from "./v1mounts.js";
+import { createSessionsApp } from "./v1sessions.js";
+import { createSnippetsApp } from "./v1snippets.js";
+import { SessionStore } from "./sessionStore.js";
 
-loadProjectEnv();
+// --- Public factory --------------------------------------------------------
 
-async function bootstrap(): Promise<void> {
-  // Boot the in-process runtimes in dependency order.
-  const { snippetRuntime, baseDir } = await installSnippetRuntime({});
+export type CreateServerOpts = {
+  // Override the on-disk workspace root. Defaults to defaultBaseDir().
+  baseDir?: string;
+  // Tenant id for the observer (controls where crystallised /lib/ files
+  // land for trajectories driven by /v1/bash and /v1/snippets that don't
+  // pin a session-bound tenant).
+  tenantId?: string;
+};
+
+export type CreateServerResult = {
+  app: Hono;
+  baseDir: string;
+};
+
+// Boot the in-process runtimes and assemble the Hono app. Does NOT
+// start an HTTP listener — the caller does that with `serve()` or
+// `app.fetch` directly. Idempotent across calls within one process is
+// NOT guaranteed; the SDK singletons (LibraryResolver, BodyDispatcher,
+// snippet runtime onTrajectorySaved) are replaced on each call.
+export async function createServer(
+  opts: CreateServerOpts = {},
+): Promise<CreateServerResult> {
+  const { snippetRuntime, baseDir } = await installSnippetRuntime(
+    opts.baseDir !== undefined ? { baseDir: opts.baseDir } : {},
+  );
   await installFlueDispatcher({ baseDir });
   installObserver({
     baseDir,
-    tenantId: process.env["DATAFETCH_TENANT"] ?? "demo-tenant",
+    tenantId: opts.tenantId ?? process.env["DATAFETCH_TENANT"] ?? "demo-tenant",
     snippetRuntime,
   });
+
+  const store = new SessionStore({ baseDir });
 
   const app = new Hono();
   app.get("/health", (c) => c.json({ ok: true, baseDir }));
@@ -55,6 +88,24 @@ async function bootstrap(): Promise<void> {
       baseDir,
     }),
   );
+  app.route("/v1/connect", createConnectApp({ baseDir, store }));
+  app.route("/v1/sessions", createSessionsApp({ baseDir, store }));
+  app.route(
+    "/v1/snippets",
+    createSnippetsApp({ snippetRuntime, baseDir, store }),
+  );
+
+  return { app, baseDir };
+}
+
+// --- Standalone bootstrap --------------------------------------------------
+
+// Used when this file is invoked as the entry point (e.g. `tsx
+// src/server/server.ts` or the `pnpm api` script). The CLI's `server`
+// subcommand drives its own `createServer()` + `serve()` loop.
+async function bootstrap(): Promise<void> {
+  loadProjectEnv();
+  const { app, baseDir } = await createServer();
 
   const port = Number(process.env["PORT"] ?? 5174);
   const server = serve({ fetch: app.fetch, port });
@@ -79,8 +130,24 @@ async function bootstrap(): Promise<void> {
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
-bootstrap().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error("[server] bootstrap failed:", err);
-  process.exit(1);
-});
+// Only run bootstrap when this file is the entry point. Importing
+// `createServer` from a sibling module (e.g. cli.ts) must NOT trigger
+// the standalone listener.
+const isEntry = (() => {
+  const argv1 = process.argv[1];
+  if (!argv1) return false;
+  // import.meta.url: `file:///abs/path/to/server.ts`. argv[1] under tsx
+  // is the absolute path of the entry script. Match by suffix to
+  // tolerate symlinks / drive-letter case differences.
+  const argvBase = argv1.split(/[\\/]/).pop() ?? "";
+  const urlBase = import.meta.url.split(/[\\/]/).pop() ?? "";
+  return argvBase === urlBase;
+})();
+
+if (isEntry) {
+  bootstrap().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error("[server] bootstrap failed:", err);
+    process.exit(1);
+  });
+}

@@ -1,25 +1,20 @@
-// datafetch CLI — four subcommands.
+// datafetch CLI — multiple subcommands.
 //
-//   pnpm datafetch publish <mount-id> [--uri <atlas>] [--db <name>]
-//     Publishes a mount via publishMount({source: atlasMount({...})}) and
-//     streams stage events to stdout. Returns the inventory at the end.
+// Existing (Phase 0/1):
+//   publish, connect, agent, demo, server.
 //
-//   pnpm datafetch connect [--tenant <id>]
-//     Stub for the tenant handshake. Prints the tenant token and the live
-//     mount inventory. Real tenant tokens land post-MVP; today this is a
-//     courtesy command for the demo flow.
-//
-//   pnpm datafetch agent [--tenant <id>] [--mount <id>]
-//     Interactive bash session against the registered mounts. Reads stdin
-//     line-by-line, sends each line through BashSession.exec, and prints
-//     stdout/stderr/exitCode.
-//
-//   pnpm datafetch demo [--mount finqa-2024] [--tenant demo-tenant] [--no-cache]
-//     Runs the headline two-question scenario via runDemo({...}).
+// New (Phase 2+3+4):
+//   session new|list|resume|end|switch|current   — tenant session lifecycle.
+//   tsx -e '<src>' | tsx <file>                  — primary agent execution verb.
+//   man <fn>                                     — render structured docs.
+//   apropos <kw>                                 — semantic search across /lib/.
+//   install-skill                                — copy SKILL.md into ~/.claude/skills/.
 
 import * as readline from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 import path from "node:path";
+
+import { serve } from "@hono/node-server";
 
 import { atlasMount } from "./adapter/atlasMount.js";
 import { publishMount } from "./adapter/publishMount.js";
@@ -31,36 +26,68 @@ import { loadProjectEnv } from "./env.js";
 import { installFlueDispatcher } from "./flue/install.js";
 import { installObserver } from "./observer/install.js";
 import { getLibraryResolver } from "./sdk/index.js";
+import { createServer } from "./server/server.js";
 import { installSnippetRuntime } from "./snippet/install.js";
+
+import type { Flags } from "./cli/types.js";
+import { cmdSession } from "./cli/session.js";
+import { cmdApropos, cmdMan, cmdTsx } from "./cli/agentVerbs.js";
+import { cmdInstallSkill } from "./cli/installSkill.js";
 
 loadProjectEnv();
 
 // --- Flag parsing ----------------------------------------------------------
+//
+// Pure-string flags (e.g. `--tenant t`) overwrite. Repeatable flags
+// (`--mount a --mount b`) accumulate into a string[]. Boolean flags
+// stand alone (`--json`, `--force`, `--no-cache`, `--help`).
 
-type Flags = Record<string, string | boolean | string[]>;
+const BOOLEAN_FLAGS = new Set(["no-cache", "help", "json", "force"]);
+const REPEATABLE_FLAGS = new Set(["mount"]);
+
+// Short-flag aliases: a leading `-e <value>` is treated like `--e <value>`.
+// This matches how Node / tsx accept `-e '<source>'` for one-liners and
+// keeps the SKILL.md examples (`datafetch tsx -e '...'`) working without
+// forcing the agent to use `--e`.
+const SHORT_FLAG_ALIAS: Record<string, string> = {
+  "-e": "e",
+};
 
 function parseFlags(argv: string[]): { positionals: string[]; flags: Flags } {
   const positionals: string[] = [];
   const flags: Flags = {};
-  const booleanFlags = new Set(["no-cache", "help"]);
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (!arg) continue;
-    if (!arg.startsWith("--")) {
+    let key: string | null = null;
+    if (arg.startsWith("--")) {
+      key = arg.slice(2);
+    } else if (Object.prototype.hasOwnProperty.call(SHORT_FLAG_ALIAS, arg)) {
+      key = SHORT_FLAG_ALIAS[arg]!;
+    }
+    if (key === null) {
       positionals.push(arg);
       continue;
     }
-    const key = arg.slice(2);
-    if (booleanFlags.has(key)) {
+    if (BOOLEAN_FLAGS.has(key)) {
       flags[key] = true;
       continue;
     }
     const next = argv[i + 1];
+    let value: string | true;
     if (next === undefined || next.startsWith("--")) {
-      flags[key] = true;
+      value = true;
     } else {
-      flags[key] = next;
+      value = next;
       i += 1;
+    }
+    if (REPEATABLE_FLAGS.has(key) && typeof value === "string") {
+      const prior = flags[key];
+      if (Array.isArray(prior)) prior.push(value);
+      else if (typeof prior === "string") flags[key] = [prior, value];
+      else flags[key] = [value];
+    } else {
+      flags[key] = value;
     }
   }
   return { positionals, flags };
@@ -77,25 +104,56 @@ function usage(): void {
   // eslint-disable-next-line no-console
   console.log(
     [
-      "datafetch — bash workspace over a mounted dataset",
+      "datafetch — bash-shaped workspace over a mounted dataset",
       "",
-      "Commands:",
-      "  pnpm datafetch publish <mount-id> [--uri <atlas-uri>] [--db <db-name>]",
+      "Server / data plane:",
+      "  datafetch server [--port 8080] [--base-dir <path>]",
+      "    Boot the data plane (Hono app + snippet runtime + Flue + observer).",
+      "",
+      "  datafetch publish <mount-id> [--uri <atlas-uri>] [--db <db-name>]",
       "    Publish a mount; stream warm-up stage events to stdout.",
       "",
-      "  pnpm datafetch connect [--tenant <id>]",
-      "    Print the tenant token and current mount inventory.",
+      "Sessions (talks to the server over HTTP):",
+      "  datafetch session new --tenant <id> [--mount <id>...] [--json]",
+      "  datafetch session list [--json]",
+      "  datafetch session resume <sessionId>",
+      "  datafetch session end <sessionId>",
+      "  datafetch session switch --tenant <id> [--mount <id>...]",
+      "  datafetch session current",
+      "    Manage the active session pointer at $DATAFETCH_HOME/active-session.",
       "",
-      "  pnpm datafetch agent [--tenant <id>] [--mount <id>]",
-      "    Open an interactive bash session in the registered mount(s).",
+      "Agent verbs (resolve --session / DATAFETCH_SESSION / pointer):",
+      "  datafetch tsx -e '<source>' | datafetch tsx <file>",
+      "    Run a TS snippet against the active session; prints stdout/stderr",
+      "    and the Result envelope after a `--- envelope ---` separator.",
+      "  datafetch man <fn>",
+      "    Render NAME / SYNOPSIS / INPUT / OUTPUT / EXAMPLES for a /lib/ fn.",
+      "  datafetch apropos <kw> [--json]",
+      "    Search /lib/<tenant>/ and /lib/__seed__/ by intent overlap.",
       "",
-      "  pnpm datafetch demo [--mount finqa-2024] [--tenant demo-tenant] [--no-cache]",
+      "Skill bundle:",
+      "  datafetch install-skill [--path <dir>] [--force]",
+      "    Copy skills/datafetch/SKILL.md into ~/.claude/skills/datafetch/.",
+      "",
+      "Misc:",
+      "  datafetch connect [--tenant <id>]",
+      "    Print a tenant token and the current mount inventory (in-process).",
+      "  datafetch agent [--tenant <id>] [--mount <id>]",
+      "    Interactive bash session against the registered mount(s) (in-process).",
+      "  datafetch demo [--mount finqa-2024] [--tenant demo-tenant] [--no-cache]",
       "    Run the two-question Q1/Q2 demo end-to-end.",
       "",
+      "Common flags:",
+      "  --server <url>       data-plane base URL (default http://localhost:8080)",
+      "  --session <id>       override the active session pointer",
+      "  --base-dir <path>    override DATAFETCH_HOME",
+      "",
       "Environment:",
-      "  DATAFETCH_HOME     baseDir for /db/, /lib/, trajectories",
-      "  ATLAS_URI          MongoDB Atlas connection string",
-      "  PORT               HTTP server port (server.ts only)",
+      "  DATAFETCH_HOME       baseDir for /db/, /lib/, trajectories, sessions",
+      "  DATAFETCH_SESSION    fallback session id when no --session flag is set",
+      "  DATAFETCH_SERVER_URL fallback server base URL (default localhost:8080)",
+      "  ATLAS_URI            MongoDB Atlas connection string",
+      "  PORT                 HTTP server port (server.ts only)",
     ].join("\n"),
   );
 }
@@ -248,6 +306,51 @@ async function cmdDemo(_positionals: string[], flags: Flags): Promise<void> {
   await runDemo(opts);
 }
 
+async function cmdServer(_positionals: string[], flags: Flags): Promise<void> {
+  const portRaw = flagString(flags, "port") ?? process.env["PORT"] ?? "8080";
+  const port = Number(portRaw);
+  if (!Number.isFinite(port) || port <= 0) {
+    throw new Error(`server: invalid --port ${portRaw}`);
+  }
+  const baseDirFlag = flagString(flags, "base-dir");
+
+  const createOpts: Parameters<typeof createServer>[0] = {};
+  if (baseDirFlag) createOpts.baseDir = path.resolve(baseDirFlag);
+
+  const { app, baseDir } = await createServer(createOpts);
+  const handle = serve({ fetch: app.fetch, port });
+
+  // eslint-disable-next-line no-console
+  console.log(`[server] listening on http://localhost:${port}`);
+  // eslint-disable-next-line no-console
+  console.log(`[server] baseDir=${baseDir}`);
+
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    // eslint-disable-next-line no-console
+    console.log(`[server] ${signal} received; closing mounts and shutting down`);
+    try {
+      await closeAllMounts();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[server] closeAllMounts: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    handle.close();
+    process.exit(0);
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+  // Stay in the foreground. The signal handlers above own process exit.
+  await new Promise<void>(() => {
+    /* never resolves; the process exits via the signal handler */
+  });
+}
+
 // --- Main ------------------------------------------------------------------
 
 async function main(): Promise<void> {
@@ -272,6 +375,24 @@ async function main(): Promise<void> {
     case "demo":
       await cmdDemo(positionals, flags);
       return;
+    case "server":
+      await cmdServer(positionals, flags);
+      return;
+    case "session":
+      await cmdSession(positionals, flags);
+      return;
+    case "tsx":
+      await cmdTsx(positionals, flags);
+      return;
+    case "man":
+      await cmdMan(positionals, flags);
+      return;
+    case "apropos":
+      await cmdApropos(positionals, flags);
+      return;
+    case "install-skill":
+      await cmdInstallSkill(positionals, flags);
+      return;
     default:
       throw new Error(`Unknown command: ${command}`);
   }
@@ -279,8 +400,11 @@ async function main(): Promise<void> {
 
 main()
   .catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error(err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`${message}\n`);
+    if (process.env["DEBUG"] === "1" && err instanceof Error && err.stack) {
+      process.stderr.write(`${err.stack}\n`);
+    }
     process.exitCode = 1;
   })
   .finally(async () => {

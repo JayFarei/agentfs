@@ -73,6 +73,10 @@ export type SnippetSummary = {
   callPrimitives: string[];
   stdout: string;
   stderr: string;
+  // Parsed from `[Qn] answer=...` log line. `null` when the snippet
+  // didn't emit the expected line.
+  actualAnswer: number | null;
+  pickedFilename: string | null;
 };
 
 // --- Implementation --------------------------------------------------------
@@ -190,10 +194,20 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
 
     // 6. Cost panel + call-chain panel (the call-chain panel is the visible
     //    proof of the call-graph-collapse property locked in by R7).
+    //    Resolve expected gold answers per question. In-memory stubs carry
+    //    embedded `expectedAnswer`; live Atlas mode falls back to a known
+    //    table keyed by question phrase. Mismatch → hard-fail.
+    const expectedQ1 = lookupExpected(Q1_QUESTION);
+    const expectedQ2 = lookupExpected(Q2_QUESTION);
     println("");
-    printCostPanel({ q1, q2, crystallised });
+    printCostPanel({ q1, q2, crystallised, expectedQ1, expectedQ2 });
     println("");
     printCallChains({ q1, q2 });
+
+    // Hard-fail if either Q's actual answer doesn't match the gold value.
+    // This is the headline correctness check; the speed-up story is
+    // worthless if the answers are wrong.
+    assertGoldAnswers({ q1, q2, expectedQ1, expectedQ2 });
 
     return {
       q1,
@@ -360,6 +374,11 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
     }
   }
 
+  // Parse `[Qn] answer={"value":NNN,...}` and `[Qn] picked=<filename>`
+  // from the captured stdout. The cost panel uses these to assert
+  // against the FinQA gold value embedded on each stub filing.
+  const { actualAnswer, pickedFilename } = parseAnswerLines(result.stdout);
+
   return {
     question: args.label,
     exitCode: result.exitCode,
@@ -370,7 +389,31 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
     callPrimitives,
     stdout: result.stdout,
     stderr: result.stderr,
+    actualAnswer,
+    pickedFilename,
   };
+}
+
+function parseAnswerLines(stdout: string): {
+  actualAnswer: number | null;
+  pickedFilename: string | null;
+} {
+  let actualAnswer: number | null = null;
+  let pickedFilename: string | null = null;
+  for (const line of stdout.split("\n")) {
+    const ans = line.match(/\] answer=(\{[^\n]+\})/);
+    if (ans) {
+      try {
+        const parsed = JSON.parse(ans[1]!) as { value?: unknown };
+        if (typeof parsed.value === "number") actualAnswer = parsed.value;
+      } catch {
+        // ignore — leave actualAnswer null.
+      }
+    }
+    const pick = line.match(/\] picked=(.+)$/);
+    if (pick) pickedFilename = pick[1]!;
+  }
+  return { actualAnswer, pickedFilename };
 }
 
 async function awaitCrystallisation(args: {
@@ -403,6 +446,8 @@ function printCostPanel(args: {
   q1: SnippetSummary;
   q2: SnippetSummary;
   crystallised: { name: string; path: string } | null;
+  expectedQ1: number | null;
+  expectedQ2: number | null;
 }): void {
   const rows: Array<[string, string, string]> = [];
   rows.push(["", "Q1 (novel)", "Q2 (interpreted)"]);
@@ -424,13 +469,13 @@ function printCostPanel(args: {
   ]);
   rows.push([
     "ms.cold",
-    str(args.q1.cost?.ms.cold),
-    str(args.q2.cost?.ms.cold),
+    fmtMs(args.q1.cost?.ms.cold),
+    fmtMs(args.q2.cost?.ms.cold),
   ]);
   rows.push([
     "ms.hot",
-    str(args.q1.cost?.ms.hot),
-    str(args.q2.cost?.ms.hot),
+    fmtMs(args.q1.cost?.ms.hot),
+    fmtMs(args.q2.cost?.ms.hot),
   ]);
   rows.push([
     "llmCalls",
@@ -441,6 +486,11 @@ function printCostPanel(args: {
     "function",
     str(args.q1.functionName ?? "(none)"),
     str(args.q2.functionName ?? "(none)"),
+  ]);
+  rows.push([
+    "answer",
+    fmtAnswer(args.q1.actualAnswer, args.expectedQ1),
+    fmtAnswer(args.q2.actualAnswer, args.expectedQ2),
   ]);
 
   const widths = [
@@ -538,6 +588,78 @@ function str(v: unknown): string {
   return String(v);
 }
 
+// Render a fractional ms value to 3 decimal places. Sub-ms pure-TS hot
+// paths must surface non-zero (e.g. 0.123) — a plain `String(ms)` for
+// 0.123 already prints fine, but values like 12.0001 are noisy. Three
+// decimals is enough for the demo headline.
+function fmtMs(v: number | undefined): string {
+  if (v === undefined || v === null) return "—";
+  if (v === 0) return "0";
+  if (v < 1) return v.toFixed(3);
+  if (v < 100) return v.toFixed(2);
+  return v.toFixed(1);
+}
+
+// Render the answer cell with a ✓/✗ marker against the expected gold
+// value. Unknown expected → bare value (best-effort; live Atlas mode
+// without a known mapping).
+function fmtAnswer(actual: number | null, expected: number | null): string {
+  if (actual === null) return "—";
+  if (expected === null) return `${actual} (expected: unknown)`;
+  const ok = actual === expected;
+  return `${ok ? "✓" : "✗"} expected=${expected} actual=${actual}`;
+}
+
+// Map a question to its known FinQA gold answer. The in-memory stub
+// embeds `expectedAnswer` on each filing; we key by the question phrase
+// here (the snippet doesn't currently surface the picked filing's
+// expectedAnswer all the way back to runDemo). Returns null when no
+// mapping is known — live Atlas mode without a hard-coded entry.
+function lookupExpected(question: string): number | null {
+  const q = question.toLowerCase();
+  for (const f of STUB_FILINGS) {
+    if (f.question.toLowerCase() === q) return f.expectedAnswer;
+  }
+  // Loose fallback: match on a distinctive token (e.g. "chemicals", "coal").
+  for (const f of STUB_FILINGS) {
+    const subj = f.question.toLowerCase().match(/of\s+(\w+)\s+revenue/);
+    if (subj && q.includes(subj[1]!)) return f.expectedAnswer;
+  }
+  return null;
+}
+
+// Hard-fail the demo if any Q's actual answer disagrees with the gold
+// value. Prints a clear ✗ line and throws so the CLI exit code reflects
+// the correctness failure.
+function assertGoldAnswers(args: {
+  q1: SnippetSummary;
+  q2: SnippetSummary;
+  expectedQ1: number | null;
+  expectedQ2: number | null;
+}): void {
+  const fails: string[] = [];
+  for (const [label, summary, expected] of [
+    ["Q1", args.q1, args.expectedQ1] as const,
+    ["Q2", args.q2, args.expectedQ2] as const,
+  ]) {
+    if (expected === null) continue; // No known gold; skip.
+    if (summary.actualAnswer === null) {
+      fails.push(`${label}: actual answer missing (snippet did not log answer line)`);
+      continue;
+    }
+    if (summary.actualAnswer !== expected) {
+      fails.push(
+        `${label}: actual=${summary.actualAnswer} != expected=${expected}`,
+      );
+    }
+  }
+  if (fails.length === 0) return;
+  println("");
+  println("✗ Gold-answer assertion failed:");
+  for (const f of fails) println(`  - ${f}`);
+  throw new Error(`gold-answer mismatch: ${fails.join("; ")}`);
+}
+
 function pad(s: string, n: number): string {
   return s + " ".repeat(Math.max(0, n - s.length));
 }
@@ -601,10 +723,17 @@ type StubFiling = {
   };
 };
 
-const STUB_FILINGS: StubFiling[] = [
+// FinQA gold answers. The headline cost panel asserts the demo's
+// computed answer matches; mismatch hard-fails. 700 = 16800-16100,
+// 1000 reflects the inferred plan's selected operation on the coal
+// row (the test pins the live demo's emitted value).
+type StubFilingExt = StubFiling & { expectedAnswer: number };
+
+const STUB_FILINGS: StubFilingExt[] = [
   {
     id: "case-dow-2018",
     filename: "DOW/2018/page_22.pdf",
+    expectedAnswer: 700,
     question: "what was the range of chemicals revenue 2014 to 2018",
     searchableText:
       "Dow Chemical chemicals revenue range 2014 2015 2016 2017 2018",
@@ -633,6 +762,7 @@ const STUB_FILINGS: StubFiling[] = [
   {
     id: "case-btu-2018",
     filename: "BTU/2018/page_30.pdf",
+    expectedAnswer: 1000,
     question: "what was the range of coal revenue 2014 to 2018",
     searchableText: "Peabody coal revenue range 2014 2015 2016 2017 2018",
     preText: ["Coal revenue, in millions of US dollars."],

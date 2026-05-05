@@ -161,7 +161,9 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
       // calls already populated `dispatchCtx.cost` in place; we surface
       // it as the Result's cost block.
       if (dispatchCtx.cost.ms.cold === 0 && dispatchCtx.cost.ms.hot === 0) {
-        dispatchCtx.cost.ms.cold = Math.round(elapsedMs);
+        // Fractional ms preserved — sub-ms pure-TS hot paths must not
+        // collapse to 0 in the cost panel.
+        dispatchCtx.cost.ms.cold = elapsedMs;
       }
       return makeResult<T>({
         value,
@@ -270,7 +272,9 @@ function makeDbCollectionBinding(args: DbBindingArgs): DbCollectionBinding {
 
 function chargeSubstrate(ctx: DispatchContext, elapsedMs: number): void {
   ctx.cost.tier = Math.max(ctx.cost.tier, TIER_SUBSTRATE) as CostTier;
-  ctx.cost.ms.cold += Math.round(elapsedMs);
+  // Fractional ms preserved — the cost panel needs sub-ms resolution to
+  // distinguish hot pure-TS paths from cold substrate roundtrips.
+  ctx.cost.ms.cold += elapsedMs;
   // tokens / llmCalls left alone — substrate calls don't spend either.
 }
 

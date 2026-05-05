@@ -17,13 +17,16 @@
 //
 // Heuristics applied (all must pass):
 //   1. >= 2 distinct primitive calls in the trajectory.
-//   2. No call has a thrown-error output (no `error`/`errors`/`stack`
-//      key on its output, and the run finished with `mode != "novel"` — a
-//      novel mode in the saved record indicates an error path through
-//      the snippet runtime).
-//   3. Mode is "interpreted" (compositions over primitives + lib seeds).
-//      LLM-backed trajectories are excluded per D-015 — the observer
-//      crystallises composition patterns, not standalone LLM functions.
+//   2. The trajectory's `errored` flag is false AND no call has a
+//      thrown-error output (no `error`/`errors`/`stack` key on its
+//      output). Error-path detection lives on the trajectory's `errored`
+//      field, NOT on `mode` — per PRD §8.1, `mode: "novel"` means
+//      "first-time successful ad-hoc composition" (tier 4).
+//   3. Mode is "novel" (first-time composition we want to crystallise)
+//      or "interpreted" (already-composed; usually filtered by the
+//      shape-hash dedup below). LLM-backed / cache trajectories are
+//      excluded per D-015 — the observer crystallises composition
+//      patterns, not standalone LLM functions or cached results.
 //   4. The first call is a substrate retrieval (`db.*`) returning a list,
 //      and at least one subsequent call is a `lib.*` whose input
 //      references the first call's output (data-flow check).
@@ -64,12 +67,14 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     };
   }
 
-  // 2. No call has an error-shaped output, and the snippet didn't fall
-  //    back to novel-mode (which indicates an error path).
-  if (trajectory.mode === "novel") {
+  // 2. The snippet didn't error AND no recorded call has an error-shaped
+  //    output. Error-path detection is on `trajectory.errored`, NOT on
+  //    `mode` — per PRD §8.1 a successful first-time composition is
+  //    `mode: "novel"`, tier 4.
+  if (trajectory.errored === true) {
     return {
       ok: false,
-      reason: `trajectory.mode is "novel" (snippet errored or no body executed)`,
+      reason: "trajectory.errored=true (snippet threw or no body executed)",
     };
   }
   for (const call of trajectory.calls) {
@@ -81,11 +86,15 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     }
   }
 
-  // 3. Mode is "interpreted".
-  if (trajectory.mode !== "interpreted") {
+  // 3. Mode must be a composition pattern. "novel" (first-time successful
+  //    ad-hoc composition) is the headline crystallisation target;
+  //    "interpreted" trajectories are also accepted but the shape-hash
+  //    dedup below typically filters them. LLM-backed / cache /compiled
+  //    are excluded per D-015.
+  if (trajectory.mode !== "novel" && trajectory.mode !== "interpreted") {
     return {
       ok: false,
-      reason: `trajectory.mode is "${trajectory.mode}"; observer only crystallises composition patterns (mode "interpreted"). Per D-015 the agent authors LLM-backed functions directly.`,
+      reason: `trajectory.mode is "${trajectory.mode}"; observer only crystallises composition patterns (mode "novel" or "interpreted"). Per D-015 the agent authors LLM-backed functions directly.`,
     };
   }
 

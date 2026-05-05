@@ -24,6 +24,7 @@
 // same path also makes ```json``` fence handling consistent.
 
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 
 import { defaultBaseDir } from "../paths.js";
 
@@ -195,7 +196,7 @@ const TIER_LLM = 3 as CostTier;
 
 async function runFlueCall<O>(args: FlueCallArgs): Promise<O> {
   const { session, prompt, model, ctx } = args;
-  const startedMs = Date.now();
+  const startedMs = performance.now();
   let result: O;
   try {
     // Flue returns a `{ text }` envelope. Most skill / structured-LLM
@@ -206,7 +207,7 @@ async function runFlueCall<O>(args: FlueCallArgs): Promise<O> {
     const r = await session.prompt(prompt, { model });
     result = extractStructuredOrText<O>(r.text);
   } finally {
-    const elapsed = Date.now() - startedMs;
+    const elapsed = performance.now() - startedMs;
     chargeCost(ctx, elapsed);
   }
   return result;

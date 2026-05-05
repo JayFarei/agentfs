@@ -8,6 +8,8 @@
 //
 // Per design.md §6.1 + personas.md §2 + decisions.md D-011.
 
+import { performance } from "node:perf_hooks";
+
 import type { GenericSchema } from "valibot";
 import { safeParseAsync } from "valibot";
 
@@ -183,8 +185,9 @@ export function fn<I, O>(init: FnInit<I, O>): Fn<I, O> {
     const ctx = mergeDispatchContext(defaultDispatchContext(), ctxOverride);
     const ctxHadCost = ctxOverride?.cost !== undefined;
 
-    // 3) Dispatch body.
-    const startedMs = Date.now();
+    // 3) Dispatch body. Use performance.now() so sub-ms pure-TS bodies
+    //    surface in cost.ms.{hot,cold} (Date.now() collapses to 0).
+    const startedMs = performance.now();
     let raw: O;
     if (spec.body.kind === "pure") {
       raw = await spec.body.fn(validInput);
@@ -195,7 +198,7 @@ export function fn<I, O>(init: FnInit<I, O>): Fn<I, O> {
       }
       raw = await dispatcher.dispatch<I, O>(spec.body, validInput, ctx);
     }
-    const elapsedMs = Date.now() - startedMs;
+    const elapsedMs = performance.now() - startedMs;
 
     // 4) Validate output.
     const outResult = await safeParseAsync(spec.output, raw);

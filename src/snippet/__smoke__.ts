@@ -12,8 +12,9 @@
 //   4. Run a multi-line snippet using `df.db.cases.findSimilar` +
 //      `df.lib.pickFiling` + `df.lib.locateFigure` + console.log.
 //   5. Assert: stdout contains the picked filing's identifier; the
-//      trajectory file exists; cost.tier === 2; cost.llmCalls === 0;
-//      per-call records include both substrate and lib boundaries.
+//      trajectory file exists; cost.tier === 4 (novel composition,
+//      PRD §8.1); cost.llmCalls === 0; per-call records include both
+//      substrate and lib boundaries; trajectory.mode === "novel".
 //
 // Prints PASS / FAIL per check and a final summary. Exit code 0 on all
 // pass; 1 otherwise.
@@ -354,7 +355,7 @@ async function main(): Promise<void> {
     });
   }
 
-  // 5. cost.tier === 2 (substrate touched, no LLM)
+  // 5. cost.tier === 4 (novel ad-hoc composition, no crystallised wrapper)
   const cost =
     (trajectoryRecord?.["cost"] as
       | { tier: number; llmCalls: number; tokens?: { hot: number; cold: number } }
@@ -363,8 +364,8 @@ async function main(): Promise<void> {
       | { tier: number; llmCalls: number; tokens?: { hot: number; cold: number } }
       | undefined);
   checks.push({
-    name: "cost.tier === 2",
-    pass: cost?.tier === 2,
+    name: "cost.tier === 4",
+    pass: cost?.tier === 4,
     detail: JSON.stringify(cost),
   });
 
@@ -375,10 +376,10 @@ async function main(): Promise<void> {
     detail: JSON.stringify(cost),
   });
 
-  // 7. trajectory mode is "interpreted"
+  // 7. trajectory mode is "novel" (first-time successful composition)
   checks.push({
-    name: 'trajectory.mode === "interpreted"',
-    pass: trajectoryRecord?.["mode"] === "interpreted",
+    name: 'trajectory.mode === "novel"',
+    pass: trajectoryRecord?.["mode"] === "novel",
     detail: `mode=${trajectoryRecord?.["mode"]}`,
   });
 

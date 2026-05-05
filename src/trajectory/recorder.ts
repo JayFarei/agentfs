@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 
 import type { Cost, ResultMode } from "../sdk/result.js";
 
@@ -31,14 +32,20 @@ export type TrajectoryRecord = {
   question: string;
   // Widened from the prototype's `"novel"`-only literal to the full
   // ResultMode union so trajectories can record interpreted / llm-backed
-  // / cache hits as well.
+  // / cache hits as well. Per PRD §8.1: `novel` means "first-time
+  // successful ad-hoc composition" (tier 4), NOT "errored". Errors are
+  // signalled via the separate `errored` flag below.
   mode: ResultMode;
   calls: PrimitiveCallRecord[];
   result?: unknown;
   createdAt: string;
+  // True when the snippet threw or no body executed. Disjoint from `mode`
+  // so the observer can gate crystallisation on errors without conflating
+  // them with the novel/interpreted distinction.
+  errored?: boolean;
   // The fields below are optional in the envelope. They are populated
   // by the snippet runtime once a snippet completes; the legacy code
-  // path (which writes `mode: "novel"` only) leaves them undefined.
+  // path leaves them undefined.
   cost?: Cost;
   provenance?: TrajectoryProvenance;
 };
@@ -59,8 +66,12 @@ export class TrajectoryRecorder {
       id: args.id ?? trajectoryId(),
       tenantId: args.tenantId,
       question: args.question,
-      mode: "novel",
+      // Default to "interpreted" — the snippet runtime sets the final
+      // mode (novel/interpreted/llm-backed) once the snippet completes.
+      // Error paths are signalled via `errored: true`, not via mode.
+      mode: "interpreted",
       calls: [],
+      errored: false,
       createdAt: new Date().toISOString()
     };
   }
@@ -78,15 +89,18 @@ export class TrajectoryRecorder {
     input: TInput,
     fn: (input: TInput) => Promise<TOutput> | TOutput
   ): Promise<TOutput> {
-    const started = Date.now();
+    const startedWall = Date.now();
+    const startedHr = performance.now();
     const output = await fn(input);
     this.record.calls.push({
       index: this.record.calls.length,
       primitive,
       input,
       output,
-      startedAt: new Date(started).toISOString(),
-      durationMs: Date.now() - started
+      startedAt: new Date(startedWall).toISOString(),
+      // Sub-millisecond resolution; the cost panel relies on fractional
+      // ms to make the pure-TS hot path visible vs cold-path roundtrips.
+      durationMs: performance.now() - startedHr
     });
     return output;
   }
@@ -97,6 +111,10 @@ export class TrajectoryRecorder {
 
   setMode(mode: ResultMode): void {
     this.record.mode = mode;
+  }
+
+  setErrored(errored: boolean): void {
+    this.record.errored = errored;
   }
 
   setCost(cost: Cost): void {

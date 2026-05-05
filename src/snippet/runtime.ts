@@ -103,7 +103,29 @@ export class DiskSnippetRuntime implements SnippetRuntime {
     });
 
     // 3. Persist trajectory.
-    recorder.setMode(error ? "novel" : "interpreted");
+    //    Mode classification (PRD §8.1, D-010):
+    //      - errored snippet              → mode unchanged (default
+    //        "interpreted"), `errored=true`. The observer gate skips on
+    //        `errored`, NOT on mode.
+    //      - successful run that invoked a crystallised wrapper
+    //        (df.lib.crystallise_*) → "interpreted", tier 2.
+    //      - successful first-time composition (no crystallised wrapper)
+    //        → "novel", tier 4 (full ReAct / ad-hoc composition).
+    if (error) {
+      recorder.setErrored(true);
+      // Leave mode at the recorder's default ("interpreted"); error-path
+      // gating uses `errored`.
+    } else if (calledCrystallisedWrapper(recorder.snapshot)) {
+      recorder.setMode("interpreted");
+      // Tier accumulator already reflects substrate (2) / LLM (3) max.
+    } else {
+      recorder.setMode("novel");
+      // Bump tier to 4 (full ReAct / novel composition) per PRD §8.1.
+      // The accumulator may have been raised to 2 by substrate calls or
+      // 3 by LLM calls; max() preserves whichever is higher, but for an
+      // explicit "novel" composition the tier IS 4 by definition.
+      dispatchCtx.cost.tier = 4;
+    }
     recorder.setCost(snapshotCost(dispatchCtx.cost));
     recorder.setProvenance({
       tenant: sessionCtx.tenantId,
@@ -264,6 +286,20 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
 }
 
 // --- Helpers ---------------------------------------------------------------
+
+// True iff any recorded call resolved through a crystallised /lib/<tenant>
+// wrapper. The observer authors files named `crystallise_<topic>_<hash>`,
+// so the call list contains a `lib.crystallise_*` entry whenever the
+// snippet invoked one. Distinguishes Q2's interpreted replay from Q1's
+// novel ad-hoc composition.
+function calledCrystallisedWrapper(
+  snapshot: { calls: ReadonlyArray<{ primitive: string }> },
+): boolean {
+  for (const call of snapshot.calls) {
+    if (call.primitive.startsWith("lib.crystallise")) return true;
+  }
+  return false;
+}
 
 function firstNonEmptyLine(source: string): string | null {
   for (const line of source.split("\n")) {
