@@ -42,30 +42,104 @@ datafetch apropos <kw>              # semantic search across /lib/ intents
 
 Resolution order for the active session: `--session <id>` flag, then `DATAFETCH_SESSION` env var, then `$DATAFETCH_HOME/active-session`. `session new` writes the pointer; `session end` clears it if it was active.
 
-## Tools vs primitives
+## Hierarchy of reuse — always check higher tiers first
 
-Two kinds of file live in `/lib/<tenant>/`:
+Three tiers of available work, ordered cheapest-to-newest. Walk down them
+in order. Stop at the first tier that fits your task. Composing fresh
+chains when an existing one fits is wasted work — both for you and for
+the next agent — and it doesn't feed the system that crystallises new
+tools.
 
-- **Tools** — TypeScript files whose first lines are a YAML frontmatter block (`/* --- name: ... description: | ... --- */`). The frontmatter follows the same shape Claude Code skills use: `name`, `description` (with a *"Use when..."* clause). Tools are crystallised wrappers — the observer wrote them from a prior trajectory that converged on a reusable shape. **If a tool's description matches the user's task, call it directly.**
-- **Primitives** — TypeScript files without that frontmatter. Building blocks like `pickFiling`, `executeTableMath`, retrieval handles. Compose primitives into a snippet only when no tool's description matches.
+### Tier 1 — Past trajectories
 
-The frontmatter on tool files is the affordance signal. `head -25 <file>.ts` is the discovery move.
+Recent successful task runs live at `$DATAFETCH_HOME/trajectories/<id>.json`.
+Each is a complete worked example: question text, the call sequence, the
+inputs passed to each call, the outputs returned. This is the cheapest
+possible answer — someone (often a prior session of you) already solved
+this exact shape.
 
-## Discovery flow
+```bash
+ls -t $DATAFETCH_HOME/trajectories/ | head -10
+jq '{question, calls: [.calls[].primitive]}' $DATAFETCH_HOME/trajectories/<id>.json
+```
 
-When the user asks for something:
+If a trajectory's call sequence matches your task, replay it — same
+primitives, same arg shapes. Substitute your task's specifics where the
+example uses literal values.
 
-1. `cat $DATAFETCH_HOME/AGENTS.md` — what mounts are attached, what's in `/lib/`.
-2. `ls $DATAFETCH_HOME/lib/<tenant>/` — what tools exist for this tenant. The names hint at what they do.
-3. For each candidate file, `head -25 $DATAFETCH_HOME/lib/<tenant>/<name>.ts` — read the YAML frontmatter at the top. The `description` field's *"Use when..."* clause tells you whether this tool fits the task.
-4. **If a tool's description matches**, call it directly:
-   ```bash
-   datafetch tsx -e "console.log(JSON.stringify(await df.lib.<name>(<input matching the example shape>)))"
-   ```
-   Do not re-compose; the wrapper already encodes this exact flow.
-5. **If no tool matches**, look at primitives in `$DATAFETCH_HOME/lib/__seed__/` (and the tenant's own primitives that lack frontmatter). `head` gives you the function's signature; `cat` gives you the body if you want to use it as a template. Compose a `tsx` snippet that fans out across the primitives you need. The runtime records the trajectory; if the shape converges with prior runs, the observer crystallises a new tool for next time.
+### Tier 2 — Crystallised tools
 
-`datafetch apropos "<keywords>"` is a faster keyword search across all functions when you already know roughly what you're looking for. Output tags each entry as `(tool)` or `(primitive)` — same distinction. Useful when there are many files; the `ls`+`head` flow is the primary path otherwise.
+Wrappers the observer has promoted from convergent trajectories. They
+live at `$DATAFETCH_HOME/lib/<tenant>/<name>.ts` and carry YAML
+frontmatter at the top of the file describing what they do.
+
+```bash
+ls $DATAFETCH_HOME/lib/<tenant>/
+head -30 $DATAFETCH_HOME/lib/<tenant>/<name>.ts
+```
+
+The frontmatter follows Claude Code's skill format: `name`, `description`
+(with a *"Use when..."* clause). If a tool's description matches the
+user's task, call it directly:
+
+```bash
+datafetch tsx -e "console.log(JSON.stringify(await df.lib.<name>(<input>)))"
+```
+
+Use the example in the frontmatter as a guide for the input shape. Do
+not re-compose the chain by hand; the wrapper already encodes it.
+
+### Tier 3 — Base primitives
+
+The seed functions (`pickFiling`, `executeTableMath`, retrieval handles
+on `df.db.<coll>`, etc.) live at `$DATAFETCH_HOME/lib/__seed__/`. These
+have no frontmatter. Compose from them only when no trajectory or tool
+fits.
+
+```bash
+ls $DATAFETCH_HOME/lib/__seed__/
+head -25 $DATAFETCH_HOME/lib/__seed__/<name>.ts   # signature + JSDoc
+cat   $DATAFETCH_HOME/lib/__seed__/<name>.ts      # full body if you need it as a template
+```
+
+Primitives always need to be grounded in the substrate via `df.db.<coll>.*`
+calls — never construct filing/case data by hand. If the substrate seems
+unavailable, that is the exception worth investigating, not a reason to
+fabricate inputs. (See "Don't fabricate" below.)
+
+## Why this order matters — the compounding effect
+
+Every reuse strengthens the workspace:
+
+- **Trajectories you replay** strengthen the case for crystallisation.
+  When the observer sees the same call shape multiple times, it promotes
+  it to a tool.
+- **Tools you call** get exercised. If their shape converges with a new
+  pattern, the observer can promote a higher-level wrapper around them.
+- **Base primitives** are the foundation. A warmed-up workspace rarely
+  needs to touch them directly.
+
+Composing a fresh chain when an existing one fits doesn't just waste
+your work — it bypasses the observer's signal, so future agents won't
+see this task pattern in the available tools either. Reuse begets reuse.
+
+## Don't fabricate
+
+If `df.db.<coll>.*` calls fail, your snippets error, or the data plane
+seems off — investigate. Read the error. Try `curl http://localhost:8080/health`.
+Read `cat $DATAFETCH_HOME/server.log`. Try a smaller query.
+
+What you must NOT do is construct filing or case data inline ("a mock
+filing with these values…") to bypass the substrate. That produces
+plausible-looking outputs from imagined inputs and corrupts the
+trajectory record. The runtime records every `df.*` call; a trajectory
+without a `df.db.*` call is structurally suspect.
+
+The `apropos` shortcut: `datafetch apropos "<keywords>"` is a faster
+keyword search across all functions in tiers 2 and 3 when you already
+know roughly what you're looking for. Output tags each entry as `(tool)`
+or `(primitive)`. Useful when many files exist; the tiered `ls`+`head`
+walk is the primary path otherwise.
 
 ## Authoring a new function
 
