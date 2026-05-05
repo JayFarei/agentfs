@@ -426,7 +426,11 @@ assert_eq() {
   fi
   printf '[FAIL] %s (expected=%q actual=%q)\n' "$label" "$expected" "$actual" >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
-  return 1
+  # Return 0: PASS_COUNT/FAIL_COUNT are the source of truth and
+  # `print_summary` reports the tally at the end. Returning non-zero
+  # would abort under `set -euo pipefail` and skip later assertions —
+  # which is the opposite of what a regression harness wants.
+  return 0
 }
 
 assert_neq() {
@@ -440,7 +444,7 @@ assert_neq() {
   fi
   printf '[FAIL] %s (unexpected=%q actual=%q)\n' "$label" "$unexpected" "$actual" >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
-  return 1
+  return 0  # see assert_eq for why we don't propagate failure exit codes
 }
 
 assert_json_field() {
