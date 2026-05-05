@@ -42,17 +42,30 @@ datafetch apropos <kw>              # semantic search across /lib/ intents
 
 Resolution order for the active session: `--session <id>` flag, then `DATAFETCH_SESSION` env var, then `$DATAFETCH_HOME/active-session`. `session new` writes the pointer; `session end` clears it if it was active.
 
+## Tools vs primitives
+
+Two kinds of file live in `/lib/<tenant>/`:
+
+- **Tools** — TypeScript files whose first lines are a YAML frontmatter block (`/* --- name: ... description: | ... --- */`). The frontmatter follows the same shape Claude Code skills use: `name`, `description` (with a *"Use when..."* clause). Tools are crystallised wrappers — the observer wrote them from a prior trajectory that converged on a reusable shape. **If a tool's description matches the user's task, call it directly.**
+- **Primitives** — TypeScript files without that frontmatter. Building blocks like `pickFiling`, `executeTableMath`, retrieval handles. Compose primitives into a snippet only when no tool's description matches.
+
+The frontmatter on tool files is the affordance signal. `head -25 <file>.ts` is the discovery move.
+
 ## Discovery flow
 
 When the user asks for something:
 
 1. `cat $DATAFETCH_HOME/AGENTS.md` — what mounts are attached, what's in `/lib/`.
-2. `ls $DATAFETCH_HOME/mounts/<mount>/` then `cat .../README.md` — what this dataset is.
-3. `datafetch apropos "<keywords>"` — find an existing function by intent.
-4. `datafetch man <fn>` — read the structured docs.
-5. `cat $DATAFETCH_HOME/lib/<tenant>/<fn>.ts` — read the source if you want to use it as a template.
+2. `ls $DATAFETCH_HOME/lib/<tenant>/` — what tools exist for this tenant. The names hint at what they do.
+3. For each candidate file, `head -25 $DATAFETCH_HOME/lib/<tenant>/<name>.ts` — read the YAML frontmatter at the top. The `description` field's *"Use when..."* clause tells you whether this tool fits the task.
+4. **If a tool's description matches**, call it directly:
+   ```bash
+   datafetch tsx -e "console.log(JSON.stringify(await df.lib.<name>(<input matching the example shape>)))"
+   ```
+   Do not re-compose; the wrapper already encodes this exact flow.
+5. **If no tool matches**, look at primitives in `$DATAFETCH_HOME/lib/__seed__/` (and the tenant's own primitives that lack frontmatter). `head` gives you the function's signature; `cat` gives you the body if you want to use it as a template. Compose a `tsx` snippet that fans out across the primitives you need. The runtime records the trajectory; if the shape converges with prior runs, the observer crystallises a new tool for next time.
 
-If a function exists, call it through `datafetch tsx -e "console.log(JSON.stringify(await df.lib.<name>(<input>)))"`.
+`datafetch apropos "<keywords>"` is a faster keyword search across all functions when you already know roughly what you're looking for. Output tags each entry as `(tool)` or `(primitive)` — same distinction. Useful when there are many files; the `ls`+`head` flow is the primary path otherwise.
 
 ## Authoring a new function
 

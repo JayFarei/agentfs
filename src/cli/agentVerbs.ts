@@ -56,6 +56,40 @@ async function fetchSessionRecord(
   });
 }
 
+// --- Tool detection --------------------------------------------------------
+//
+// A "tool" is a crystallised wrapper — a function authored by the observer
+// with a YAML frontmatter block at the top of the file. The frontmatter is
+// the affordance signal: `name`, `description`, plus a "Use when..." clause
+// the agent reads to decide whether to call directly vs compose.
+//
+// Anything without that frontmatter is a "primitive" — a building block
+// shipped in /lib/__seed__/ or hand-authored. Primitives compose into tools.
+//
+// Detection: read the first ~256 bytes; if the file opens with `/* ---` or
+// `/*---` (the YAML-in-comment frontmatter marker), it's a tool.
+
+async function isTool(
+  baseDir: string,
+  tenantId: string,
+  name: string,
+): Promise<boolean> {
+  const candidates = [
+    path.join(baseDir, "lib", tenantId, `${name}.ts`),
+    path.join(baseDir, "lib", "__seed__", `${name}.ts`),
+  ];
+  for (const file of candidates) {
+    try {
+      const head = await fsp.readFile(file, { encoding: "utf8" });
+      const trimmed = head.slice(0, 32).trimStart();
+      return trimmed.startsWith("/* ---") || trimmed.startsWith("/*---");
+    } catch {
+      // try the next candidate
+    }
+  }
+  return false;
+}
+
 // --- tsx -------------------------------------------------------------------
 
 export async function cmdTsx(
@@ -179,14 +213,28 @@ export async function cmdApropos(
 
   const query = positionals.join(" ");
   const queryTokens = tokenise(query);
-  const scored = entries
+  const scoredRaw = entries
     .map((entry) => ({
       name: entry.name,
       intent: entry.spec.intent,
       score: scoreEntry(entry, queryTokens),
     }))
-    .filter((m) => m.score >= SCORE_THRESHOLD)
-    .sort((a, b) => b.score - a.score);
+    .filter((m) => m.score >= SCORE_THRESHOLD);
+
+  // Tag each match as tool vs primitive. Tools (crystallised wrappers
+  // with YAML frontmatter) sort ahead of primitives within the score
+  // ranking. The presence of the frontmatter — visible via `head -25`
+  // on the .ts file — is the affordance signal; this sort is a hint.
+  const scored = await Promise.all(
+    scoredRaw.map(async (m) => ({
+      ...m,
+      isTool: await isTool(baseDir, record.tenantId, m.name),
+    })),
+  );
+  scored.sort(
+    (a, b) =>
+      (a.isTool === b.isTool ? 0 : a.isTool ? -1 : 1) || b.score - a.score,
+  );
 
   if (jsonFlag(flags)) {
     process.stdout.write(`${JSON.stringify({ matches: scored })}\n`);
@@ -203,7 +251,8 @@ export async function cmdApropos(
   );
   for (const m of scored) {
     const padded = m.name.padEnd(maxName, " ");
-    process.stdout.write(`${padded} (df.lib) - ${m.intent}\n`);
+    const tag = m.isTool ? "tool" : "primitive";
+    process.stdout.write(`${padded} (${tag}) - ${m.intent}\n`);
   }
 }
 
@@ -361,6 +410,26 @@ function tokenise(s: string): Set<string> {
   return new Set(tokens);
 }
 
+// Walk an arbitrary value and add the tokenised forms of every string it
+// contains (recursively, including arrays and nested objects). Used to
+// pull keywords out of the originating user question that crystallisation
+// preserves as `examples[0].input.query`.
+function collectStringValues(value: unknown, into: Set<string>): void {
+  if (typeof value === "string") {
+    for (const tok of tokenise(value)) into.add(tok);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStringValues(item, into);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const v of Object.values(value as Record<string, unknown>)) {
+      collectStringValues(v, into);
+    }
+  }
+}
+
 function jaccard(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 && b.size === 0) return 0;
   let intersection = 0;
@@ -384,6 +453,12 @@ function scoreEntry(entry: LibraryEntry, queryTokens: Set<string>): number {
       for (const key of Object.keys(input as Record<string, unknown>)) {
         for (const tok of tokenise(key)) entryTokens.add(tok);
       }
+      // Also tokenise example input STRING values. Crystallised wrappers
+      // carry the originating user question as the first example's
+      // string value (e.g. "what is the range of chemicals revenue...").
+      // Without this, apropos can't find a wrapper by the user-facing
+      // words even though they're sitting in the file as data.
+      collectStringValues(input, entryTokens);
     }
   }
   for (const tok of tokenise(entry.name)) entryTokens.add(tok);

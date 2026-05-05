@@ -172,8 +172,10 @@ function generatePureSource(args: GenerateArgs): string | null {
   const sdkUrl = sdkIndexUrl();
   const valibotUrl = valibotEntryUrl();
 
+  const fm = frontmatter({ template, trajectory, example, externalParams });
   const header = headerComment({ template, trajectory });
   return [
+    fm,
     header,
     `import { fn } from "${sdkUrl}";`,
     `import * as v from "${valibotUrl}";`,
@@ -409,6 +411,62 @@ function headerComment(args: {
     `// @steps: ${args.template.steps.map((s) => s.primitive).join(" -> ")}`,
     "",
   ].join("\n");
+}
+
+// YAML frontmatter at the very top of the crystallised file. Mirrors the
+// format Claude Code skills use at `~/.claude/skills/<name>/SKILL.md`:
+// `name` + a `description` block whose text gives the agent enough signal
+// to decide whether to call the wrapper directly vs compose from primitives.
+//
+// Pure-template, no LLM call. Pulls the originating question out of the
+// example's longest string value (typically a `query` parameter), the call
+// graph from the template's steps, and the input shape from the parameter
+// names. The resulting block reads as an affordance the agent can match
+// against its task — same shape it's already trained to scan.
+function frontmatter(args: {
+  template: CallTemplate;
+  trajectory: TrajectoryRecord;
+  example: Record<string, unknown>;
+  externalParams: TemplateParameter[];
+}): string {
+  const userQuestion =
+    longestStringValue(args.example) ?? args.trajectory.question;
+  const callGraph = args.template.steps
+    .map((s) => s.primitive)
+    .join(" -> ");
+  const inputKeys = args.externalParams.map((p) => p.name).join(", ");
+
+  // Indent the description's body by two spaces so YAML's `|` block
+  // scalar parses cleanly. Newlines inside the block are preserved.
+  const descLines = [
+    `Crystallised composition that answers questions shaped like:`,
+    `  "${userQuestion.replace(/"/g, '\\"')}"`,
+    `Internally chains: ${callGraph}.`,
+    `Use when the user's question matches the example above. Pass input`,
+    `as { ${inputKeys} }; the runtime returns the last call's output.`,
+  ];
+  const description = descLines.map((l) => `  ${l}`).join("\n");
+
+  return [
+    "/* ---",
+    `name: ${args.template.name}`,
+    `description: |`,
+    description,
+    `trajectory: ${args.trajectory.id}`,
+    `shape-hash: ${args.template.shapeHash}`,
+    "--- */",
+    "",
+  ].join("\n");
+}
+
+function longestStringValue(obj: Record<string, unknown>): string | null {
+  let best: string | null = null;
+  for (const v of Object.values(obj)) {
+    if (typeof v === "string" && v.length > 8) {
+      if (best === null || v.length > best.length) best = v;
+    }
+  }
+  return best;
 }
 
 function safeJsonStringify(value: unknown): string {
