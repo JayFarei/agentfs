@@ -20,11 +20,12 @@ Order:
   3. agent-loop.sh       (Atlas + client agent; opt-in)
   4. llm-body-loop.sh    (Atlas + client agent + Flue LLM body; opt-in)
 
-By default only session-switch.sh runs. Set RUN_AGENT_E2E=1 to include the
-agent loops. The default agent driver is DF_AGENT_DRIVER=codex, which uses the
-local Codex CLI login. Set DF_AGENT_DRIVER=claude only when you explicitly want
-to use Claude Code as the client agent. Claude Code can use either local login
-or an Anthropic env key.
+By default, session-switch.sh and intent-workspace.sh run; the live client
+agent loops are skipped. Set RUN_AGENT_E2E=1 to include the agent loops. The
+default agent driver is DF_AGENT_DRIVER=codex, which uses the local Codex CLI
+login. Set DF_AGENT_DRIVER=claude only when you explicitly want to use Claude
+Code as the client agent. Claude Code can use either local login or an
+Anthropic env key.
 
 Required env if running 2 + 3: ATLAS_URI.
 You may also set RUNALL_SKIP="agent-loop llm-body-loop" to skip slow scripts.

@@ -64,6 +64,40 @@ DATAFETCH_HOME=""
 SERVER_PID=""
 SERVER_LOG=""
 
+load_acceptance_env_file() {
+  if [[ "${ATLASFS_SKIP_ENV_FILE:-0}" == "1" || ! -f "$REPO_ROOT/.env" ]]; then
+    return 0
+  fi
+  if [[ -z "${ATLAS_URI:-}" ]]; then
+    local atlas_uri
+    atlas_uri="$(
+      cd "$REPO_ROOT" && node -e '
+        if (typeof process.loadEnvFile === "function") process.loadEnvFile(".env");
+        const value = process.env.ATLAS_URI || process.env.MONGODB_URI || "";
+        if (value) process.stdout.write(value);
+      ' 2>/dev/null || true
+    )"
+    if [[ -n "$atlas_uri" ]]; then
+      export ATLAS_URI="$atlas_uri"
+    fi
+  fi
+  if [[ -z "${ATLAS_DB_NAME:-}" ]]; then
+    local atlas_db_name
+    atlas_db_name="$(
+      cd "$REPO_ROOT" && node -e '
+        if (typeof process.loadEnvFile === "function") process.loadEnvFile(".env");
+        const value = process.env.ATLAS_DB_NAME || "";
+        if (value) process.stdout.write(value);
+      ' 2>/dev/null || true
+    )"
+    if [[ -n "$atlas_db_name" ]]; then
+      export ATLAS_DB_NAME="$atlas_db_name"
+    fi
+  fi
+}
+
+load_acceptance_env_file
+
 # ---- Logging ----------------------------------------------------------------
 
 step() {
@@ -332,7 +366,7 @@ agent_system_prompt() {
   else
     printf '[warn] skill not found at %s; running without skill context\n' "$skill_path" >&2
   fi
-  local context="Active datafetch session: ${SESSION_ID:-}. Datafetch home: ${DATAFETCH_HOME:-}. Datafetch server URL: ${DATAFETCH_SERVER_URL:-http://localhost:8080}. The datafetch CLI is on PATH. Use this server URL; do not hard-code localhost:8080 when the URL above differs."
+  local context="Active datafetch session: ${SESSION_ID:-}. Datafetch home: ${DATAFETCH_HOME:-}. Datafetch server URL: ${DATAFETCH_SERVER_URL:-http://localhost:8080}. Agent working directory: ${DF_AGENT_CWD:-$REPO_ROOT}. The datafetch CLI is on PATH. Use this server URL; do not hard-code localhost:8080 when the URL above differs."
   printf '%s\n\n%s\n' "$skill_content" "$context"
 }
 
@@ -360,13 +394,17 @@ ${prompt}"
   local reasoning="${DF_TEST_REASONING_EFFORT:-medium}"
   local sandbox="${DF_CODEX_SANDBOX:-danger-full-access}"
   local approval="${DF_CODEX_APPROVAL:-never}"
+  local workdir="${DF_AGENT_CWD:-$REPO_ROOT}"
   local args=(
     --model "$model"
     --sandbox "$sandbox"
     --ask-for-approval "$approval"
-    --cd "$REPO_ROOT"
+    --cd "$workdir"
     -c "model_reasoning_effort=\"$reasoning\""
   )
+  if [[ "$workdir" != "$REPO_ROOT" ]]; then
+    args+=(--add-dir "$REPO_ROOT")
+  fi
   if [[ -n "${DATAFETCH_HOME:-}" ]]; then
     args+=(--add-dir "$DATAFETCH_HOME")
   fi
