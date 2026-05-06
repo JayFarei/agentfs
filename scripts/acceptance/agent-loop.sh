@@ -239,6 +239,8 @@ write_troubleshooting_artifact() {
   sanitize_file "$DATAFETCH_HOME/publish.log" "$dir/publish.log"
   sanitize_file "${Q1_OUT:-}" "$dir/q1.out"
   sanitize_file "${Q2_OUT:-}" "$dir/q2.out"
+  sanitize_file "$DATAFETCH_HOME/AGENTS.md" "$dir/AGENTS.md"
+  sanitize_file "$DATAFETCH_HOME/CLAUDE.md" "$dir/CLAUDE.md"
   sanitize_file "$DATAFETCH_HOME/df.d.ts" "$dir/df.d.ts"
   sanitize_file "$DATAFETCH_HOME/active-session" "$dir/active-session"
   printf '%s\n' "${Q1_PROMPT:-}" > "$dir/q1.prompt.txt"
@@ -599,7 +601,7 @@ WRAP
 Q1_PROMPT='What is the range of chemicals revenue between 2014 and 2018? The datafetch CLI is on PATH; the FinQA mount finqa-2024 is published. Do not read repo tests or demo source files for the answer.
 
 You MUST use the plan/execute contract:
-1. Orient with `datafetch apropos` and `cat $DATAFETCH_HOME/df.d.ts`.
+1. Orient with `cat $DATAFETCH_HOME/AGENTS.md`, `cat $DATAFETCH_HOME/df.d.ts`, and `datafetch apropos`.
 2. Use `datafetch plan -e "..."` for exploration/sampling only. Do not answer from plan output.
 3. Commit the repeatable TypeScript trajectory with exactly ONE `datafetch execute -e "..."` call. If you are not ready to commit, keep using `datafetch plan`; do not use execute as a probe.
 
@@ -772,7 +774,7 @@ fi
 Q2_PROMPT='What is the range of coal revenue between 2014 and 2018? The datafetch CLI is on PATH and the active session is already configured. Do not read repo tests or demo source files for the answer.
 
 You MUST use the plan/execute contract:
-1. Orient with `datafetch apropos --json "range coal revenue 2014 2018"` and inspect the top match.
+1. Orient with `cat $DATAFETCH_HOME/AGENTS.md`, then `datafetch apropos --json "range coal revenue 2014 2018"` and inspect the top match.
 2. Use `datafetch plan -e "..."` for any exploration/sampling only. Do not answer from plan output.
 3. Commit the repeatable final answer path with exactly ONE `datafetch execute -e "..."` call. If the top apropos match fits, that one execute call should invoke the learned tool directly. If no learned tool fits, that one execute call must contain the full db retrieval -> filing selection -> table-plan inference -> table math workflow.
 
