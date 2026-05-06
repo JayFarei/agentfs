@@ -50,10 +50,16 @@ Optional env:
   AGENT_LOOP_TIMEOUT              per-question budget (seconds), default 300
   AGENT_LOOP_ARTIFACT_DIR         where to preserve troubleshooting artefacts
                                   (default: artifacts/agent-loop/<timestamp>)
+  Q1_INTENT/Q2_INTENT             override the default derived FinQA intents
+  Q1_EXPECTED_STATUS/VALUE        expected committed Q1 answer quality gate
+  Q2_EXPECTED_STATUS/VALUE        expected committed Q2 answer quality gate
   DEBUG=1                         dump tmux pane + server log on failure
 
 Required tools: datafetch (or the bin/datafetch.mjs shim), tmux,
                 jq, curl.
+
+Default intents are derived from
+scripts/acceptance/fixtures/finqa-intent-batch.json.
 EOF
 }
 
@@ -68,8 +74,12 @@ RUN_STAMP="$(date -u +"%Y%m%dT%H%M%SZ")"
 AGENT_LOOP_ARTIFACT_DIR="${AGENT_LOOP_ARTIFACT_DIR:-$REPO_ROOT/artifacts/agent-loop/$RUN_STAMP}"
 
 SESSION_ID=""
-Q1_INTENT="What is the range of chemicals revenue between 2014 and 2018?"
-Q2_INTENT="What is the range of coal revenue between 2014 and 2018?"
+Q1_INTENT="${Q1_INTENT:-What is the range of chemicals revenue between 2014 and 2016?}"
+Q2_INTENT="${Q2_INTENT:-What is the range of coal revenue between 2014 and 2016?}"
+Q1_EXPECTED_STATUS="${Q1_EXPECTED_STATUS:-answered}"
+Q1_EXPECTED_VALUE="${Q1_EXPECTED_VALUE:-190}"
+Q2_EXPECTED_STATUS="${Q2_EXPECTED_STATUS:-answered}"
+Q2_EXPECTED_VALUE="${Q2_EXPECTED_VALUE:-1687}"
 Q1_WORKSPACE=""
 Q2_WORKSPACE=""
 Q1_OUT=""
@@ -118,6 +128,21 @@ assert_json_truthy() {
     printf '[FAIL] %s\n' "$label" >&2
     if [[ -f "$file" ]]; then jq . "$file" >&2 || true; fi
     FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+}
+
+assert_answer_expectation() {
+  local label="$1"
+  local workspace="$2"
+  local expected_status="$3"
+  local expected_value="$4"
+  local answer="$workspace/result/answer.json"
+
+  if [[ -n "$expected_status" ]]; then
+    assert_json_field "$answer" ".status" "$expected_status" "$label answer status is $expected_status" || true
+  fi
+  if [[ -n "$expected_value" ]]; then
+    assert_json_field "$answer" ".value" "$expected_value" "$label answer value is $expected_value" || true
   fi
 }
 
@@ -346,6 +371,10 @@ write_troubleshooting_artifact() {
     --arg artifactDir "$dir" \
     --arg q1Intent "$Q1_INTENT" \
     --arg q2Intent "$Q2_INTENT" \
+    --arg q1ExpectedStatus "$Q1_EXPECTED_STATUS" \
+    --arg q1ExpectedValue "$Q1_EXPECTED_VALUE" \
+    --arg q2ExpectedStatus "$Q2_EXPECTED_STATUS" \
+    --arg q2ExpectedValue "$Q2_EXPECTED_VALUE" \
     --arg q1Workspace "${Q1_WORKSPACE:-}" \
     --arg q2Workspace "${Q2_WORKSPACE:-}" \
     --arg learnedInterfaceName "${CRYSTALLISED_NAME:-}" \
@@ -360,8 +389,16 @@ write_troubleshooting_artifact() {
       artifactDir: $artifactDir,
       passCount: $passCount,
       failCount: $failCount,
-      q1: { intent: $q1Intent, workspace: $q1Workspace },
-      q2: { intent: $q2Intent, workspace: $q2Workspace },
+      q1: {
+        intent: $q1Intent,
+        expected: { status: $q1ExpectedStatus, value: $q1ExpectedValue },
+        workspace: $q1Workspace
+      },
+      q2: {
+        intent: $q2Intent,
+        expected: { status: $q2ExpectedStatus, value: $q2ExpectedValue },
+        workspace: $q2Workspace
+      },
       learnedInterfaceName: $learnedInterfaceName,
       files: {
         clientSummary: "client-summary.md",
@@ -386,8 +423,10 @@ write_troubleshooting_artifact() {
     printf '# Client view\n\n'
     printf -- '- status: %s\n' "$status"
     printf -- '- Q1 intent: %s\n' "$Q1_INTENT"
+    printf -- '- Q1 expected: status=%s value=%s\n' "$Q1_EXPECTED_STATUS" "$Q1_EXPECTED_VALUE"
     printf -- '- Q1 workspace: %s\n' "${Q1_WORKSPACE:-}"
     printf -- '- Q2 intent: %s\n' "$Q2_INTENT"
+    printf -- '- Q2 expected: status=%s value=%s\n' "$Q2_EXPECTED_STATUS" "$Q2_EXPECTED_VALUE"
     printf -- '- Q2 workspace: %s\n' "${Q2_WORKSPACE:-}"
     printf -- '- learned interface: %s\n\n' "${CRYSTALLISED_NAME:-}"
     printf '## Q1 Transcript Head\n\n```text\n'
@@ -460,7 +499,9 @@ write_troubleshooting_artifact() {
     printf '## Scenario\n\n'
     printf -- '- status: %s\n' "$status"
     printf -- '- Q1 intent: %s\n' "$Q1_INTENT"
+    printf -- '- Q1 expected: status=%s value=%s\n' "$Q1_EXPECTED_STATUS" "$Q1_EXPECTED_VALUE"
     printf -- '- Q2 intent: %s\n' "$Q2_INTENT"
+    printf -- '- Q2 expected: status=%s value=%s\n' "$Q2_EXPECTED_STATUS" "$Q2_EXPECTED_VALUE"
     printf -- '- learned interface: %s\n\n' "${CRYSTALLISED_NAME:-none}"
 
     printf '## Q1 worktree\n\n'
@@ -667,6 +708,7 @@ if [[ -f "$Q1_OUT" ]]; then
 fi
 assert_workspace_run_written "Q1" "$Q1_WORKSPACE"
 assert_workspace_commit "Q1" "$Q1_WORKSPACE"
+assert_answer_expectation "Q1" "$Q1_WORKSPACE" "$Q1_EXPECTED_STATUS" "$Q1_EXPECTED_VALUE"
 
 Q1_HEAD_TRAJ="$(workspace_head_trajectory "$Q1_WORKSPACE")"
 step "Q1: waiting up to 10s for observer learned-interface write from HEAD $Q1_HEAD_TRAJ"
@@ -704,7 +746,7 @@ Q2_WORKSPACE="$MOUNTED_WORKSPACE"
 
 if [[ -n "$CRYSTALLISED_NAME" ]]; then
   step "Q2 preflight: apropos should surface $CRYSTALLISED_NAME"
-  APROPOS_JSON=$(dft apropos --json "range coal revenue 2014 2018" || true)
+  APROPOS_JSON=$(dft apropos --json "$Q2_INTENT" || true)
   DISCOVERY_TOP=$(printf '%s\n' "$APROPOS_JSON" | jq -r '.matches[0].name // empty' 2>/dev/null || true)
   if [[ "$DISCOVERY_TOP" == "$CRYSTALLISED_NAME" ]]; then
     printf '[PASS] apropos top match is %s\n' "$DISCOVERY_TOP"
@@ -751,6 +793,7 @@ if [[ -f "$Q2_OUT" ]]; then
   head -n 40 "$Q2_OUT" >&2 || true
 fi
 assert_workspace_commit "Q2" "$Q2_WORKSPACE" "$CRYSTALLISED_NAME"
+assert_answer_expectation "Q2" "$Q2_WORKSPACE" "$Q2_EXPECTED_STATUS" "$Q2_EXPECTED_VALUE"
 
 step "Q2: assert no nested learned interface was created"
 POST_Q2_CRYSTALLISED_COUNT=$(learned_interface_count)

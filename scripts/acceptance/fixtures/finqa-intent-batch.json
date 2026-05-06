@@ -1,0 +1,174 @@
+{
+  "version": 1,
+  "dataset": "finqa-2024",
+  "source": {
+    "db": "atlasfs_hackathon",
+    "collection": "finqa_cases",
+    "sampleSize": 8474
+  },
+  "purpose": "Curated FinQA intent families for testing whether repeated visible intent programs can distill into reusable datafetch interfaces.",
+  "families": [
+    {
+      "name": "rangeTableMetric",
+      "interfaceGoal": "Given an entity or row label, a metric, and a year span, select evidence, validate coverage, extract the numeric series, and return the range.",
+      "evidenceCaseId": "UNP/2016/page_52.pdf-4",
+      "evidenceTable": "Union Pacific freight revenue by commodity group, years 2014-2016, values in millions.",
+      "slots": ["entity", "metric", "startYear", "endYear", "operation"],
+      "train": [
+        {
+          "label": "range/chemicals/revenue/2014-2016",
+          "intent": "What is the range of chemicals revenue between 2014 and 2016?",
+          "expected": {
+            "status": "answered",
+            "value": 190,
+            "unit": "millions"
+          }
+        },
+        {
+          "label": "range/coal/revenue/2014-2016",
+          "intent": "What is the range of coal revenue between 2014 and 2016?",
+          "expected": {
+            "status": "answered",
+            "value": 1687,
+            "unit": "millions"
+          }
+        },
+        {
+          "label": "range/automotive/revenue/2014-2016",
+          "intent": "What is the range of automotive revenue between 2014 and 2016?",
+          "expected": {
+            "status": "answered",
+            "value": 154,
+            "unit": "millions"
+          }
+        }
+      ],
+      "holdout": [
+        {
+          "label": "range/intermodal/revenue/2014-2016",
+          "intent": "What is the range of intermodal revenue between 2014 and 2016?",
+          "expected": {
+            "status": "answered",
+            "value": 775,
+            "unit": "millions"
+          }
+        },
+        {
+          "label": "range/agricultural-products/revenue/2014-2016",
+          "intent": "What is the range of agricultural products revenue between 2014 and 2016?",
+          "expected": {
+            "status": "answered",
+            "value": 196,
+            "unit": "millions"
+          }
+        },
+        {
+          "label": "range/total-freight-revenues/2014-2016",
+          "intent": "What is the range of total freight revenues between 2014 and 2016?",
+          "expected": {
+            "status": "answered",
+            "value": 3959,
+            "unit": "millions"
+          }
+        }
+      ],
+      "counterexamples": [
+        {
+          "label": "range/chemicals/revenue/2014-2018",
+          "intent": "What is the range of chemicals revenue between 2014 and 2018?",
+          "expected": {
+            "status": "partial",
+            "missing": ["2017", "2018"]
+          }
+        },
+        {
+          "label": "range/coal/revenue/2014-2018",
+          "intent": "What is the range of coal revenue between 2014 and 2018?",
+          "expected": {
+            "status": "partial",
+            "missing": ["2017", "2018"]
+          }
+        },
+        {
+          "label": "range/common-shares/revenue/2014-2016",
+          "intent": "What is the range of common shares revenue between 2014 and 2016?",
+          "expected": {
+            "status": "unsupported",
+            "code": "ENTITY_OR_METRIC_MISMATCH"
+          }
+        }
+      ]
+    },
+    {
+      "name": "tableMetricGrowthRate",
+      "interfaceGoal": "Given a row label or metric and two years, compute (end - start) / start with evidence and unit handling.",
+      "slots": ["entity", "metric", "startYear", "endYear", "operation"],
+      "train": [
+        {
+          "label": "growth/space-systems/operating-profit/2010-2011",
+          "caseId": "LMT/2012/page_47.pdf-3",
+          "intent": "What is the growth rate in operating profit for space systems in 2011?",
+          "expected": {
+            "status": "answered",
+            "value": "3.2%"
+          }
+        },
+        {
+          "label": "growth/entergy/net-revenue/2014-2015",
+          "caseId": "ETR/2015/page_17.pdf-2",
+          "intent": "What is the growth rate of net revenue from 2014 to 2015?",
+          "expected": {
+            "status": "answered",
+            "value": "1.6%"
+          }
+        }
+      ],
+      "holdout": [
+        {
+          "label": "growth/space-systems/backlog/2010-2011",
+          "caseId": "LMT/2012/page_47.pdf-3",
+          "intent": "What is the growth rate in backlog at year-end for space systems in 2011?",
+          "expected": {
+            "status": "answered",
+            "value": "-10.1%"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rowShareOfTotal",
+      "interfaceGoal": "Given a row label and denominator row in a financial table, compute the row's share of the total.",
+      "evidenceCaseId": "MAR/2018/page_43.pdf-1",
+      "evidenceTable": "Marriott contractual obligations by row and payment period.",
+      "slots": ["numeratorRow", "denominatorRow", "period", "operation"],
+      "train": [
+        {
+          "label": "share/operating-leases/total-contractual-obligations",
+          "intent": "What percentage of total contractual obligations is due to operating leases where we are the primary obligor?",
+          "expected": {
+            "status": "answered",
+            "value": "16%"
+          }
+        },
+        {
+          "label": "share/capital-lease-obligations/total-contractual-obligations",
+          "intent": "What percentage of total contractual obligations is due to capital lease obligations?",
+          "expected": {
+            "status": "answered",
+            "value": "2%"
+          }
+        }
+      ],
+      "holdout": [
+        {
+          "label": "share/debt/total-contractual-obligations",
+          "intent": "What percentage of total contractual obligations is due to debt?",
+          "expected": {
+            "status": "answered",
+            "value": "79%"
+          }
+        }
+      ]
+    }
+  ]
+}
