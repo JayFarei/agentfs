@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -135,6 +135,119 @@ describe("DiskSnippetRuntime phase artifacts", () => {
       crystallisable: true,
       exitCode: 0,
     });
+  });
+
+  it("rejects commit runs that do not return df.answer", async () => {
+    const baseDir = await tempBaseDir("df-runtime-commit-reject-");
+    dirs.push(baseDir);
+
+    const runtime = new DiskSnippetRuntime();
+    const result = await runtime.run({
+      source: 'console.log("plain output")',
+      phase: "commit",
+      sessionCtx: {
+        sessionId: "sess_commit_reject",
+        tenantId: "tenant-a",
+        mountIds: ["finqa"],
+        baseDir,
+      },
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.phase).toBe("commit");
+    expect(result.crystallisable).toBe(false);
+    expect(result.validation).toMatchObject({
+      accepted: false,
+      blockers: ["script did not return df.answer(...)"],
+    });
+    const artifactDir = result.artifactDir!;
+    await expect(readFile(path.join(artifactDir, "validation.json"), "utf8")).resolves.toContain(
+      "script did not return df.answer",
+    );
+    await expect(readFile(path.join(artifactDir, "answer.json"), "utf8")).resolves.toBe(
+      "null\n",
+    );
+  });
+
+  it("accepts commit runs that return df.answer with lineage and relative helpers", async () => {
+    const baseDir = await tempBaseDir("df-runtime-commit-accept-");
+    dirs.push(baseDir);
+    const scriptsDir = path.join(baseDir, "workspace", "scripts");
+    await mkdir(scriptsDir, { recursive: true });
+    await writeFile(
+      path.join(scriptsDir, "helpers.ts"),
+      "export function evidenceRef(id: string) { return { ref: id }; }\n",
+      "utf8",
+    );
+
+    const adapter: MountAdapter & { close: () => Promise<void> } = {
+      id: "commit-adapter",
+      capabilities: () => ({ vector: false, lex: true, stream: false, compile: false }),
+      probe: async () => ({ collections: [] }),
+      sample: async () => [],
+      collection: <T>(): CollectionHandle<T> => ({
+        findExact: async () => [],
+        search: async () => [{ id: "case-1" }] as T[],
+        findSimilar: async () => [],
+        hybrid: async () => [],
+      }),
+      close: async () => {},
+    };
+    const reg = new InMemoryMountRuntimeRegistry();
+    setMountRuntimeRegistry(reg);
+    reg.register(
+      "finqa",
+      makeMountRuntime({
+        mountId: "finqa",
+        adapter,
+        identMap: [{ ident: "cases", name: "cases" }],
+      }),
+    );
+
+    const source = [
+      'import { evidenceRef } from "./helpers.ts";',
+      'const rows = await df.db.cases.search("revenue", { limit: 1 });',
+      "return df.answer({",
+      '  status: "answered",',
+      "  value: rows.length,",
+      "  evidence: [evidenceRef(rows[0].id)],",
+      "  coverage: { rows: rows.length },",
+      '  derivation: { operation: "count", values: [rows.length] },',
+      "});",
+    ].join("\n");
+
+    const runtime = new DiskSnippetRuntime();
+    const result = await runtime.run({
+      source,
+      phase: "commit",
+      sourcePath: path.join(scriptsDir, "answer.ts"),
+      sessionCtx: {
+        sessionId: "sess_commit_accept",
+        tenantId: "tenant-a",
+        mountIds: ["finqa"],
+        baseDir,
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.phase).toBe("commit");
+    expect(result.crystallisable).toBe(true);
+    expect(result.validation).toMatchObject({ accepted: true, learnable: true });
+    expect(result.answer).toMatchObject({
+      status: "answered",
+      value: 1,
+      evidence: [{ ref: "case-1" }],
+    });
+    const artifactDir = result.artifactDir!;
+    await expect(readFile(path.join(artifactDir, "commit.ts"), "utf8")).resolves.toContain(
+      'import { evidenceRef } from "./helpers.ts";',
+    );
+    await expect(readFile(path.join(artifactDir, "answer.json"), "utf8")).resolves.toContain(
+      '"value": 1',
+    );
+    await expect(readFile(path.join(artifactDir, "lineage.json"), "utf8")).resolves.toContain(
+      "db.cases.search",
+    );
   });
 
   it("bounds plan retrieval calls while leaving execute retrieval unrestricted", async () => {

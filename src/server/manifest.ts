@@ -129,6 +129,9 @@ async function renderManifest(opts: RegenerateManifestOpts): Promise<string> {
   }
   out.push("  };");
   out.push("");
+  out.push("  /** Commit a structured, evidence-backed final answer. */");
+  out.push("  answer(input: AnswerInput): AnswerEnvelope;");
+  out.push("");
   out.push("  /** Run an async function with df.* in scope; returns a Result envelope. */");
   out.push("  run<T>(fn: () => Promise<T>): Promise<Result<T>>;");
   out.push("};");
@@ -231,6 +234,23 @@ const SUPPORT_TYPES = `interface Result<T> {
   };
   escalations: number;
   warnings?: { code: string; message: string }[];
+}
+
+type AnswerStatus = "answered" | "partial" | "unsupported";
+
+interface AnswerInput {
+  status: AnswerStatus;
+  value?: unknown;
+  unit?: string;
+  evidence?: unknown;
+  coverage?: unknown;
+  derivation?: unknown;
+  missing?: unknown;
+  reason?: string;
+}
+
+interface AnswerEnvelope extends AnswerInput {
+  createdAt: string;
 }
 
 interface CollectionHandle {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { serve } from "@hono/node-server";
 import http from "node:http";
 import os from "node:os";
@@ -50,10 +50,21 @@ async function withSnippetServer<T>(
           exitCode: 0,
           trajectoryId: `traj_${body.phase}`,
           phase: body.phase,
-          crystallisable: body.phase === "execute",
+          crystallisable: body.phase === "execute" || body.phase === "commit",
           artifactDir: `/tmp/${body.phase}`,
           mode: body.phase === "execute" ? "novel" : "interpreted",
           callPrimitives: [],
+          ...(body.phase === "commit"
+            ? {
+                answer: {
+                  status: "answered",
+                  value: 1,
+                  evidence: [{ ref: "x" }],
+                  derivation: { operation: "count" },
+                },
+                validation: { accepted: true, learnable: true, blockers: [] },
+              }
+            : {}),
         }),
       );
     });
@@ -100,7 +111,7 @@ async function withDatafetchServer<T>(
   }
 }
 
-async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<{
+async function runCli(args: string[], env: NodeJS.ProcessEnv, cwd?: string): Promise<{
   stdout: string;
   stderr: string;
   exitCode: number;
@@ -109,8 +120,8 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<{
   return new Promise((resolve, reject) => {
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
-    const child = spawn("pnpm", ["tsx", "src/cli.ts", ...args], {
-      cwd: repoRoot,
+    const child = spawn("node", [path.join(repoRoot, "bin", "datafetch.mjs"), ...args], {
+      cwd: cwd ?? repoRoot,
       env,
     });
     child.stdout.on("data", (b: Buffer) => stdoutChunks.push(b));
@@ -185,6 +196,84 @@ describe("datafetch plan/execute CLI", () => {
           phase: "execute",
         },
       ]);
+    });
+  }, 30_000);
+
+  it("drives the intent workspace run/commit facade and writes workspace artifacts", async () => {
+    const baseDir = await makeBaseDir();
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "df-intent-workspace-"));
+    tempDirs.push(workspace);
+
+    await withSnippetServer(async (serverUrl, bodies) => {
+      await mkdir(path.join(workspace, ".datafetch"), { recursive: true });
+      await mkdir(path.join(workspace, "scripts"), { recursive: true });
+      await writeFile(
+        path.join(workspace, ".datafetch", "workspace.json"),
+        `${JSON.stringify(
+          {
+            version: 1,
+            sessionId: "sess_workspace",
+            tenantId: "tenant-a",
+            mountIds: ["finqa"],
+            dataset: "finqa",
+            intent: "count rows",
+            baseDir,
+            serverUrl,
+            createdAt: "2026-05-06T00:00:00.000Z",
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+      await writeFile(
+        path.join(workspace, "scripts", "scratch.ts"),
+        "console.log('scratch')\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(workspace, "scripts", "answer.ts"),
+        "return df.answer({ status: 'answered', value: 1, evidence: [{ ref: 'x' }], derivation: { operation: 'count' } })\n",
+        "utf8",
+      );
+
+      const env = {
+        ...process.env,
+        DATAFETCH_SESSION: "",
+        DATAFETCH_HOME: baseDir,
+      };
+      const run = await runCli(["run", "scripts/scratch.ts"], env, workspace);
+      expect(run.exitCode).toBe(0);
+      expect(run.stdout).toContain('"phase": "run"');
+      await expect(
+        readFile(path.join(workspace, "tmp", "runs", "001", "source.ts"), "utf8"),
+      ).resolves.toContain("scratch");
+      await expect(
+        readFile(path.join(workspace, "tmp", "runs", "001", "result.json"), "utf8"),
+      ).resolves.toContain('"phase": "run"');
+
+      const commit = await runCli(["commit", "scripts/answer.ts"], env, workspace);
+      expect(commit.exitCode).toBe(0);
+      expect(commit.stdout).toContain('"phase": "commit"');
+      await expect(
+        readFile(path.join(workspace, "result", "answer.json"), "utf8"),
+      ).resolves.toContain('"status": "answered"');
+      await expect(
+        readFile(path.join(workspace, "result", "validation.json"), "utf8"),
+      ).resolves.toContain('"accepted": true');
+
+      expect(bodies).toMatchObject([
+        {
+          sessionId: "sess_workspace",
+          phase: "run",
+        },
+        {
+          sessionId: "sess_workspace",
+          phase: "commit",
+        },
+      ]);
+      expect(bodies[0]?.sourcePath).toMatch(/scripts\/scratch\.ts$/);
+      expect(bodies[1]?.sourcePath).toMatch(/scripts\/answer\.ts$/);
     });
   }, 30_000);
 

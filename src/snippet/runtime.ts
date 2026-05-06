@@ -43,6 +43,11 @@ import type {
 } from "../bash/snippetRuntime.js";
 
 import { buildDf, type DfBinding } from "./dfBinding.js";
+import {
+  isAnswerEnvelope,
+  validateAnswerEnvelope,
+  type AnswerValidation,
+} from "./answer.js";
 
 // --- Public types ----------------------------------------------------------
 
@@ -55,6 +60,8 @@ export type RunResult = {
   phase?: SnippetPhase;
   crystallisable?: boolean;
   artifactDir?: string;
+  answer?: unknown;
+  validation?: AnswerValidation;
 };
 
 export type DiskSnippetRuntimeOpts = {
@@ -110,11 +117,27 @@ export class DiskSnippetRuntime implements SnippetRuntime {
     const df = buildDf({ sessionCtx: effectiveSessionCtx, dispatchCtx });
 
     // 2. Run the snippet under captured stdout/stderr.
-    const { stdout, stderr, exitCode, error } = await runSnippet({
+    const { stdout, stderr, exitCode, error, returnValue } = await runSnippet({
       source,
       df,
       seq: ++this.seq,
+      sourcePath,
     });
+
+    recorder.setResult(returnValue);
+
+    const answer = isAnswerEnvelope(returnValue) ? returnValue : undefined;
+    const validation =
+      phase === "commit"
+        ? validateAnswerEnvelope({
+            value: returnValue,
+            lineageCallCount: recorder.snapshot.calls.length,
+          })
+        : undefined;
+    if (answer !== undefined) recorder.setAnswer(answer);
+    if (validation !== undefined) recorder.setAnswerValidation(validation);
+    const effectiveExitCode =
+      phase === "commit" && validation?.accepted !== true ? 1 : exitCode;
 
     // 3. Persist trajectory.
     //    Mode classification (PRD §8.1, D-010):
@@ -125,7 +148,7 @@ export class DiskSnippetRuntime implements SnippetRuntime {
     //        (df.lib.crystallise_*) → "interpreted", tier 2.
     //      - successful first-time composition (no crystallised wrapper)
     //        → "novel", tier 4 (full ReAct / ad-hoc composition).
-    if (error) {
+    if (error || effectiveExitCode !== 0) {
       recorder.setErrored(true);
       // Leave mode at the recorder's default ("interpreted"); error-path
       // gating uses `errored`.
@@ -150,13 +173,14 @@ export class DiskSnippetRuntime implements SnippetRuntime {
         ? undefined
         : {
             phase,
-            crystallisable: phase === "execute",
+            crystallisable: isCrystallisablePhase(phase, validation),
             ...(sourcePath !== undefined ? { sourcePath } : {}),
             artifactDir: phaseArtifactDir({
               baseDir: sessionCtx.baseDir,
               sessionId: sessionCtx.sessionId,
               phase,
               trajectoryId: recorder.id,
+              sourcePath,
             }),
           };
     if (phaseMetadata) {
@@ -171,9 +195,12 @@ export class DiskSnippetRuntime implements SnippetRuntime {
           source,
           stdout,
           stderr,
-          exitCode,
+          exitCode: effectiveExitCode,
           trajectory,
           cost: snapshotCost(dispatchCtx.cost),
+          result: returnValue,
+          answer,
+          validation,
         });
       }
       // Notify the observer (Wave 4). Fire-and-forget; any thrown error
@@ -204,9 +231,11 @@ export class DiskSnippetRuntime implements SnippetRuntime {
     return {
       stdout,
       stderr,
-      exitCode,
+      exitCode: effectiveExitCode,
       trajectoryId: recorder.id,
       cost: snapshotCost(dispatchCtx.cost),
+      ...(answer !== undefined ? { answer } : {}),
+      ...(validation !== undefined ? { validation } : {}),
       ...(phaseMetadata
         ? {
             phase: phaseMetadata.phase,
@@ -224,12 +253,14 @@ type RunArgs = {
   source: string;
   df: DfBinding;
   seq: number;
+  sourcePath?: string;
 };
 
 type RunResp = {
   stdout: string;
   stderr: string;
   exitCode: number;
+  returnValue?: unknown;
   error?: Error;
 };
 
@@ -247,23 +278,32 @@ type RunResp = {
 // declares (e.g. `import * as v from "valibot"`) resolve through tsx
 // + Node ESM as usual.
 function wrapSource(source: string): string {
+  const { imports, body } = splitLeadingImports(source);
   return [
     "// Stamped by DiskSnippetRuntime",
+    ...imports,
     "export const __df_done = (async () => {",
-    source,
+    body,
     "})();",
   ].join("\n");
 }
 
 async function runSnippet(args: RunArgs): Promise<RunResp> {
-  const { source, df, seq } = args;
+  const { source, df, seq, sourcePath } = args;
 
-  const tmpDir = path.join(
-    os.tmpdir(),
-    `df-snippet-${process.pid}-${Date.now()}-${seq}`,
-  );
+  const sourceDir = sourcePath !== undefined ? path.dirname(sourcePath) : null;
+  const runBesideSource = sourceDir !== null && (await dirExists(sourceDir));
+  const tmpDir = runBesideSource
+    ? sourceDir!
+    : path.join(os.tmpdir(), `df-snippet-${process.pid}-${Date.now()}-${seq}`);
   await fsp.mkdir(tmpDir, { recursive: true });
-  const file = path.join(tmpDir, "snippet.mts");
+  const file =
+    sourcePath !== undefined
+      ? path.join(
+          tmpDir,
+          `.datafetch-run-${process.pid}-${Date.now()}-${seq}.mts`,
+        )
+      : path.join(tmpDir, "snippet.mts");
   await fsp.writeFile(file, wrapSource(source), "utf8");
 
   // Patch globals.
@@ -297,12 +337,13 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
   console.debug = writeLine(stderr);
 
   let error: Error | undefined;
+  let returnValue: unknown;
   try {
     const mod = (await import(
       `${pathToFileURL(file).href}?seq=${seq}`
     )) as { __df_done?: Promise<unknown> };
     if (mod.__df_done) {
-      await mod.__df_done;
+      returnValue = await mod.__df_done;
     }
   } catch (err) {
     error = err instanceof Error ? err : new Error(String(err));
@@ -323,16 +364,31 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
     } else {
       (globalThis as Record<string, unknown>)["df"] = origDf;
     }
-    // Best-effort cleanup; ignore failures.
-    fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+    // Best-effort cleanup; ignore failures. Source-path execution writes a
+    // temp sibling file so relative imports resolve from the script directory.
+    if (runBesideSource) {
+      fsp.rm(file, { force: true }).catch(() => undefined);
+    } else {
+      fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
   return {
     stdout: stdout.join(""),
     stderr: stderr.join(""),
     exitCode: error ? 1 : 0,
+    ...(returnValue !== undefined ? { returnValue } : {}),
     ...(error ? { error } : {}),
   };
+}
+
+async function dirExists(dir: string): Promise<boolean> {
+  try {
+    const st = await fsp.stat(dir);
+    return st.isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 // --- Helpers ---------------------------------------------------------------
@@ -359,6 +415,38 @@ function firstNonEmptyLine(source: string): string | null {
   return null;
 }
 
+function splitLeadingImports(source: string): {
+  imports: string[];
+  body: string;
+} {
+  const lines = source.split("\n");
+  const imports: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      imports.push(line);
+      index += 1;
+      continue;
+    }
+    if (!trimmed.startsWith("import ")) break;
+    imports.push(line);
+    index += 1;
+    while (
+      index < lines.length &&
+      !(lines[index - 1] ?? "").trimEnd().endsWith(";")
+    ) {
+      imports.push(lines[index] ?? "");
+      index += 1;
+    }
+  }
+  return {
+    imports,
+    body: lines.slice(index).join("\n"),
+  };
+}
+
 function snapshotCost(c: Cost): Cost {
   return {
     tier: c.tier as CostTier,
@@ -368,19 +456,28 @@ function snapshotCost(c: Cost): Cost {
   };
 }
 
+function isCrystallisablePhase(
+  phase: SnippetPhase,
+  validation?: AnswerValidation,
+): boolean {
+  if (phase === "commit") return validation?.accepted === true;
+  return phase === "execute";
+}
+
 function phaseArtifactDir(args: {
   baseDir: string;
   sessionId?: string;
   phase: SnippetPhase;
   trajectoryId: string;
+  sourcePath?: string;
 }): string {
   const sessionId = args.sessionId ?? "__adhoc__";
-  if (args.phase === "plan") {
+  if (args.phase === "plan" || args.phase === "run") {
     return path.join(
       args.baseDir,
       "sessions",
       sessionId,
-      "plan",
+      args.phase,
       "attempts",
       args.trajectoryId,
     );
@@ -389,7 +486,7 @@ function phaseArtifactDir(args: {
     args.baseDir,
     "sessions",
     sessionId,
-    "execute",
+    args.phase,
     args.trajectoryId,
   );
 }
@@ -402,9 +499,15 @@ async function writePhaseArtifacts(args: {
   exitCode: number;
   trajectory: TrajectoryRecord;
   cost: Cost;
+  result: unknown;
+  answer?: unknown;
+  validation?: AnswerValidation;
 }): Promise<void> {
   await fsp.mkdir(args.artifactDir, { recursive: true });
-  const sourceName = args.trajectory.phase === "execute" ? "execute.ts" : "source.ts";
+  const sourceName =
+    args.trajectory.phase === "execute" || args.trajectory.phase === "commit"
+      ? `${args.trajectory.phase}.ts`
+      : "source.ts";
   await Promise.all([
     fsp.writeFile(path.join(args.artifactDir, sourceName), args.source, "utf8"),
     fsp.writeFile(path.join(args.artifactDir, "stdout.txt"), args.stdout, "utf8"),
@@ -420,6 +523,9 @@ async function writePhaseArtifacts(args: {
           mode: args.trajectory.mode,
           callPrimitives: args.trajectory.calls.map((call) => call.primitive),
           cost: args.cost,
+          result: args.result,
+          answer: args.answer,
+          validation: args.validation,
         },
         null,
         2,
@@ -432,4 +538,49 @@ async function writePhaseArtifacts(args: {
       "utf8",
     ),
   ]);
+  if (args.trajectory.phase === "commit") {
+    await Promise.all([
+      fsp.writeFile(
+        path.join(args.artifactDir, "answer.json"),
+        `${JSON.stringify(args.answer ?? null, null, 2)}\n`,
+        "utf8",
+      ),
+      fsp.writeFile(
+        path.join(args.artifactDir, "validation.json"),
+        `${JSON.stringify(args.validation ?? null, null, 2)}\n`,
+        "utf8",
+      ),
+      fsp.writeFile(
+        path.join(args.artifactDir, "answer.md"),
+        renderAnswerMarkdown(args.answer, args.validation),
+        "utf8",
+      ),
+      fsp.writeFile(
+        path.join(args.artifactDir, "lineage.json"),
+        `${JSON.stringify(args.trajectory, null, 2)}\n`,
+        "utf8",
+      ),
+    ]);
+  }
+}
+
+function renderAnswerMarkdown(
+  answer: unknown,
+  validation: AnswerValidation | undefined,
+): string {
+  const lines: string[] = ["# datafetch answer", ""];
+  if (validation) {
+    lines.push(`accepted: ${validation.accepted ? "yes" : "no"}`);
+    if (validation.blockers.length > 0) {
+      lines.push("");
+      lines.push("blockers:");
+      for (const blocker of validation.blockers) lines.push(`- ${blocker}`);
+    }
+    lines.push("");
+  }
+  lines.push("```json");
+  lines.push(JSON.stringify(answer ?? null, null, 2));
+  lines.push("```");
+  lines.push("");
+  return lines.join("\n");
 }

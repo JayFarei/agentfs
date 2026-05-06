@@ -15,7 +15,7 @@ import type { Cost } from "../sdk/index.js";
 
 // --- Session context -------------------------------------------------------
 
-export type SnippetPhase = "plan" | "execute";
+export type SnippetPhase = "plan" | "execute" | "run" | "commit";
 
 // The minimum context a snippet evaluator needs to bind `df.*` for the
 // active session: which tenant, which mounts are visible, where the
@@ -43,6 +43,8 @@ export type SnippetRunResult = {
   phase?: SnippetPhase;
   crystallisable?: boolean;
   artifactDir?: string;
+  answer?: unknown;
+  validation?: unknown;
 };
 
 export type SnippetRuntime = {

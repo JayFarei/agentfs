@@ -26,7 +26,7 @@ export type TrajectoryProvenance = {
   functionName?: string;
 };
 
-export type TrajectoryPhase = "plan" | "execute";
+export type TrajectoryPhase = "plan" | "execute" | "run" | "commit";
 
 export type TrajectoryRecord = {
   id: string;
@@ -54,6 +54,8 @@ export type TrajectoryRecord = {
   crystallisable?: boolean;
   sourcePath?: string;
   artifactDir?: string;
+  answer?: unknown;
+  answerValidation?: unknown;
 };
 
 export function atlasfsHome(): string {
@@ -113,6 +115,14 @@ export class TrajectoryRecorder {
 
   setResult(result: unknown): void {
     this.record.result = result;
+  }
+
+  setAnswer(answer: unknown): void {
+    this.record.answer = answer;
+  }
+
+  setAnswerValidation(validation: unknown): void {
+    this.record.answerValidation = validation;
   }
 
   setMode(mode: ResultMode): void {

@@ -43,6 +43,11 @@ datafetch session end <sessionId>
 datafetch session switch --tenant <id> [--mount <id>...]
 datafetch session current
 
+datafetch mount --tenant <id> --dataset <mount-id> --intent '<text>'
+                                      # create one intent workspace
+datafetch run [scripts/scratch.ts]    # exploratory workspace run; writes tmp/runs/N
+datafetch commit [scripts/answer.ts]  # final answer; writes result/
+
 datafetch plan -e '<source>'        # exploratory run; cannot crystallise
 datafetch plan <file>               # exploratory saved trajectory
 
@@ -57,6 +62,10 @@ datafetch apropos <kw>              # semantic search across /lib/ intents
 ```
 
 Resolution order for the active session: `--session <id>` flag, then `DATAFETCH_SESSION` env var, then `$DATAFETCH_HOME/active-session`. `session new` writes the pointer; `session end` clears it if it was active.
+
+Prefer the intent workspace flow for new tasks: `datafetch mount`, `cd` into
+the folder, use `datafetch run` while exploring, then `datafetch commit` once
+`scripts/answer.ts` returns a structured `df.answer(...)`.
 
 ## Hierarchy of reuse — always check higher tiers first
 
@@ -190,24 +199,25 @@ EOF
 
 ## Plan, Then Execute
 
-Use `datafetch plan` to search, sample, inspect available tools, write
-temporary skills/functions, and draft the trajectory. A plan run may be
-broad, but it is not the final answer and it cannot crystallise.
+In an intent workspace, use `datafetch run scripts/scratch.ts` to search,
+sample, inspect available tools, write helper code, and draft the trajectory.
+A run may be broad, but it is not the final answer and it cannot crystallise.
 
-Use `datafetch execute` for the committed trajectory that answers the
-user. The execute source should contain the whole repeatable workflow:
-retrieval calls, deterministic transforms, and any skill-driven agent
-steps. This is the artifact future agents can find, replay, and learn
-from.
+Use `datafetch commit scripts/answer.ts` for the committed trajectory that
+answers the user. The committed source must return `df.answer(...)` and should
+contain the whole repeatable workflow: retrieval calls, deterministic
+transforms, and any skill-driven agent steps. This is the artifact future
+agents can find, replay, and learn from.
 
-Do not answer from plan output. If the plan identified the right shape,
-write or reuse the TypeScript trajectory and run it with
-`datafetch execute`.
+Do not answer from `tmp/runs/N` output. If exploration identified the right
+shape, write or reuse the TypeScript trajectory in `scripts/answer.ts`, run
+`datafetch commit`, and answer from `result/answer.json`.
 
 ## Result envelope
 
-Every `datafetch plan`, `datafetch execute`, and legacy `datafetch tsx`
-run prints the snippet's stdout/stderr, then a separator and the envelope:
+Every `datafetch run`, `datafetch commit`, legacy `datafetch plan` /
+`datafetch execute`, and `datafetch tsx` run prints the snippet's stdout/stderr,
+then a separator and the envelope:
 
 ```
 --- envelope ---
@@ -216,28 +226,28 @@ run prints the snippet's stdout/stderr, then a separator and the envelope:
   "mode": "novel" | "interpreted" | "llm-backed" | "cache" | "compiled",
   "functionName": "<name-of-crystallised-fn-if-any>",
   "callPrimitives": ["db.cases.findExact", "lib.pickFiling", ...],
-  "phase": "plan" | "execute",
+  "phase": "run" | "commit" | "plan" | "execute",
   "crystallisable": true | false,
   "artifactDir": "/path/to/session/artifact",
+  "answer": { "status": "answered" | "partial" | "unsupported", ... },
+  "validation": { "accepted": true | false, "blockers": [...] },
   "cost": { "tier": 0|1|2|3|4, "tokens": {...}, "ms": {...}, "llmCalls": n },
   "exitCode": 0
 }
 ```
 
-`phase: "plan"` and `crystallisable: false` mean exploratory work only.
-`phase: "execute"` and `crystallisable: true` mean the committed run can
+`phase: "run"` and `crystallisable: false` mean exploratory work only.
+`phase: "commit"` and `validation.accepted: true` mean the committed answer can
 be learned from. `mode: "novel"` and `cost.tier: 4` mean a from-scratch
 composition. `mode: "interpreted"` and `cost.tier: 2` mean a crystallised
-`df.lib.<name>` was used. Successful first-time execute compositions
-become candidates for crystallisation — re-run a similar query and the
-next envelope should report `mode: "interpreted"`.
+`df.lib.<name>` was used.
 
 ## Compose your full task in one snippet
 
-The data plane records what runs through `df.*`. If you extract data via `df.db.<coll>.findExact(...)` and then process it outside the committed `datafetch execute` snippet (calling your own LLM, transforming locally, coming back for the next bit), the trajectory will be fragmented and the observer cannot crystallise a useful function from it. Compose the whole committed task in one `execute` snippet whenever you can.
+The data plane records what runs through `df.*`. If you extract data via `df.db.<coll>.findExact(...)` and then process it outside the committed `datafetch commit` script (calling your own LLM, transforming locally, coming back for the next bit), the trajectory will be fragmented and the observer cannot crystallise a useful function from it. Compose the whole committed task in `scripts/answer.ts` whenever you can.
 
 For table-math questions, do not hide the important workflow in ad hoc local
-JavaScript. The committed `datafetch execute` run should call the reusable
+JavaScript. The committed `datafetch commit` run should call the reusable
 chain explicitly: retrieve candidates with `df.db.*`, select the filing with a
 `df.lib.*` helper or learned function, infer the table plan with
 `df.lib.inferTableMathPlan`, and compute with `df.lib.executeTableMath`. Inline

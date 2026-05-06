@@ -56,17 +56,31 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
 
   // 1. Phase-aware execution: legacy trajectories had no phase field, so
   //    keep them eligible. Once a run declares a phase, only committed
-  //    execute artifacts are learnable.
-  if (trajectory.phase !== undefined && trajectory.phase !== "execute") {
+  //    artifacts are learnable. `execute` remains as the legacy committed
+  //    phase; `commit` is the intent-workspace answer gate.
+  if (
+    trajectory.phase !== undefined &&
+    trajectory.phase !== "execute" &&
+    trajectory.phase !== "commit"
+  ) {
     return {
       ok: false,
-      reason: `trajectory.phase is "${trajectory.phase}"; only execute artifacts can crystallise`,
+      reason: `trajectory.phase is "${trajectory.phase}"; only committed artifacts can crystallise`,
+    };
+  }
+  if (
+    trajectory.phase === "commit" &&
+    !answerValidationAccepted(trajectory.answerValidation)
+  ) {
+    return {
+      ok: false,
+      reason: "commit answer validation did not accept the trajectory",
     };
   }
   if (trajectory.crystallisable === false) {
     return {
       ok: false,
-      reason: "trajectory.crystallisable=false; only execute artifacts can crystallise",
+      reason: "trajectory.crystallisable=false; only committed artifacts can crystallise",
     };
   }
 
@@ -175,6 +189,11 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
   }
 
   return { ok: true };
+}
+
+function answerValidationAccepted(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  return (value as { accepted?: unknown }).accepted === true;
 }
 
 // --- Helpers ---------------------------------------------------------------

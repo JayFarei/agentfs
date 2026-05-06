@@ -30,7 +30,7 @@ export type SnippetsAppDeps = {
 const snippetsRequestSchema = v.object({
   sessionId: v.pipe(v.string(), v.minLength(1)),
   source: v.pipe(v.string(), v.minLength(1)),
-  phase: v.optional(v.picklist(["plan", "execute"])),
+  phase: v.optional(v.picklist(["plan", "execute", "run", "commit"])),
   sourcePath: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
@@ -124,6 +124,8 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
       phase,
       crystallisable,
       artifactDir,
+      answer: runResult.answer,
+      validation: runResult.validation,
     });
   });
 

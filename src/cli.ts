@@ -5,6 +5,8 @@
 //
 // New (Phase 2+3+4):
 //   session new|list|resume|end|switch|current   — tenant session lifecycle.
+//   mount --tenant --dataset --intent            — create an intent workspace.
+//   run <file> | commit <file>                   — workspace run/commit loop.
 //   plan -e '<src>' | plan <file>                — exploratory bounded run.
 //   execute -e '<src>' | execute <file>          — committed trajectory run.
 //   tsx -e '<src>' | tsx <file>                  — legacy unphased snippet verb.
@@ -41,6 +43,7 @@ import {
   cmdTsx,
 } from "./cli/agentVerbs.js";
 import { cmdInstallSkill } from "./cli/installSkill.js";
+import { cmdCommit, cmdMount, cmdRun } from "./cli/workspace.js";
 
 loadProjectEnv();
 
@@ -120,6 +123,14 @@ function usage(): void {
       "",
       "  datafetch publish <mount-id> [--uri <atlas-uri>] [--db <db-name>]",
       "    Publish a mount; stream warm-up stage events to stdout.",
+      "",
+      "Intent workspace:",
+      "  datafetch mount --tenant <id> --dataset <mount-id> --intent '<text>' [--path <dir>]",
+      "    Create a VFS-style worktree for one user intent.",
+      "  datafetch run [scripts/scratch.ts]",
+      "    Run exploratory TypeScript; writes tmp/runs/N/.",
+      "  datafetch commit [scripts/answer.ts]",
+      "    Commit final visible TypeScript returning df.answer(...); writes result/.",
       "",
       "Sessions (talks to the server over HTTP):",
       "  datafetch session new --tenant <id> [--mount <id>...] [--json]",
@@ -379,6 +390,15 @@ async function main(): Promise<void> {
   switch (command) {
     case "publish":
       await cmdPublish(positionals, flags);
+      return;
+    case "mount":
+      await cmdMount(positionals, flags);
+      return;
+    case "run":
+      await cmdRun(positionals, flags);
+      return;
+    case "commit":
+      await cmdCommit(positionals, flags);
       return;
     case "connect":
       await cmdConnect(positionals, flags);

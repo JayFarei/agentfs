@@ -8,6 +8,7 @@
 //   df.db.<ident>.findSimilar(query, limit?)    -> Promise<unknown[]>
 //   df.db.<ident>.hybrid(query, opts?)          -> Promise<unknown[]>
 //   df.lib.<name>(input)                         -> Promise<Result<unknown>>
+//   df.answer(envelope)                          -> AnswerEnvelope
 //   df.run(asyncFn)                              -> Promise<Result<unknown>>
 //
 // Every method threads the snippet's shared `DispatchContext` (cost
@@ -31,11 +32,18 @@ import {
 
 import type { SessionCtx } from "../bash/snippetRuntime.js";
 
+import {
+  makeAnswerEnvelope,
+  type AnswerEnvelope,
+  type AnswerInput,
+} from "./answer.js";
+
 // --- Public types ----------------------------------------------------------
 
 export type DfBinding = {
   db: Record<string, DbCollectionBinding>;
   lib: Record<string, (input: unknown) => Promise<Result<unknown>>>;
+  answer(input: AnswerInput): AnswerEnvelope;
   run<T>(fn: () => Promise<T> | T): Promise<Result<T>>;
 };
 
@@ -154,6 +162,9 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
   return {
     db: dbProxy,
     lib: libProxy,
+    answer(input: AnswerInput): AnswerEnvelope {
+      return makeAnswerEnvelope(input);
+    },
     async run<T>(asyncFn: () => Promise<T> | T): Promise<Result<T>> {
       const startedMs = performance.now();
       const value = await asyncFn();
@@ -281,7 +292,7 @@ function boundPlanLimit(
   phase: SessionCtx["phase"],
   limit: number | undefined,
 ): number | undefined {
-  if (phase !== "plan") return limit;
+  if (phase !== "plan" && phase !== "run") return limit;
   return Math.min(limit ?? PLAN_RESULT_LIMIT, PLAN_RESULT_LIMIT);
 }
 
@@ -289,7 +300,7 @@ function boundPlanOpts(
   phase: SessionCtx["phase"],
   opts: { limit?: number } | undefined,
 ): { limit?: number } | undefined {
-  if (phase !== "plan") return opts;
+  if (phase !== "plan" && phase !== "run") return opts;
   return { ...(opts ?? {}), limit: boundPlanLimit(phase, opts?.limit) };
 }
 

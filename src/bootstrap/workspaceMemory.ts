@@ -110,16 +110,16 @@ export async function renderWorkspaceMemory(
     "4. Inspect `_descriptor.json`, `_samples.json`, and `_stats.json` before deciding that a field or category is absent.",
   );
   lines.push("");
-  lines.push("## Phase Contract");
+  lines.push("## Workspace Contract");
   lines.push("");
   lines.push(
-    "- Plan mode is for sampling, broad search, scratch TypeScript, and validating what the dataset can answer.",
+    "- In an intent workspace, `datafetch run scripts/scratch.ts` is for sampling, broad search, scratch TypeScript, and validating what the dataset can answer.",
   );
   lines.push(
-    "- Execute mode is the committed trajectory: one repeatable TypeScript workflow that answers the user and can be learned from.",
+    "- `datafetch commit scripts/answer.ts` is the committed trajectory: one repeatable TypeScript workflow that returns `df.answer(...)` and can be learned from after validation.",
   );
   lines.push(
-    "- Do not answer from plan output. Convert the validated plan into `datafetch execute` source, then answer from that run.",
+    "- Do not answer from `tmp/runs/N` output. Convert the validated plan into `scripts/answer.ts`, commit it, then answer from `result/answer.json`.",
   );
   lines.push(
     "- Make probabilistic steps explicit as reusable `df.lib.*` calls or `fn({ body: agent(...) })` functions with skill markdown sidecars.",
@@ -131,7 +131,7 @@ export async function renderWorkspaceMemory(
   lines.push("- which concepts are explicit fields versus derived categories;");
   lines.push("- whether the sample is representative enough or needs a broader search;");
   lines.push("- how polymorphic rows, missing fields, units, or aliases will be handled;");
-  lines.push("- the exact `df.db.*` and `df.lib.*` calls the execute file will run.");
+  lines.push("- the exact `df.db.*` and `df.lib.*` calls the committed answer file will run.");
   lines.push("");
   lines.push("## Mounted Dataset Surface");
   lines.push("");
@@ -216,7 +216,7 @@ export async function renderWorkspaceMemory(
     }
   }
 
-  lines.push("## Execute File Shape");
+  lines.push("## Committed Answer File Shape");
   lines.push("");
   lines.push("Use flat TypeScript. Keep the full answer path in the file:");
   lines.push("");
@@ -225,12 +225,18 @@ export async function renderWorkspaceMemory(
   lines.push("  const candidates = await df.db.<ident>.search(input.query, { limit: 50 });");
   lines.push("  const picked = await df.lib.<selector>({ question: input.question, candidates });");
   lines.push("  const plan = await df.lib.<planner>({ question: input.question, filing: picked.value });");
-  lines.push("  return df.lib.<executor>({ filing: picked.value, plan: plan.value });");
+  lines.push("  const out = await df.lib.<executor>({ filing: picked.value, plan: plan.value });");
+  lines.push("  return df.answer({");
+  lines.push("    status: \"answered\",");
+  lines.push("    value: out.value,");
+  lines.push("    evidence: [{ ref: picked.value.id ?? picked.value.filename }],");
+  lines.push("    derivation: { operation: \"derived-from-visible-df-calls\" },");
+  lines.push("  });");
   lines.push("}");
   lines.push("```");
   lines.push("");
   lines.push(
-    "If no existing selector/planner/executor fits, write the missing `fn({...})` in `lib/<tenant>/` during plan mode and call it from execute mode.",
+    "If no existing selector/planner/executor fits, write the missing helper in `scripts/helpers.ts` or a typed `fn({...})` in `lib/<tenant>/`, then call it from `scripts/answer.ts` and commit.",
   );
   lines.push("");
 

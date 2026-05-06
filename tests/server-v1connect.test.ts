@@ -132,7 +132,8 @@ describe("createConnectApp — POST /", () => {
     expect(agents).toContain("Datafetch Workspace Memory");
     expect(agents).toContain("df.db.finqaCases");
     expect(agents).toContain("financial question answering");
-    expect(agents).toContain("Execute mode is the committed trajectory");
+    expect(agents).toContain("datafetch commit scripts/answer.ts");
+    expect(agents).toContain("returns `df.answer(...)`");
 
     expect(await readFile(path.join(baseDir, "df.d.ts"), "utf8")).toContain(
       "declare const df",

@@ -26,6 +26,10 @@ function buildTrajectory(
     ...(partial.crystallisable !== undefined ? { crystallisable: partial.crystallisable } : {}),
     ...(partial.sourcePath !== undefined ? { sourcePath: partial.sourcePath } : {}),
     ...(partial.artifactDir !== undefined ? { artifactDir: partial.artifactDir } : {}),
+    ...(partial.answer !== undefined ? { answer: partial.answer } : {}),
+    ...(partial.answerValidation !== undefined
+      ? { answerValidation: partial.answerValidation }
+      : {}),
   };
 }
 
@@ -126,7 +130,7 @@ describe("shouldCrystallise", () => {
     if (!out.ok) expect(out.reason).toContain("composition pattern");
   });
 
-  it("rejects plan-phase trajectories because only execute artifacts can crystallise", () => {
+  it("rejects plan-phase trajectories because only committed artifacts can crystallise", () => {
     const traj = buildTrajectory({
       calls: VALID_CALLS,
       mode: "novel",
@@ -139,7 +143,40 @@ describe("shouldCrystallise", () => {
       existing: EMPTY_LIB,
     });
     expect(out.ok).toBe(false);
-    if (!out.ok) expect(out.reason).toContain("execute");
+    if (!out.ok) expect(out.reason).toContain("committed");
+  });
+
+  it("approves commit-phase trajectories only after answer validation accepts", () => {
+    const traj = buildTrajectory({
+      calls: VALID_CALLS,
+      mode: "novel",
+      phase: "commit",
+      crystallisable: true,
+      answerValidation: { accepted: true },
+    });
+    const out = shouldCrystallise({
+      trajectory: traj,
+      shapeHash: "commit",
+      existing: EMPTY_LIB,
+    });
+    expect(out).toEqual({ ok: true });
+  });
+
+  it("rejects commit-phase trajectories when answer validation fails", () => {
+    const traj = buildTrajectory({
+      calls: VALID_CALLS,
+      mode: "novel",
+      phase: "commit",
+      crystallisable: false,
+      answerValidation: { accepted: false },
+    });
+    const out = shouldCrystallise({
+      trajectory: traj,
+      shapeHash: "commit",
+      existing: EMPTY_LIB,
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toContain("validation");
   });
 
   it("rejects trajectories that already call a crystallised tool", () => {

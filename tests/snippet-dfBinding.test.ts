@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 
 import { buildDf } from "../src/snippet/dfBinding.js";
+import { isAnswerEnvelope } from "../src/snippet/answer.js";
 import {
   InMemoryMountRuntimeRegistry,
   makeMountRuntime,
@@ -133,5 +134,28 @@ describe("buildDf — df.db.<ident>", () => {
     expect(ctx.cost.tier).toBeGreaterThanOrEqual(2);
     expect(ctx.cost.llmCalls).toBe(0);
     expect(ctx.cost.ms.cold).toBeGreaterThanOrEqual(0);
+  });
+
+  it("creates marked structured answer envelopes via df.answer", () => {
+    const df = buildDf({
+      sessionCtx: { tenantId: "t", mountIds: [], baseDir: "/tmp/x" },
+      dispatchCtx: buildDispatchCtx(),
+    });
+
+    const answer = df.answer({
+      status: "answered",
+      value: 42,
+      evidence: [{ ref: "case-1" }],
+      derivation: { operation: "constant" },
+    });
+
+    expect(answer).toMatchObject({
+      status: "answered",
+      value: 42,
+      evidence: [{ ref: "case-1" }],
+      derivation: { operation: "constant" },
+    });
+    expect(answer.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(isAnswerEnvelope(answer)).toBe(true);
   });
 });
