@@ -321,6 +321,12 @@ function renderStepExpression(
       if (q === null) return null;
       args.push(q);
       if (o !== null) args.push(o);
+    } else if (step.callShape === "positional-filter-limit") {
+      const f = bindingExpr(step.inputBindings["filter"], externalParams);
+      const l = bindingExpr(step.inputBindings["limit"], externalParams);
+      if (f === null) return null;
+      if (l !== null) args.push(f, l);
+      else args.push(f);
     } else {
       const obj = renderBindingObject(step.inputBindings, externalParams);
       if (obj === null) return null;

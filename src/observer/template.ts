@@ -69,10 +69,14 @@ export type TemplateStep = {
   // final return.
   outputName: string;
   // Optional. Some calls have a flat positional argument shape (e.g.
-  // findSimilar(query, limit)) where the recorded input is `{query, opts}`
-  // or `{query, limit}`. The authoring step inspects this hint to pick
-  // the call shape.
-  callShape: "positional-query-limit" | "positional-query-opts" | "single-arg";
+  // findSimilar(query, limit)) where the recorded input is `{query, opts}`,
+  // `{query, limit}`, or `{filter, limit}`. The authoring step inspects
+  // this hint to pick the call shape.
+  callShape:
+    | "positional-query-limit"
+    | "positional-query-opts"
+    | "positional-filter-limit"
+    | "single-arg";
 };
 
 export type CallTemplate = {
@@ -332,7 +336,8 @@ function inferTypeLabel(value: unknown): TypeLabel {
 // Recognise three common substrate-call shapes:
 //   - findSimilar {query, limit?}  -> positional-query-limit
 //   - search/hybrid {query, opts?} -> positional-query-opts
-//   - {filter, limit} or anything else -> single-arg
+//   - findExact {filter, limit?}   -> positional-filter-limit
+//   - anything else -> single-arg
 //
 // The authoring step uses this to pick the right call expression. Lib
 // calls always use single-arg shape (the fn() factory takes one input
@@ -358,6 +363,13 @@ function inferCallShape(call: PrimitiveCallRecord): TemplateStep["callShape"] {
     (keys.size === 1 || (keys.has("opts") && keys.size === 2))
   ) {
     return "positional-query-opts";
+  }
+  if (
+    method === "findExact" &&
+    keys.has("filter") &&
+    (keys.size === 1 || (keys.has("limit") && keys.size === 2))
+  ) {
+    return "positional-filter-limit";
   }
   return "single-arg";
 }

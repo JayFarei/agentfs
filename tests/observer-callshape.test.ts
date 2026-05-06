@@ -45,5 +45,19 @@ describe("extractTemplate db call shape", () => {
       ]),
     );
     expect(search.steps[0]!.callShape).toBe("positional-query-opts");
+
+    const exact = extractTemplate(
+      buildTrajectory([
+        {
+          index: 0,
+          primitive: "db.finqaCases.findExact",
+          input: { filter: { question: "coal revenue" } },
+          output: [{ filename: "UNP/2016/page_52.pdf" }],
+          startedAt: ISO,
+          durationMs: 0,
+        },
+      ]),
+    );
+    expect(exact.steps[0]!.callShape).toBe("positional-filter-limit");
   });
 });
