@@ -117,16 +117,19 @@ export async function authorFunction(
     };
   }
 
-  // Refresh the typed API manifest so the newly-crystallised tool shows
-  // up in df.d.ts on the next read. Lazy import so the observer module
-  // doesn't pull a server dependency at load time (the observer also
-  // runs from runDemo and the in-process __smoke__ harness).
+  // Refresh the typed API manifest and workspace memory so the newly
+  // crystallised tool shows up in df.d.ts / AGENTS.md on the next read.
+  // Lazy imports keep the observer module light for runDemo and smoke tests.
   void (async () => {
     try {
       const { regenerateManifest } = await import(
         "../server/manifest.js"
       );
+      const { regenerateWorkspaceMemory } = await import(
+        "../bootstrap/workspaceMemory.js"
+      );
       await regenerateManifest({ baseDir, tenantId });
+      await regenerateWorkspaceMemory({ baseDir, tenantId });
     } catch {
       // best-effort
     }

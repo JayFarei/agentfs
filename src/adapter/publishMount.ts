@@ -48,6 +48,7 @@ import {
   getMountRuntimeRegistry,
   makeMountRuntime,
 } from "./runtime.js";
+import { regenerateWorkspaceMemory } from "../bootstrap/workspaceMemory.js";
 
 // --- Public types ----------------------------------------------------------
 
@@ -168,6 +169,7 @@ export async function publishMount(
         );
         registered = true;
       }
+      await regenerateWorkspaceMemory({ baseDir, mountIds: [args.id] });
       return cachedResult;
     } catch (err) {
       resultError = err instanceof Error ? err : new Error(String(err));

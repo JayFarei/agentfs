@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -46,6 +46,44 @@ describe("createConnectApp — POST /", () => {
     });
   }
 
+  async function writeMountInventory(mountId: string): Promise<void> {
+    const mountRoot = path.join(baseDir, "mounts", mountId);
+    const collRoot = path.join(mountRoot, "finqa_cases");
+    await mkdir(collRoot, { recursive: true });
+    await writeFile(
+      path.join(mountRoot, "_inventory.json"),
+      JSON.stringify({
+        mountId,
+        substrate: "atlas",
+        generatedAt: "2026-05-06T00:00:00.000Z",
+        collections: [
+          {
+            ident: "finqaCases",
+            name: "finqa_cases",
+            rows: 8281,
+            fingerprint: "sha256:test",
+          },
+        ],
+      }),
+      "utf8",
+    );
+    await writeFile(
+      path.join(collRoot, "_descriptor.json"),
+      JSON.stringify({
+        kind: "documents",
+        cardinality: { rows: 8281 },
+        fields: {
+          question: { role: "text", presence: 1, embeddable: true },
+          answer: { role: "number", presence: 0.9 },
+          filing: { role: "text", presence: 0.8 },
+        },
+        affordances: ["findExact", "search", "findSimilar", "hybrid"],
+        polymorphic_variants: null,
+      }),
+      "utf8",
+    );
+  }
+
   it("rejects invalid JSON with 400", async () => {
     const app = createConnectApp({ baseDir, store });
     const res = await postConnect(app, "not json{");
@@ -79,6 +117,29 @@ describe("createConnectApp — POST /", () => {
     // Persisted to disk before response.
     const onDisk = await store.loadSession(record.sessionId);
     expect(onDisk).toEqual(record);
+  });
+
+  it("regenerates workspace memory alongside the typed manifest", async () => {
+    await writeMountInventory("finqa-2024");
+    const app = createConnectApp({ baseDir, store });
+    const res = await postConnect(app, {
+      tenantId: "test-jay",
+      mountIds: ["finqa-2024"],
+    });
+    expect(res.status).toBe(200);
+
+    const agents = await readFile(path.join(baseDir, "AGENTS.md"), "utf8");
+    expect(agents).toContain("Datafetch Workspace Memory");
+    expect(agents).toContain("df.db.finqaCases");
+    expect(agents).toContain("financial question answering");
+    expect(agents).toContain("Execute mode is the committed trajectory");
+
+    expect(await readFile(path.join(baseDir, "df.d.ts"), "utf8")).toContain(
+      "declare const df",
+    );
+    const alias = path.join(baseDir, "CLAUDE.md");
+    expect((await lstat(alias)).isSymbolicLink()).toBe(true);
+    expect(await readlink(alias)).toBe("AGENTS.md");
   });
 
   it("defaults mountIds to all currently registered mounts when omitted", async () => {

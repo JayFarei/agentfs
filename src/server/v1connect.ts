@@ -11,6 +11,7 @@ import { Hono } from "hono";
 import * as v from "valibot";
 
 import { getMountRuntimeRegistry } from "../adapter/runtime.js";
+import { regenerateWorkspaceMemory } from "../bootstrap/workspaceMemory.js";
 import { defaultBaseDir } from "../paths.js";
 
 import { regenerateManifest } from "./manifest.js";
@@ -64,11 +65,19 @@ export function createConnectApp(deps: ConnectAppDeps = {}): Hono {
       mountIds,
     });
 
-    // Regenerate the typed API manifest for this tenant. Best-effort;
-    // never blocks the connect response if it fails.
-    void regenerateManifest({
-      baseDir: deps.baseDir ?? defaultBaseDir(),
+    const baseDir = deps.baseDir ?? defaultBaseDir();
+
+    // Regenerate the typed API manifest and workspace memory for this tenant.
+    // Both helpers swallow/log their own errors, but awaiting them prevents
+    // tests and short-lived callers from racing cleanup against late writes.
+    await regenerateManifest({
+      baseDir,
       tenantId: parsed.output.tenantId,
+    });
+    await regenerateWorkspaceMemory({
+      baseDir,
+      tenantId: parsed.output.tenantId,
+      mountIds,
     });
 
     return c.json(record);

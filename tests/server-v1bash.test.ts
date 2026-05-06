@@ -114,6 +114,30 @@ describe("createBashApp", () => {
     expect(body.stdout).toContain("demo-mount");
   });
 
+  it("seeds the VFS root with the server-maintained AGENTS.md when present", async () => {
+    await writeFile(
+      path.join(baseDir, "AGENTS.md"),
+      "# Generated Workspace Memory\n\nvalidated plan\n",
+      "utf8",
+    );
+    const app = createBashApp({
+      mountReader,
+      snippetRuntime: new StubSnippetRuntime(),
+      libraryResolver: null,
+      baseDir,
+    });
+    const res = await postBash(app, {
+      sessionId: "sess-agents",
+      tenantId: "t",
+      mountIds: ["demo-mount"],
+      command: "cat /AGENTS.md && cat /CLAUDE.md",
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { stdout: string };
+    expect(body.stdout).toContain("Generated Workspace Memory");
+    expect(body.stdout).toContain("validated plan");
+  });
+
   it("reuses the cached session across calls with the same sessionId", async () => {
     const app = createBashApp({
       mountReader,

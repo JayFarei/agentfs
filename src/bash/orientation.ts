@@ -4,7 +4,7 @@
 // the agent's first `cat /AGENTS.md` returns useful content. Three scopes
 // per kb/prd/design.md §4.2:
 //
-//   /AGENTS.md                              workspace orientation (~600 tokens)
+//   /AGENTS.md + /CLAUDE.md                 workspace orientation (~600 tokens)
 //   /usr/share/datafetch/skill/SKILL.md     SDK skill bundle
 //   /README.md                              short project description
 //   /package.json                           plausible Node project metadata

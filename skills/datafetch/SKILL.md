@@ -11,9 +11,10 @@ Your job, when given a data question: orient, look for an existing function, cal
 
 ## Workspace layout
 
-The on-disk root is `$DATAFETCH_HOME` (default `~/.atlasfs` or the cwd's `.atlasfs/`). Read this first if it's present:
+The on-disk root is `$DATAFETCH_HOME` (default `~/.atlasfs` or the cwd's `.atlasfs/`). Read these first if present:
 
-- `$DATAFETCH_HOME/AGENTS.md` — workspace orientation (auto-generated).
+- `$DATAFETCH_HOME/AGENTS.md` — server-maintained workspace memory for this dataset.
+- `$DATAFETCH_HOME/CLAUDE.md` — compatibility alias for agents that look for Claude project instructions first.
 - `$DATAFETCH_HOME/lib/<tenant>/<name>.ts` — your tenant-private typed functions.
 - `$DATAFETCH_HOME/lib/__seed__/<name>.ts` — fallback seeds shared across tenants.
 - `$DATAFETCH_HOME/mounts/<mount-id>/` — substrate-derived files for each mount (per-collection schema modules, samples, descriptors).

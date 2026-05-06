@@ -361,15 +361,17 @@ export class BashSession {
     mounts.push({ mountPoint: `/tmp`, filesystem: new InMemoryFs() });
 
     // 4. Compose the MountableFs. Base is an InMemoryFs that holds
-    //    orientation files at the root (/AGENTS.md, /README.md,
-    //    /package.json) and the SDK skill bundle.
+    //    orientation files at the root (/AGENTS.md, /CLAUDE.md,
+    //    /README.md, /package.json) and the SDK skill bundle.
     const base = new InMemoryFs();
     const orientationCtx: OrientationContext = {
       tenantId: this.tenantId,
       mountIds: this.mountIds,
       libFunctions: await this.snapshotLibFunctions(lib.fs),
     };
-    await base.writeFile("/AGENTS.md", renderAgentsMd(orientationCtx));
+    const agentsMd = await this.readWorkspaceAgentsMd(orientationCtx);
+    await base.writeFile("/AGENTS.md", agentsMd);
+    await base.writeFile("/CLAUDE.md", agentsMd);
     await base.writeFile("/README.md", renderRootReadme());
     await base.writeFile("/package.json", renderPackageJson(orientationCtx));
     await base.mkdir("/usr/share/datafetch/skill", { recursive: true });
@@ -431,6 +433,16 @@ export class BashSession {
         .sort();
     } catch {
       return [];
+    }
+  }
+
+  private async readWorkspaceAgentsMd(
+    orientationCtx: OrientationContext,
+  ): Promise<string> {
+    try {
+      return await fsp.readFile(path.join(this.baseDir, "AGENTS.md"), "utf8");
+    } catch {
+      return renderAgentsMd(orientationCtx);
     }
   }
 }
