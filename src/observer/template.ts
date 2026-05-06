@@ -330,8 +330,8 @@ function inferTypeLabel(value: unknown): TypeLabel {
 }
 
 // Recognise three common substrate-call shapes:
-//   - {query, limit}  -> positional-query-limit
-//   - {query, opts}   -> positional-query-opts
+//   - findSimilar {query, limit?}  -> positional-query-limit
+//   - search/hybrid {query, opts?} -> positional-query-opts
 //   - {filter, limit} or anything else -> single-arg
 //
 // The authoring step uses this to pick the right call expression. Lib
@@ -344,10 +344,19 @@ function inferCallShape(call: PrimitiveCallRecord): TemplateStep["callShape"] {
   }
   const obj = call.input as Record<string, unknown>;
   const keys = new Set(Object.keys(obj));
-  if (keys.has("query") && keys.has("limit") && keys.size === 2) {
+  const method = call.primitive.split(".")[2];
+  if (
+    method === "findSimilar" &&
+    keys.has("query") &&
+    (keys.size === 1 || (keys.has("limit") && keys.size === 2))
+  ) {
     return "positional-query-limit";
   }
-  if (keys.has("query") && keys.has("opts") && keys.size === 2) {
+  if (
+    (method === "search" || method === "hybrid") &&
+    keys.has("query") &&
+    (keys.size === 1 || (keys.has("opts") && keys.size === 2))
+  ) {
     return "positional-query-opts";
   }
   return "single-arg";
