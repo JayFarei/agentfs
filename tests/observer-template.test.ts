@@ -153,8 +153,137 @@ describe("extractTemplate", () => {
     expect(a.shapeHash).toBe(b.shapeHash);
     expect(a.shapeHash).toMatch(/^[0-9a-f]{8}$/);
     expect(a.name).toMatch(/^crystallise_[a-zA-Z0-9_]+_[0-9a-f]{8}$/);
-    // Topic should be derived from the lib.* primitive name.
-    expect(a.topic).toContain("pickfiling");
+    // Topic should be semantic, not tied to the first lib.* primitive name.
+    expect(a.topic).toBe("filing_question");
+  });
+
+  it("names table-math range trajectories by the task shape", () => {
+    const traj = buildTrajectory(
+      [
+        {
+          index: 0,
+          primitive: "db.cases.findSimilar",
+          input: { query: "range of chemicals revenue 2014 2018", limit: 5 },
+          output: [{ a: 1 }],
+          startedAt: ISO,
+          durationMs: 0,
+        },
+        {
+          index: 1,
+          primitive: "lib.pickFiling",
+          input: { question: "range of chemicals revenue 2014 2018", candidates: [{ a: 1 }] },
+          output: { a: 1 },
+          startedAt: ISO,
+          durationMs: 0,
+        },
+        {
+          index: 2,
+          primitive: "lib.inferTableMathPlan",
+          input: { question: "range of chemicals revenue 2014 2018", filing: { a: 1 } },
+          output: { operation: "range" },
+          startedAt: ISO,
+          durationMs: 0,
+        },
+        {
+          index: 3,
+          primitive: "lib.executeTableMath",
+          input: { filing: { a: 1 }, plan: { operation: "range" } },
+          output: { roundedAnswer: 700 },
+          startedAt: ISO,
+          durationMs: 0,
+        },
+      ],
+      { question: "what is the range of chemicals revenue between 2014 and 2018" },
+    );
+    const tpl = extractTemplate(traj);
+    expect(tpl.topic).toBe("range_table_metric");
+    expect(tpl.name).toMatch(/^crystallise_range_table_metric_[0-9a-f]{8}$/);
+  });
+
+  it("keeps selected search results internal instead of exposing filing as input", () => {
+    const picked = {
+      filename: "UNP/2016/page_52.pdf",
+      question: "what is the mathematical range for chemical revenue",
+    };
+    const other = {
+      filename: "UNP/2017/page_12.pdf",
+      question: "unrelated filing",
+    };
+    const plan = { operation: "range", years: [2014, 2016] };
+    const traj = buildTrajectory(
+      [
+        {
+          index: 0,
+          primitive: "db.finqaCases.search",
+          input: { query: "range chemicals revenue 2014", opts: { limit: 5 } },
+          output: [picked, other],
+          startedAt: ISO,
+          durationMs: 0,
+        },
+        {
+          index: 1,
+          primitive: "lib.inferTableMathPlan",
+          input: {
+            question: "What is the range of chemicals revenue from 2014-2016?",
+            filing: picked,
+          },
+          output: plan,
+          startedAt: ISO,
+          durationMs: 0,
+        },
+        {
+          index: 2,
+          primitive: "lib.executeTableMath",
+          input: { filing: picked, plan },
+          output: { roundedAnswer: 190 },
+          startedAt: ISO,
+          durationMs: 0,
+        },
+      ],
+      { question: "What is the range of chemicals revenue from 2014-2016?" },
+    );
+
+    const tpl = extractTemplate(traj);
+
+    expect(tpl.parameters.map((p) => p.name)).not.toContain("filing");
+    expect(tpl.steps[1]!.inputBindings["filing"]).toEqual({
+      kind: "ref",
+      ref: "out0[0]",
+    });
+    expect(tpl.steps[2]!.inputBindings["filing"]).toEqual({
+      kind: "ref",
+      ref: "out0[0]",
+    });
+  });
+
+  it("recognises query-only db retrieval inputs as positional calls", () => {
+    const similar = extractTemplate(
+      buildTrajectory([
+        {
+          index: 0,
+          primitive: "db.finqaCases.findSimilar",
+          input: { query: "coal revenue" },
+          output: [{ filename: "UNP/2016/page_52.pdf" }],
+          startedAt: ISO,
+          durationMs: 0,
+        },
+      ]),
+    );
+    expect(similar.steps[0]!.callShape).toBe("positional-query-limit");
+
+    const search = extractTemplate(
+      buildTrajectory([
+        {
+          index: 0,
+          primitive: "db.finqaCases.search",
+          input: { query: "coal revenue" },
+          output: [{ filename: "UNP/2016/page_52.pdf" }],
+          startedAt: ISO,
+          durationMs: 0,
+        },
+      ]),
+    );
+    expect(search.steps[0]!.callShape).toBe("positional-query-opts");
   });
 
   it("a different primitive order yields a different shapeHash", () => {

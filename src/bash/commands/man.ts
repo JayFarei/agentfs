@@ -21,48 +21,19 @@
 
 import { defineCommand, type Command } from "just-bash";
 
-import type { Fn, FnSpec, LibraryResolver } from "../../sdk/index.js";
 import {
-  renderSchemaBlock,
-  renderSynopsisArg,
-} from "../../sdk/schemaRender.js";
+  describeLibraryFunction,
+  renderManPage,
+} from "../../discovery/librarySearch.js";
+import type { LibraryResolver } from "../../sdk/index.js";
 
 // --- Inputs needed at construction -----------------------------------------
 
 export type ManCommandDeps = {
+  baseDir: string;
   resolveTenant: () => string;
   resolveLibrary: () => LibraryResolver | null;
 };
-
-// --- Schema introspection --------------------------------------------------
-
-// Render a valibot schema as a one-line type string for the man-page body.
-// We don't try to render every valibot construct; we cover the shapes
-// Schema renderers are shared with the CLI's man verb and the server's
-// df.d.ts manifest generator. See src/sdk/schemaRender.ts.
-
-// --- Page rendering --------------------------------------------------------
-
-function renderManPage(name: string, spec: FnSpec<unknown, unknown>): string {
-  const lines: string[] = [];
-  lines.push("NAME");
-  lines.push(`       ${name} - ${spec.intent}`);
-  lines.push("SYNOPSIS");
-  lines.push(`       df.lib.${name}(${renderSynopsisArg(spec.input)})`);
-  lines.push("INPUT SCHEMA");
-  lines.push(...renderSchemaBlock(spec.input));
-  lines.push("OUTPUT");
-  lines.push(...renderSchemaBlock(spec.output));
-  if (spec.examples.length > 0) {
-    lines.push("EXAMPLES");
-    for (const example of spec.examples) {
-      const inputJson = JSON.stringify(example.input);
-      const outputJson = JSON.stringify(example.output);
-      lines.push(`       df.lib.${name}(${inputJson}) → ${outputJson}`);
-    }
-  }
-  return `${lines.join("\n")}\n`;
-}
 
 // --- Command factory -------------------------------------------------------
 
@@ -87,9 +58,14 @@ export function createManCommand(deps: ManCommandDeps): Command {
     }
 
     const tenant = deps.resolveTenant();
-    let entry: Fn<unknown, unknown> | null;
+    let entry;
     try {
-      entry = await resolver.resolve(tenant, name);
+      entry = await describeLibraryFunction({
+        baseDir: deps.baseDir,
+        tenantId: tenant,
+        resolver,
+        name,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return {
@@ -108,7 +84,7 @@ export function createManCommand(deps: ManCommandDeps): Command {
     }
 
     return {
-      stdout: renderManPage(name, entry.spec),
+      stdout: renderManPage(entry),
       stderr: "",
       exitCode: 0,
     };

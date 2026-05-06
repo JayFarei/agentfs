@@ -54,6 +54,7 @@ export type BuildDfOpts = {
 // --- buildDf ----------------------------------------------------------------
 
 const TIER_SUBSTRATE: CostTier = 2;
+const PLAN_RESULT_LIMIT = 10;
 
 export function buildDf(opts: BuildDfOpts): DfBinding {
   const { sessionCtx, dispatchCtx } = opts;
@@ -90,6 +91,7 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
           mountId: entry.mountId,
           collectionName: entry.collectionName,
           dispatchCtx,
+          phase: sessionCtx.phase,
         });
       },
     },
@@ -196,10 +198,11 @@ type DbBindingArgs = {
   mountId: string;
   collectionName: string;
   dispatchCtx: DispatchContext;
+  phase?: SessionCtx["phase"];
 };
 
 function makeDbCollectionBinding(args: DbBindingArgs): DbCollectionBinding {
-  const { ident, mountId, collectionName, dispatchCtx } = args;
+  const { ident, mountId, collectionName, dispatchCtx, phase } = args;
   // Resolve the live handle lazily per call. The mount runtime registry
   // returns a long-lived adapter keyed by mountId; calling
   // `runtime.collection(name)` is cheap (no substrate roundtrip).
@@ -244,30 +247,50 @@ function makeDbCollectionBinding(args: DbBindingArgs): DbCollectionBinding {
 
   return {
     async findExact(filter, limit) {
+      const boundedLimit = boundPlanLimit(phase, limit);
       return run(
         `db.${ident}.findExact`,
-        { filter, limit },
-        async (h) => h.findExact(filter, limit),
+        { filter, limit: boundedLimit },
+        async (h) => h.findExact(filter, boundedLimit),
       );
     },
     async search(query, opts) {
-      return run(`db.${ident}.search`, { query, opts }, async (h) =>
-        h.search(query, opts),
+      const boundedOpts = boundPlanOpts(phase, opts);
+      return run(`db.${ident}.search`, { query, opts: boundedOpts }, async (h) =>
+        h.search(query, boundedOpts),
       );
     },
     async findSimilar(query, limit) {
+      const boundedLimit = boundPlanLimit(phase, limit);
       return run(
         `db.${ident}.findSimilar`,
-        { query, limit },
-        async (h) => h.findSimilar(query, limit),
+        { query, limit: boundedLimit },
+        async (h) => h.findSimilar(query, boundedLimit),
       );
     },
     async hybrid(query, opts) {
-      return run(`db.${ident}.hybrid`, { query, opts }, async (h) =>
-        h.hybrid(query, opts),
+      const boundedOpts = boundPlanOpts(phase, opts);
+      return run(`db.${ident}.hybrid`, { query, opts: boundedOpts }, async (h) =>
+        h.hybrid(query, boundedOpts),
       );
     },
   };
+}
+
+function boundPlanLimit(
+  phase: SessionCtx["phase"],
+  limit: number | undefined,
+): number | undefined {
+  if (phase !== "plan") return limit;
+  return Math.min(limit ?? PLAN_RESULT_LIMIT, PLAN_RESULT_LIMIT);
+}
+
+function boundPlanOpts(
+  phase: SessionCtx["phase"],
+  opts: { limit?: number } | undefined,
+): { limit?: number } | undefined {
+  if (phase !== "plan") return opts;
+  return { ...(opts ?? {}), limit: boundPlanLimit(phase, opts?.limit) };
 }
 
 function chargeSubstrate(ctx: DispatchContext, elapsedMs: number): void {

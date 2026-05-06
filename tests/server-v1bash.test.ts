@@ -163,4 +163,27 @@ describe("createBashApp", () => {
     const sb = (await second.json()) as { stdout: string };
     expect(sb.stdout).toContain("second");
   });
+
+  it("treats mounted /db filesystems as read-only", async () => {
+    const app = createBashApp({
+      mountReader,
+      snippetRuntime: new StubSnippetRuntime(),
+      libraryResolver: null,
+      baseDir,
+    });
+    const res = await postBash(app, {
+      sessionId: "sess-readonly",
+      tenantId: "t",
+      mountIds: ["demo-mount"],
+      command: "echo x > /db/demo-mount/new.ts",
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      stdout: string;
+      stderr: string;
+      exitCode: number;
+    };
+    expect(body.exitCode).not.toBe(0);
+    expect(`${body.stdout}\n${body.stderr}`).toMatch(/EROFS|read-only/i);
+  });
 });

@@ -16,21 +16,23 @@
 // produce a second crystallised copy.
 //
 // Heuristics applied (all must pass):
-//   1. >= 2 distinct primitive calls in the trajectory.
-//   2. The trajectory's `errored` flag is false AND no call has a
+//   1. Phase metadata, when present, must identify a committed execute
+//      artifact. Plan attempts are exploration and cannot crystallise.
+//   2. >= 2 distinct primitive calls in the trajectory.
+//   3. The trajectory's `errored` flag is false AND no call has a
 //      thrown-error output (no `error`/`errors`/`stack` key on its
 //      output). Error-path detection lives on the trajectory's `errored`
 //      field, NOT on `mode` — per PRD §8.1, `mode: "novel"` means
 //      "first-time successful ad-hoc composition" (tier 4).
-//   3. Mode is "novel" (first-time composition we want to crystallise)
+//   4. Mode is "novel" (first-time composition we want to crystallise)
 //      or "interpreted" (already-composed; usually filtered by the
 //      shape-hash dedup below). LLM-backed / cache trajectories are
 //      excluded per D-015 — the observer crystallises composition
 //      patterns, not standalone LLM functions or cached results.
-//   4. The first call is a substrate retrieval (`db.*`) returning a list,
+//   5. The first call is a substrate retrieval (`db.*`) returning a list,
 //      and at least one subsequent call is a `lib.*` whose input
 //      references the first call's output (data-flow check).
-//   5. The shape-hash isn't already represented in the on-disk
+//   6. The shape-hash isn't already represented in the on-disk
 //      /lib/<tenant>/ overlay (avoid re-crystallising).
 
 import type { TrajectoryRecord } from "../sdk/index.js";
@@ -52,7 +54,23 @@ export type ShouldCrystalliseArgs = {
 export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
   const { trajectory, shapeHash, existing } = args;
 
-  // 1. >= 2 distinct primitive calls.
+  // 1. Phase-aware execution: legacy trajectories had no phase field, so
+  //    keep them eligible. Once a run declares a phase, only committed
+  //    execute artifacts are learnable.
+  if (trajectory.phase !== undefined && trajectory.phase !== "execute") {
+    return {
+      ok: false,
+      reason: `trajectory.phase is "${trajectory.phase}"; only execute artifacts can crystallise`,
+    };
+  }
+  if (trajectory.crystallisable === false) {
+    return {
+      ok: false,
+      reason: "trajectory.crystallisable=false; only execute artifacts can crystallise",
+    };
+  }
+
+  // 2. >= 2 distinct primitive calls.
   if (trajectory.calls.length < 2) {
     return {
       ok: false,
@@ -67,7 +85,7 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     };
   }
 
-  // 2. The snippet didn't error AND no recorded call has an error-shaped
+  // 3. The snippet didn't error AND no recorded call has an error-shaped
   //    output. Error-path detection is on `trajectory.errored`, NOT on
   //    `mode` — per PRD §8.1 a successful first-time composition is
   //    `mode: "novel"`, tier 4.
@@ -86,7 +104,7 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     }
   }
 
-  // 3. Mode must be a composition pattern. "novel" (first-time successful
+  // 4. Mode must be a composition pattern. "novel" (first-time successful
   //    ad-hoc composition) is the headline crystallisation target;
   //    "interpreted" trajectories are also accepted but the shape-hash
   //    dedup below typically filters them. LLM-backed / cache /compiled
@@ -98,7 +116,22 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     };
   }
 
-  // 4. db.* call producing a list; at least one lib.* call after it whose
+  // Interpreted trajectories that already dispatched through a crystallised
+  // wrapper should reinforce that wrapper, not crystallise a second wrapper
+  // around it. The current generated names use `crystallise_*`; once names
+  // become fully semantic this check should move to the library metadata
+  // layer, but this protects the observed nested-wrapper failure now.
+  const crystallisedCall = trajectory.calls.find((c) =>
+    /^lib\.crystallise_/.test(c.primitive),
+  );
+  if (crystallisedCall) {
+    return {
+      ok: false,
+      reason: `trajectory already calls crystallised tool ${crystallisedCall.primitive}; treat as reuse evidence, not a new template`,
+    };
+  }
+
+  // 5. db.* call producing a list; at least one lib.* call after it whose
   //    input cites the prior call's output (loose data-flow heuristic).
   const firstDbIdx = trajectory.calls.findIndex((c) =>
     c.primitive.startsWith("db."),
@@ -131,7 +164,7 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     };
   }
 
-  // 5. Shape-hash de-dup. The existing snapshot is built from the on-disk
+  // 6. Shape-hash de-dup. The existing snapshot is built from the on-disk
   //    /lib/<tenant>/*.ts files; any file whose body comment carries the
   //    same `@shape-hash:` tag means we already crystallised this shape.
   if (existing.shapeHashes.has(shapeHash)) {

@@ -5,7 +5,9 @@
 //
 // New (Phase 2+3+4):
 //   session new|list|resume|end|switch|current   — tenant session lifecycle.
-//   tsx -e '<src>' | tsx <file>                  — primary agent execution verb.
+//   plan -e '<src>' | plan <file>                — exploratory bounded run.
+//   execute -e '<src>' | execute <file>          — committed trajectory run.
+//   tsx -e '<src>' | tsx <file>                  — legacy unphased snippet verb.
 //   man <fn>                                     — render structured docs.
 //   apropos <kw>                                 — semantic search across /lib/.
 //   install-skill                                — copy SKILL.md into ~/.claude/skills/.
@@ -31,7 +33,13 @@ import { installSnippetRuntime } from "./snippet/install.js";
 
 import type { Flags } from "./cli/types.js";
 import { cmdSession } from "./cli/session.js";
-import { cmdApropos, cmdMan, cmdTsx } from "./cli/agentVerbs.js";
+import {
+  cmdApropos,
+  cmdExecute,
+  cmdMan,
+  cmdPlan,
+  cmdTsx,
+} from "./cli/agentVerbs.js";
 import { cmdInstallSkill } from "./cli/installSkill.js";
 
 loadProjectEnv();
@@ -123,8 +131,14 @@ function usage(): void {
       "    Manage the active session pointer at $DATAFETCH_HOME/active-session.",
       "",
       "Agent verbs (resolve --session / DATAFETCH_SESSION / pointer):",
+      "  datafetch plan -e '<source>' | datafetch plan <file>",
+      "    Run an exploratory TS trajectory against the active session;",
+      "    writes a non-crystallisable plan artifact.",
+      "  datafetch execute -e '<source>' | datafetch execute <file>",
+      "    Run a committed TS trajectory against the active session;",
+      "    writes the crystallisable execute artifact used for learning.",
       "  datafetch tsx -e '<source>' | datafetch tsx <file>",
-      "    Run a TS snippet against the active session; prints stdout/stderr",
+      "    Legacy unphased TS snippet against the active session; prints stdout/stderr",
       "    and the Result envelope after a `--- envelope ---` separator.",
       "  datafetch man <fn>",
       "    Render NAME / SYNOPSIS / INPUT / OUTPUT / EXAMPLES for a /lib/ fn.",
@@ -380,6 +394,12 @@ async function main(): Promise<void> {
       return;
     case "session":
       await cmdSession(positionals, flags);
+      return;
+    case "plan":
+      await cmdPlan(positionals, flags);
+      return;
+    case "execute":
+      await cmdExecute(positionals, flags);
       return;
     case "tsx":
       await cmdTsx(positionals, flags);

@@ -15,11 +15,15 @@ import type { Cost } from "../sdk/index.js";
 
 // --- Session context -------------------------------------------------------
 
+export type SnippetPhase = "plan" | "execute";
+
 // The minimum context a snippet evaluator needs to bind `df.*` for the
 // active session: which tenant, which mounts are visible, where the
 // datafetch home is on disk, and (optional) the active trajectory id so
 // nested calls can record into the same envelope.
 export type SessionCtx = {
+  sessionId?: string;
+  phase?: SnippetPhase;
   tenantId: string;
   mountIds: string[];
   baseDir: string;
@@ -36,11 +40,16 @@ export type SnippetRunResult = {
   // implementation that doesn't track them can still satisfy the type.
   trajectoryId?: string;
   cost?: Cost;
+  phase?: SnippetPhase;
+  crystallisable?: boolean;
+  artifactDir?: string;
 };
 
 export type SnippetRuntime = {
   run(args: {
     source: string;
+    phase?: SnippetPhase;
+    sourcePath?: string;
     sessionCtx: SessionCtx;
   }): Promise<SnippetRunResult>;
 };
@@ -54,6 +63,8 @@ export type SnippetRuntime = {
 export class StubSnippetRuntime implements SnippetRuntime {
   async run(_args: {
     source: string;
+    phase?: SnippetPhase;
+    sourcePath?: string;
     sessionCtx: SessionCtx;
   }): Promise<SnippetRunResult> {
     return {

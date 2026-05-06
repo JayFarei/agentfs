@@ -60,17 +60,23 @@ describe("demo CLI end-to-end (in-memory)", () => {
     expect(stdout).toMatch(/\[Q1\] answer=\{"value":700/);
 
     expect(stdout).toMatch(
-      /observer crystallised crystallise_pickfiling_[0-9a-f]{8}/,
+      /observer crystallised crystallise_range_table_metric_[0-9a-f]{8}/,
+    );
+    expect(stdout).toMatch(
+      /discovery top=crystallise_range_table_metric_[0-9a-f]{8} kind=tool score=/,
+    );
+    expect(stdout).toMatch(
+      /discovery invocation=df\.lib\.crystallise_range_table_metric_[0-9a-f]{8}/,
     );
 
     expect(stdout).toContain("[Q2] mode=interpreted tier=2 llmCalls=0");
     expect(stdout).toMatch(
-      /\[Q2\] function=crystallise_pickfiling_[0-9a-f]{8}/,
+      /\[Q2\] function=crystallise_range_table_metric_[0-9a-f]{8}/,
     );
     expect(stdout).toMatch(/\[Q2\] answer=\{"value":1000/);
 
     expect(stdout).toContain("=== Cost Panel");
-    expect(stdout).toMatch(/function\s+executeTableMath\s+crystallise_pickfiling_/);
+    expect(stdout).toMatch(/function\s+executeTableMath\s+crystallise_range_table_metric_/);
 
     expect(stdout).toContain("=== Call-Graph");
     expect(stdout).toContain("Q1 — top-level chain (novel composition):");

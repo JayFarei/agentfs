@@ -6,17 +6,26 @@ A code-mode adaptive retrieval system that crystallises query shape from agent u
 
 Atlas → mounted at /datafetch/ over NFS. Each collection becomes a typed TS module synthesised lazily on read.
 
-The agent writes TS snippets against typed paths. Audit log captures every typed call.
+The agent writes TS snippets against typed paths.
 
-User endorses successful trajectories.
+Audit log captures every typed call.
+
+User/Agent endorses successful trajectories (or it is derived via after the fact attribution)
 
 Endorsements crystallise into procedures/<tenant_id>/<name>.ts.
 
 A budget worker compiles each procedure into a single Atlas aggregation pipeline so the LLM exits the hot path.
 
-The core insight: schema is never imposed, it is induced at three tiers (sampled inferred type → endorsed query trajectory → compiled aggregation pipeline).
+The core insight:
 
-MongoDB collections are polymorphic across documents but stable across query intents once an app matures. AtlasFS crystallises the query shape, not the document shape, once per tenant.
+- schema is never imposed,
+- it is induced at three tiers
+  - sampled inferred type
+  - endorsed query trajectory
+  - compiled aggregation pipeline
+
+MongoDB collections are polymorphic across documents but stable across query intents once an app matures.
+AtlasFS crystallises the query shape, not the document shape, once per tenant.
 
 ## Two dimensions of adaptation (the load-bearing pitch)
 
@@ -61,7 +70,7 @@ Over volume, the shared shape (year-on-year change of a named line item) general
 
 Turning unstructured search into an application.
 
-A user searches. Each search is typed and composed. Procedures crystallise. The procedure library *is* the application: each entry is a named affordance with a typed parameter surface, and a UI surface falls out of it (parameter form in, result card out). The application is not designed up front, it emerges from the intents the tenant actually exercises, shaped by the data they actually have.
+A user searches. Each search is typed and composed. Procedures crystallise. The procedure library _is_ the application: each entry is a named affordance with a typed parameter surface, and a UI surface falls out of it (parameter form in, result card out). The application is not designed up front, it emerges from the intents the tenant actually exercises, shaped by the data they actually have.
 
 Users can always morph it. Endorsement adds an affordance, branching forks the application, re-endorsement on a branch reshapes a procedure without losing its history. Two tenants on the same cluster end up with two different applications because their intents diverge.
 

@@ -1,6 +1,6 @@
 // POST /v1/snippets — run a TS snippet against a persisted session.
 //
-// Request: { sessionId, source }.
+// Request: { sessionId, source, phase?, sourcePath? }.
 //
 // Resolves the session from disk (rehydrating tenantId + mountIds),
 // invokes `snippetRuntime.run({source, sessionCtx})`, then reads the
@@ -30,6 +30,8 @@ export type SnippetsAppDeps = {
 const snippetsRequestSchema = v.object({
   sessionId: v.pipe(v.string(), v.minLength(1)),
   source: v.pipe(v.string(), v.minLength(1)),
+  phase: v.optional(v.picklist(["plan", "execute"])),
+  sourcePath: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
 export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
@@ -64,6 +66,7 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
     }
 
     const sessionCtx: SessionCtx = {
+      sessionId: record.sessionId,
       tenantId: record.tenantId,
       mountIds: record.mountIds,
       baseDir: deps.baseDir,
@@ -73,6 +76,8 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
     try {
       runResult = await deps.snippetRuntime.run({
         source: parsed.output.source,
+        phase: parsed.output.phase,
+        sourcePath: parsed.output.sourcePath,
         sessionCtx,
       });
     } catch (err) {
@@ -90,14 +95,20 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
     let mode: string | undefined;
     let functionName: string | undefined;
     let callPrimitives: string[] | undefined;
+    let phase = runResult.phase;
+    let crystallisable = runResult.crystallisable;
+    let artifactDir = runResult.artifactDir;
     if (runResult.trajectoryId) {
       try {
         const traj = await readTrajectory(runResult.trajectoryId, deps.baseDir);
         mode = traj.mode;
         functionName = traj.provenance?.functionName;
         callPrimitives = traj.calls.map((call) => call.primitive);
+        phase = phase ?? traj.phase;
+        crystallisable = crystallisable ?? traj.crystallisable;
+        artifactDir = artifactDir ?? traj.artifactDir;
       } catch {
-        // Leave mode/functionName/callPrimitives undefined.
+        // Leave best-effort trajectory-derived fields undefined.
       }
     }
 
@@ -110,6 +121,9 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
       mode,
       functionName,
       callPrimitives,
+      phase,
+      crystallisable,
+      artifactDir,
     });
   });
 

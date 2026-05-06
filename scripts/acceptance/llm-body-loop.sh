@@ -5,8 +5,9 @@
 #   - the function file exists at the expected path
 #   - the trajectory shows mode == "llm-backed" and cost.llmCalls >= 1
 #
-# Required env: ATLAS_URI, ANTHROPIC_KEY (or ANTHROPIC_API_KEY).
-# Optional env: ATLAS_DB_NAME, DF_TEST_PORT, AGENT_LOOP_TIMEOUT, DEBUG.
+# Required env: ATLAS_URI.
+# Optional env: ATLAS_DB_NAME, DF_TEST_PORT, AGENT_LOOP_TIMEOUT,
+#               DF_AGENT_DRIVER (codex default, or claude), DEBUG.
 
 set -euo pipefail
 
@@ -14,16 +15,26 @@ LIB_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/lib"
 # shellcheck disable=SC1091
 source "$LIB_DIR/common.sh"
 
+# The live harness should test the skill from the current worktree, not a
+# stale copy previously installed into ~/.claude/skills.
+export DATAFETCH_SKILL_PATH="${DATAFETCH_SKILL_PATH:-$REPO_ROOT/skills/datafetch/SKILL.md}"
+
 show_help() {
   cat <<EOF
 llm-body-loop.sh — verify the agent loop produces an llm()-backed function.
 
 Required env:
   ATLAS_URI                     MongoDB Atlas connection string
-  ANTHROPIC_KEY or
-  ANTHROPIC_API_KEY             Anthropic credential
 
 Optional env:
+  DF_AGENT_DRIVER               codex (default) or claude
+  DF_TEST_MODEL                 driver model override
+  DF_LLM_TEST_MODEL             model written into the llm() body
+  DF_CLAUDE_BARE                1 forces claude --bare; default auto only
+                                uses bare when an Anthropic API key is set
+  ANTHROPIC_KEY or
+  ANTHROPIC_API_KEY             optional for DF_AGENT_DRIVER=claude if the
+                                Claude Code CLI is locally logged in
   ATLAS_DB_NAME (default atlasfs_hackathon)
   DF_TEST_PORT (default 8090)
   AGENT_LOOP_TIMEOUT (default 300s, per-question budget)
@@ -40,16 +51,12 @@ AGENT_LOOP_TIMEOUT="${AGENT_LOOP_TIMEOUT:-300}"
 
 trap teardown EXIT
 
-normalise_anthropic_env
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-  printf '[FAIL] ANTHROPIC_API_KEY (or ANTHROPIC_KEY) is required\n' >&2
-  exit 2
-fi
+agent_driver_preflight || exit 2
 if [[ -z "${ATLAS_URI:-}" ]]; then
   printf '[FAIL] ATLAS_URI is required\n' >&2
   exit 2
 fi
-for tool in claude tmux jq curl; do
+for tool in tmux jq curl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     printf '[FAIL] required tool not on PATH: %s\n' "$tool" >&2
     exit 2
@@ -65,7 +72,7 @@ export SESSION_ID
 assert_neq "" "$SESSION_ID" "session id non-empty"
 
 # Mirror agent-loop.sh's tmux helper.
-run_claude_in_tmux() {
+run_agent_in_tmux() {
   local sess="$1"
   local prompt="$2"
   local outfile="$3"
@@ -82,12 +89,19 @@ run_claude_in_tmux() {
 set -o pipefail
 LIB_DIR="$LIB_DIR"
 source "\$LIB_DIR/common.sh"
-export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+export DF_AGENT_DRIVER="${DF_AGENT_DRIVER:-codex}"
+export DF_TEST_MODEL="${DF_TEST_MODEL:-}"
+export DF_TEST_REASONING_EFFORT="${DF_TEST_REASONING_EFFORT:-}"
+export DF_CODEX_SANDBOX="${DF_CODEX_SANDBOX:-}"
+export DF_CODEX_APPROVAL="${DF_CODEX_APPROVAL:-}"
+export DF_CLAUDE_BARE="${DF_CLAUDE_BARE:-}"
+export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
+export ANTHROPIC_KEY="${ANTHROPIC_KEY:-}"
 export DATAFETCH_HOME="$DATAFETCH_HOME"
 export DATAFETCH_SERVER_URL="$DATAFETCH_SERVER_URL"
 export PATH="$PATH"
 export SESSION_ID="$SESSION_ID"
-claude_cmd "\$(cat "$promptfile")" > "$outfile" 2>&1
+agent_cmd "\$(cat "$promptfile")" > "$outfile" 2>&1
 echo \$? > "$outfile.exit"
 touch "$sentinel"
 WRAP
@@ -97,12 +111,13 @@ WRAP
 }
 
 # ---- Step: prompt that REQUIRES an llm() body ------------------------------
-PROMPT='Author a function `summariseFiling` at $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts that takes one finqa case (input: { caseId: string }) and returns { caseId: string, narrative: string }. The body MUST use `body: llm({prompt: "...", model: "anthropic/claude-haiku-4-5"})` to generate the narrative as a one-paragraph plain-English summary. Write the file via heredoc (`cat > $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts <<EOF ... EOF`). Then call it on one finqa case via `datafetch tsx -e "console.log(JSON.stringify(await df.lib.summariseFiling({caseId: \"<id>\"})))"` (pick any caseId from `await df.db.finqaCases.findExact({}, 1)`). Print the resulting JSON object on a single line at the end of your response.'
+LLM_BODY_MODEL="${DF_LLM_TEST_MODEL:-${DATAFETCH_LLM_MODEL:-${DF_LLM_MODEL:-openai-codex/gpt-5.3-codex-spark}}}"
+PROMPT='Author a function `summariseFiling` at $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts that takes one finqa case (input: { caseId: string }) and returns { caseId: string, narrative: string }. The body MUST use `body: llm({prompt: "...", model: "'$LLM_BODY_MODEL'"})` to generate the narrative as a one-paragraph plain-English summary. Write the file via heredoc (`cat > $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts <<EOF ... EOF`). Then call it on one finqa case via `datafetch tsx -e "console.log(JSON.stringify(await df.lib.summariseFiling({caseId: \"<id>\"})))"` (pick any caseId from `await df.db.finqaCases.findExact({}, 1)`). Print the resulting JSON object on a single line at the end of your response.'
 OUT="$DATAFETCH_HOME/llm.out"
 SENTINEL="$DATAFETCH_HOME/llm.done"
 
 step "spawning tmux pane dft-llm (timeout=${AGENT_LOOP_TIMEOUT}s)"
-run_claude_in_tmux dft-llm "$PROMPT" "$OUT" "$SENTINEL"
+run_agent_in_tmux dft-llm "$PROMPT" "$OUT" "$SENTINEL"
 
 if ! wait_for_tmux dft-llm "$AGENT_LOOP_TIMEOUT" "$SENTINEL"; then
   dump_tmux_pane dft-llm "$OUT"

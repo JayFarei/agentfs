@@ -9,12 +9,16 @@
 // THIS FILE IS THE DATA-PLANE BOUNDARY FOR LLM CREDENTIALS.
 //
 // Per design.md §10 + decisions.md D-008 + plan R8 + plan Verification 9:
-// the LLM API key (ANTHROPIC_API_KEY / ANTHROPIC_KEY) is read here, on the
-// data plane, at session-construction time. The agent client never sees it.
+// the LLM credential is read here, on the data plane, at session-construction
+// time. The agent client never sees it.
 // Do not export the key, do not stringify it into prompts, do not pass it
 // to any client-facing code path.
 //
 // ────────────────────────────────────────────────────────────────────────────
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import type { FlueAgent, FlueSession } from "@flue/sdk/client";
 // Pull internal in-process bits from the SDK's internal entry — same as the
@@ -36,7 +40,12 @@ import { enforceMapCap } from "../util/bounded.js";
 // only when an init() options.model is required by the SDK's resolveModel
 // hook chain; in practice every prompt() / skill() call we issue passes
 // `{ model: body.model }` explicitly.
-const FALLBACK_MODEL = "anthropic/claude-sonnet-4-6";
+const FALLBACK_MODEL =
+  process.env.DATAFETCH_LLM_MODEL ??
+  process.env.DF_LLM_MODEL ??
+  "openai-codex/gpt-5.3-codex-spark";
+
+type ResolvedModel = ReturnType<typeof resolveModel>;
 
 // Per-tenant pool entry: holds the FlueAgent (sandbox + tools) and its
 // default session.
@@ -89,9 +98,9 @@ export class FlueSessionPool {
   }
 
   private async buildEntry(tenantId: string): Promise<Entry> {
-    // Read the LLM API key on the data plane. We honour both
-    // ANTHROPIC_API_KEY and the legacy ANTHROPIC_KEY name (the
-    // .flue/agents/*.ts files used the latter as a fallback).
+    // Read LLM credentials on the data plane. We still honour both
+    // ANTHROPIC_API_KEY and the legacy ANTHROPIC_KEY name for old authored
+    // bodies, but the default path now prefers Codex subscription OAuth.
     if (!process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_KEY) {
       process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_KEY;
     }
@@ -109,7 +118,7 @@ export class FlueSessionPool {
         skills: {},
         roles: {},
         model: undefined,
-        resolveModel,
+        resolveModel: resolveDatafetchModel,
       },
       createDefaultEnv: async () =>
         bashFactoryToSessionEnv(() => new Bash({ fs: new InMemoryFs() })),
@@ -139,4 +148,108 @@ export class FlueSessionPool {
       }
     }
   }
+}
+
+function resolveDatafetchModel(modelString: string): ResolvedModel {
+  const model = resolveModel(modelString);
+  if (model.provider !== "openai-codex") {
+    return model;
+  }
+
+  const token = readCodexSubscriptionToken();
+  if (token !== null) {
+    // pi-ai's openai-codex provider currently has no env-key mapping for
+    // "openai-codex". The provider implementation already accepts ChatGPT
+    // OAuth tokens; presenting the resolved model as provider "openai" makes
+    // it pick up OPENAI_API_KEY without changing the API implementation.
+    process.env.OPENAI_API_KEY = token;
+    return { ...model, provider: "openai" } as ResolvedModel;
+  }
+
+  return model;
+}
+
+function readCodexSubscriptionToken(): string | null {
+  const envToken =
+    process.env.OPENAI_CODEX_API_KEY ??
+    process.env.CODEX_OAUTH_TOKEN ??
+    process.env.CLAW_CODEX_ACCESS_TOKEN;
+  if (isNonEmptyString(envToken)) {
+    return envToken;
+  }
+
+  return readClawCodexToken() ?? readCodexCliToken();
+}
+
+function readClawCodexToken(): string | null {
+  const auth = readJsonObject(
+    process.env.CLAW_CODEX_AUTH_FILE ??
+      path.join(os.homedir(), ".claw-codex", "auth.json"),
+  );
+  const access = stringField(auth, "access");
+  if (!isNonEmptyString(access)) {
+    return null;
+  }
+  const expires = numberField(auth, "expires");
+  if (expires !== null && expires <= Date.now() + 60_000) {
+    return null;
+  }
+  return access;
+}
+
+function readCodexCliToken(): string | null {
+  const auth = readJsonObject(path.join(os.homedir(), ".codex", "auth.json"));
+  const tokens = recordField(auth, "tokens");
+  const access = stringField(tokens, "access_token");
+  return isNonEmptyString(access) ? access : null;
+}
+
+function readJsonObject(filePath: string): Record<string, unknown> | null {
+  try {
+    const value = JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown;
+    return isRecord(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function recordField(
+  value: Record<string, unknown> | null,
+  field: string,
+): Record<string, unknown> | null {
+  if (value === null) {
+    return null;
+  }
+  const nested = value[field];
+  return isRecord(nested) ? nested : null;
+}
+
+function stringField(
+  value: Record<string, unknown> | null,
+  field: string,
+): string | null {
+  if (value === null) {
+    return null;
+  }
+  const nested = value[field];
+  return typeof nested === "string" ? nested : null;
+}
+
+function numberField(
+  value: Record<string, unknown> | null,
+  field: string,
+): number | null {
+  if (value === null) {
+    return null;
+  }
+  const nested = value[field];
+  return typeof nested === "number" ? nested : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }

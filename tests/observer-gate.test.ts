@@ -22,6 +22,10 @@ function buildTrajectory(
     ...(partial.cost !== undefined ? { cost: partial.cost } : {}),
     ...(partial.provenance !== undefined ? { provenance: partial.provenance } : {}),
     ...(partial.result !== undefined ? { result: partial.result } : {}),
+    ...(partial.phase !== undefined ? { phase: partial.phase } : {}),
+    ...(partial.crystallisable !== undefined ? { crystallisable: partial.crystallisable } : {}),
+    ...(partial.sourcePath !== undefined ? { sourcePath: partial.sourcePath } : {}),
+    ...(partial.artifactDir !== undefined ? { artifactDir: partial.artifactDir } : {}),
   };
 }
 
@@ -120,6 +124,40 @@ describe("shouldCrystallise", () => {
     });
     expect(out.ok).toBe(false);
     if (!out.ok) expect(out.reason).toContain("composition pattern");
+  });
+
+  it("rejects plan-phase trajectories because only execute artifacts can crystallise", () => {
+    const traj = buildTrajectory({
+      calls: VALID_CALLS,
+      mode: "novel",
+      phase: "plan",
+      crystallisable: false,
+    });
+    const out = shouldCrystallise({
+      trajectory: traj,
+      shapeHash: "plan",
+      existing: EMPTY_LIB,
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toContain("execute");
+  });
+
+  it("rejects trajectories that already call a crystallised tool", () => {
+    const calls: TrajectoryRecord["calls"] = [
+      VALID_CALLS[0]!,
+      {
+        ...VALID_CALLS[1]!,
+        primitive: "lib.crystallise_pickfiling_deadbeef",
+      },
+    ];
+    const traj = buildTrajectory({ calls, mode: "interpreted" });
+    const out = shouldCrystallise({
+      trajectory: traj,
+      shapeHash: "nested",
+      existing: EMPTY_LIB,
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toContain("reuse evidence");
   });
 
   it("rejects when no db.* call present", () => {

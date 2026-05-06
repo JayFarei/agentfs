@@ -25,7 +25,10 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { TrajectoryRecorder } from "../trajectory/recorder.js";
+import {
+  TrajectoryRecorder,
+  type TrajectoryRecord,
+} from "../trajectory/recorder.js";
 import {
   costZero,
   type Cost,
@@ -33,7 +36,11 @@ import {
   type DispatchContext,
 } from "../sdk/index.js";
 
-import type { SessionCtx, SnippetRuntime } from "../bash/snippetRuntime.js";
+import type {
+  SessionCtx,
+  SnippetPhase,
+  SnippetRuntime,
+} from "../bash/snippetRuntime.js";
 
 import { buildDf, type DfBinding } from "./dfBinding.js";
 
@@ -45,6 +52,9 @@ export type RunResult = {
   exitCode: number;
   trajectoryId?: string;
   cost?: Cost;
+  phase?: SnippetPhase;
+  crystallisable?: boolean;
+  artifactDir?: string;
 };
 
 export type DiskSnippetRuntimeOpts = {
@@ -75,9 +85,11 @@ export class DiskSnippetRuntime implements SnippetRuntime {
 
   async run(args: {
     source: string;
+    phase?: SnippetPhase;
+    sourcePath?: string;
     sessionCtx: SessionCtx;
   }): Promise<RunResult> {
-    const { source, sessionCtx } = args;
+    const { source, phase, sourcePath, sessionCtx } = args;
 
     // 1. Build recorder + dispatch ctx.
     const question = firstNonEmptyLine(source) ?? "<snippet>";
@@ -93,7 +105,9 @@ export class DiskSnippetRuntime implements SnippetRuntime {
       cost: costZero(0),
       pins: {},
     };
-    const df = buildDf({ sessionCtx, dispatchCtx });
+    const effectiveSessionCtx: SessionCtx =
+      phase === undefined ? sessionCtx : { ...sessionCtx, phase };
+    const df = buildDf({ sessionCtx: effectiveSessionCtx, dispatchCtx });
 
     // 2. Run the snippet under captured stdout/stderr.
     const { stdout, stderr, exitCode, error } = await runSnippet({
@@ -131,8 +145,37 @@ export class DiskSnippetRuntime implements SnippetRuntime {
       tenant: sessionCtx.tenantId,
       mount: dispatchCtx.mount,
     });
+    const phaseMetadata =
+      phase === undefined
+        ? undefined
+        : {
+            phase,
+            crystallisable: phase === "execute",
+            ...(sourcePath !== undefined ? { sourcePath } : {}),
+            artifactDir: phaseArtifactDir({
+              baseDir: sessionCtx.baseDir,
+              sessionId: sessionCtx.sessionId,
+              phase,
+              trajectoryId: recorder.id,
+            }),
+          };
+    if (phaseMetadata) {
+      recorder.setExecutionMetadata(phaseMetadata);
+    }
+    const trajectory = recorder.snapshot;
     try {
       await recorder.save(sessionCtx.baseDir);
+      if (phaseMetadata) {
+        await writePhaseArtifacts({
+          artifactDir: phaseMetadata.artifactDir,
+          source,
+          stdout,
+          stderr,
+          exitCode,
+          trajectory,
+          cost: snapshotCost(dispatchCtx.cost),
+        });
+      }
       // Notify the observer (Wave 4). Fire-and-forget; any thrown error
       // from the callback is swallowed — the snippet's return must not
       // depend on the observer's success.
@@ -164,6 +207,13 @@ export class DiskSnippetRuntime implements SnippetRuntime {
       exitCode,
       trajectoryId: recorder.id,
       cost: snapshotCost(dispatchCtx.cost),
+      ...(phaseMetadata
+        ? {
+            phase: phaseMetadata.phase,
+            crystallisable: phaseMetadata.crystallisable,
+            artifactDir: phaseMetadata.artifactDir,
+          }
+        : {}),
     };
   }
 }
@@ -316,4 +366,70 @@ function snapshotCost(c: Cost): Cost {
     ms: { hot: c.ms.hot, cold: c.ms.cold },
     llmCalls: c.llmCalls,
   };
+}
+
+function phaseArtifactDir(args: {
+  baseDir: string;
+  sessionId?: string;
+  phase: SnippetPhase;
+  trajectoryId: string;
+}): string {
+  const sessionId = args.sessionId ?? "__adhoc__";
+  if (args.phase === "plan") {
+    return path.join(
+      args.baseDir,
+      "sessions",
+      sessionId,
+      "plan",
+      "attempts",
+      args.trajectoryId,
+    );
+  }
+  return path.join(
+    args.baseDir,
+    "sessions",
+    sessionId,
+    "execute",
+    args.trajectoryId,
+  );
+}
+
+async function writePhaseArtifacts(args: {
+  artifactDir: string;
+  source: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  trajectory: TrajectoryRecord;
+  cost: Cost;
+}): Promise<void> {
+  await fsp.mkdir(args.artifactDir, { recursive: true });
+  const sourceName = args.trajectory.phase === "execute" ? "execute.ts" : "source.ts";
+  await Promise.all([
+    fsp.writeFile(path.join(args.artifactDir, sourceName), args.source, "utf8"),
+    fsp.writeFile(path.join(args.artifactDir, "stdout.txt"), args.stdout, "utf8"),
+    fsp.writeFile(path.join(args.artifactDir, "stderr.txt"), args.stderr, "utf8"),
+    fsp.writeFile(
+      path.join(args.artifactDir, "result.json"),
+      `${JSON.stringify(
+        {
+          trajectoryId: args.trajectory.id,
+          phase: args.trajectory.phase,
+          crystallisable: args.trajectory.crystallisable,
+          exitCode: args.exitCode,
+          mode: args.trajectory.mode,
+          callPrimitives: args.trajectory.calls.map((call) => call.primitive),
+          cost: args.cost,
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    ),
+    fsp.writeFile(
+      path.join(args.artifactDir, "trajectory.json"),
+      `${JSON.stringify(args.trajectory, null, 2)}\n`,
+      "utf8",
+    ),
+  ]);
 }

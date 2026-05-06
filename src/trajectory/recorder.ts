@@ -26,6 +26,8 @@ export type TrajectoryProvenance = {
   functionName?: string;
 };
 
+export type TrajectoryPhase = "plan" | "execute";
+
 export type TrajectoryRecord = {
   id: string;
   tenantId: string;
@@ -48,6 +50,10 @@ export type TrajectoryRecord = {
   // path leaves them undefined.
   cost?: Cost;
   provenance?: TrajectoryProvenance;
+  phase?: TrajectoryPhase;
+  crystallisable?: boolean;
+  sourcePath?: string;
+  artifactDir?: string;
 };
 
 export function atlasfsHome(): string {
@@ -123,6 +129,24 @@ export class TrajectoryRecorder {
 
   setProvenance(provenance: TrajectoryProvenance): void {
     this.record.provenance = provenance;
+  }
+
+  setExecutionMetadata(metadata: {
+    phase?: TrajectoryPhase;
+    crystallisable?: boolean;
+    sourcePath?: string;
+    artifactDir?: string;
+  }): void {
+    if (metadata.phase !== undefined) this.record.phase = metadata.phase;
+    if (metadata.crystallisable !== undefined) {
+      this.record.crystallisable = metadata.crystallisable;
+    }
+    if (metadata.sourcePath !== undefined) {
+      this.record.sourcePath = metadata.sourcePath;
+    }
+    if (metadata.artifactDir !== undefined) {
+      this.record.artifactDir = metadata.artifactDir;
+    }
   }
 
   async save(baseDir = atlasfsHome()): Promise<string> {

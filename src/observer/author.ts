@@ -420,7 +420,7 @@ function pickExample(args: PickExampleArgs): Record<string, unknown> | null {
 
 function intentString(template: CallTemplate): string {
   const seq = template.steps.map((s) => s.primitive).join(" -> ");
-  return `crystallised composition over ${seq}`;
+  return `reusable learned function for the ${template.topic} intent shape; internally composes ${seq}`;
 }
 
 function headerComment(args: {
@@ -463,11 +463,13 @@ function frontmatter(args: {
   // Indent the description's body by two spaces so YAML's `|` block
   // scalar parses cleanly. Newlines inside the block are preserved.
   const descLines = [
-    `Crystallised composition that answers questions shaped like:`,
+    `Learned datafetch function for questions shaped like:`,
     `  "${userQuestion.replace(/"/g, '\\"')}"`,
     `Internally chains: ${callGraph}.`,
-    `Use when the user's question matches the example above. Pass input`,
-    `as { ${inputKeys} }; the runtime returns the last call's output.`,
+    `Use when the user's question has the same task shape, even if`,
+    `the entity, metric, period, or wording differs. Prefer this before`,
+    `recomposing the primitive chain. Pass input as { ${inputKeys} };`,
+    `the runtime returns the last call's output.`,
   ];
   const description = descLines.map((l) => `  ${l}`).join("\n");
 
@@ -547,7 +549,11 @@ async function dispatchCodifier(args: {
   const body = {
     kind: "agent" as const,
     skill: args.skill,
-    model: "anthropic/claude-sonnet-4-6",
+    model:
+      process.env.DATAFETCH_CODIFIER_MODEL ??
+      process.env.DATAFETCH_LLM_MODEL ??
+      process.env.DF_LLM_MODEL ??
+      "openai-codex/gpt-5.3-codex-spark",
   };
   // The skill expects {question, filing, context}. We surface the first
   // lib call's output as the "filing" proxy.

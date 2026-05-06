@@ -16,9 +16,9 @@
 #       `node $REPO_ROOT/bin/datafetch.mjs` (which is what Phase 6's
 #       `pnpm link --global` will eventually expose).
 #
-#   claude_cmd <prompt>
-#       Builds the canonical headless Claude Code invocation with
-#       --print --bare and a tight tool allowlist. Reads the prompt as $1.
+#   agent_cmd <prompt>
+#       Builds the canonical headless client-agent invocation. Defaults to the
+#       Codex CLI driver; set DF_AGENT_DRIVER=claude to use Claude Code.
 #
 #   wait_for_tmux <session-name> <timeout-seconds>
 #       Polls until the named tmux session has exited (i.e. the wrapped
@@ -37,8 +37,13 @@
 # Environment expectations (callers may set):
 #   ATLAS_URI         — required for setup_dataplane unless --no-publish
 #   ATLAS_DB_NAME     — defaults to "atlasfs_hackathon"
-#   ANTHROPIC_KEY     — required for claude_cmd; mirrored into ANTHROPIC_API_KEY
-#   ANTHROPIC_API_KEY — alternative to ANTHROPIC_KEY (claude --bare prefers this)
+#   DF_AGENT_DRIVER   — codex (default) or claude
+#   DF_TEST_MODEL     — model override for the selected agent driver
+#   DF_CLAUDE_BARE    — 1 forces `claude --bare`; auto uses bare only when
+#                       an Anthropic API env key is present
+#   ANTHROPIC_KEY     — optional for DF_AGENT_DRIVER=claude; local Claude login
+#                       also works when available
+#   ANTHROPIC_API_KEY — alternative to ANTHROPIC_KEY for API-key auth
 #   DF_TEST_PORT      — server port (default 8090)
 #   DEBUG             — set to 1 for verbose tmux pane dumps on failure
 
@@ -266,34 +271,52 @@ teardown() {
 # test fails fast with a clear hint.
 
 require_skill_installed() {
-  local skill="$HOME/.claude/skills/datafetch/SKILL.md"
+  local skill="${DATAFETCH_SKILL_PATH:-$HOME/.claude/skills/datafetch/SKILL.md}"
   if [[ ! -f "$skill" ]]; then
     printf '[FAIL] skill not installed at %s\n' "$skill" >&2
-    printf '       run `datafetch install-skill` first\n' >&2
+    printf '       run `datafetch install-skill` first or set DATAFETCH_SKILL_PATH\n' >&2
     return 1
   fi
   step "skill present: $skill"
 }
 
-# ---- Claude Code invocation -------------------------------------------------
+# ---- Agent driver invocation -------------------------------------------------
 # Builds the canonical headless invocation. Caller passes the prompt as $1.
-# Stdout is the model's text response; stderr is Claude Code's own logging.
-#
-# We deliberately avoid `eval` here. `claude` is invoked directly so the
-# allowedTools strings are passed as separate argv entries (the way the
-# parser wants them).
+# Stdout is the model's text response; stderr is the agent's own logging.
 
-claude_cmd() {
-  local prompt="$1"
-  normalise_anthropic_env
-  if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-    printf '[FAIL] claude_cmd: ANTHROPIC_API_KEY (or ANTHROPIC_KEY) is required\n' >&2
-    return 1
-  fi
+agent_driver() {
+  printf '%s' "${DF_AGENT_DRIVER:-codex}"
+}
 
-  # Inject the datafetch SKILL.md into the system prompt. `--bare` mode
-  # disables skill auto-discovery (skills only resolve via `/skill-name`),
-  # so without this the model never reads our skill.
+agent_driver_preflight() {
+  case "$(agent_driver)" in
+    codex)
+      if ! command -v codex >/dev/null 2>&1; then
+        printf '[FAIL] required tool not on PATH for DF_AGENT_DRIVER=codex: codex\n' >&2
+        return 1
+      fi
+      ;;
+    claude)
+      normalise_anthropic_env
+      if ! command -v claude >/dev/null 2>&1; then
+        printf '[FAIL] required tool not on PATH for DF_AGENT_DRIVER=claude: claude\n' >&2
+        return 1
+      fi
+      if [[ -z "${ANTHROPIC_API_KEY:-}" && -z "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
+        printf '[warn] DF_AGENT_DRIVER=claude has no Anthropic env key; relying on Claude Code local login\n' >&2
+      fi
+      ;;
+    *)
+      printf '[FAIL] unsupported DF_AGENT_DRIVER=%s (expected codex or claude)\n' "$(agent_driver)" >&2
+      return 1
+      ;;
+  esac
+}
+
+agent_system_prompt() {
+  # Inject the datafetch SKILL.md into the system prompt. Headless agent
+  # modes do not reliably auto-discover our worktree skill, so without this
+  # the model may never read the contract we are testing.
   #
   # NOTE: We intentionally do NOT inject the typed `df.d.ts` manifest into
   # the system prompt. Earlier experiment showed it had the opposite of the
@@ -309,16 +332,72 @@ claude_cmd() {
   else
     printf '[warn] skill not found at %s; running without skill context\n' "$skill_path" >&2
   fi
-  local context="Active datafetch session: ${SESSION_ID:-}. Datafetch home: ${DATAFETCH_HOME:-}. The datafetch CLI is on PATH."
-  local sys_prompt="${skill_content}
+  local context="Active datafetch session: ${SESSION_ID:-}. Datafetch home: ${DATAFETCH_HOME:-}. Datafetch server URL: ${DATAFETCH_SERVER_URL:-http://localhost:8080}. The datafetch CLI is on PATH. Use this server URL; do not hard-code localhost:8080 when the URL above differs."
+  printf '%s\n\n%s\n' "$skill_content" "$context"
+}
 
-${context}"
+agent_cmd() {
+  case "$(agent_driver)" in
+    codex) codex_cmd "$1" ;;
+    claude) claude_cmd "$1" ;;
+    *)
+      printf '[FAIL] unsupported DF_AGENT_DRIVER=%s (expected codex or claude)\n' "$(agent_driver)" >&2
+      return 1
+      ;;
+  esac
+}
 
-  # Default to Haiku 4.5 for cost; override with DF_TEST_MODEL.
+codex_cmd() {
+  local prompt="$1"
+  local sys_prompt
+  sys_prompt="$(agent_system_prompt)"
+  local full_prompt="${sys_prompt}
+
+User task:
+${prompt}"
+
+  local model="${DF_TEST_MODEL:-gpt-5.3-codex-spark}"
+  local reasoning="${DF_TEST_REASONING_EFFORT:-medium}"
+  local sandbox="${DF_CODEX_SANDBOX:-danger-full-access}"
+  local approval="${DF_CODEX_APPROVAL:-never}"
+  local args=(
+    --model "$model"
+    --sandbox "$sandbox"
+    --ask-for-approval "$approval"
+    --cd "$REPO_ROOT"
+    -c "model_reasoning_effort=\"$reasoning\""
+  )
+  if [[ -n "${DATAFETCH_HOME:-}" ]]; then
+    args+=(--add-dir "$DATAFETCH_HOME")
+  fi
+
+  codex "${args[@]}" exec --skip-git-repo-check -- "$full_prompt"
+}
+
+# We deliberately avoid `eval` here. `claude` is invoked directly so the
+# allowedTools strings are passed as separate argv entries (the way the
+# parser wants them).
+
+claude_cmd() {
+  local prompt="$1"
+  normalise_anthropic_env
+
+  local sys_prompt
+  sys_prompt="$(agent_system_prompt)"
+
+  # Default to Haiku 4.5 for cost; override with DF_TEST_MODEL. `--bare`
+  # intentionally skips OAuth/keychain reads, so only use it for API-key auth
+  # unless DF_CLAUDE_BARE=1 explicitly forces it.
+  local claude_args=(--print)
+  if [[ "${DF_CLAUDE_BARE:-auto}" == "1" ]] ||
+     [[ "${DF_CLAUDE_BARE:-auto}" == "auto" && -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    claude_args+=(--bare)
+  fi
+
   # Note: Bash() patterns sit on separate argv entries. The `--` before the
   # prompt prevents Claude Code's flag parser from eating an arg starting
   # with `-` or `--` as the prompt's first word.
-  claude --print --bare \
+  claude "${claude_args[@]}" \
     --model "${DF_TEST_MODEL:-claude-haiku-4-5}" \
     --allowedTools \
       'Bash(datafetch *)' \
@@ -328,6 +407,7 @@ ${context}"
       'Bash(jq *)' \
       'Bash(grep *)' \
       'Bash(find *)' \
+      'Bash(curl *)' \
       'Bash(echo *)' \
       'Bash(test *)' \
       'Bash(mkdir *)' \

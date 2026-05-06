@@ -5,9 +5,14 @@ description: Use the datafetch CLI to drive bash-shaped tenanted sessions over m
 
 # datafetch
 
-Datafetch is a bash-shaped workspace over a mounted dataset. The data plane is a long-lived HTTP server on `localhost:8080`; you drive it from your shell with the `datafetch` CLI. Every tenant gets their own session, their own private `/lib/` overlay of typed TypeScript functions, and a shared read-only view of the registered mounts.
+Datafetch is a bash-shaped workspace over a mounted dataset. The data plane is a long-lived HTTP server at `$DATAFETCH_SERVER_URL` (default `http://localhost:8080`); you drive it from your shell with the `datafetch` CLI. Every tenant gets their own session, their own private `/lib/` overlay of typed TypeScript functions, and a shared read-only view of the registered mounts.
 
-Your job, when given a data question: orient, look for an existing function, call it; if nothing fits, compose a snippet from primitives. The runtime records the trajectory; if it converges with prior runs, the observer crystallises a parameterised `/lib/<tenant>/<name>.ts` for next time.
+Your job, when given a data question: orient in plan mode, look for an
+existing function, draft the trajectory, then execute the committed
+trajectory. Plan runs are scratch work; execute runs are the auditable
+answer path. The runtime records the execute trajectory; if it converges
+with prior runs, the observer crystallises a parameterised
+`/lib/<tenant>/<name>.ts` for next time.
 
 ## Workspace layout
 
@@ -15,16 +20,20 @@ The on-disk root is `$DATAFETCH_HOME` (default `~/.atlasfs` or the cwd's `.atlas
 
 - `$DATAFETCH_HOME/AGENTS.md` — server-maintained workspace memory for this dataset.
 - `$DATAFETCH_HOME/CLAUDE.md` — compatibility alias for agents that look for Claude project instructions first.
+- `$DATAFETCH_HOME/df.d.ts` — typed manifest of the exact `df.db.*` and
+  `df.lib.*` names available in this session.
 - `$DATAFETCH_HOME/lib/<tenant>/<name>.ts` — your tenant-private typed functions.
 - `$DATAFETCH_HOME/lib/__seed__/<name>.ts` — fallback seeds shared across tenants.
 - `$DATAFETCH_HOME/mounts/<mount-id>/` — substrate-derived files for each mount (per-collection schema modules, samples, descriptors).
-- `$DATAFETCH_HOME/trajectories/<id>.json` — what the runtime recorded for each `tsx` execution.
+- `$DATAFETCH_HOME/trajectories/<id>.json` — what the runtime recorded for each snippet execution.
 - `$DATAFETCH_HOME/sessions/<sessionId>.json` — server-managed session records.
+- `$DATAFETCH_HOME/sessions/<sessionId>/plan/attempts/<trajectoryId>/` — non-crystallisable plan artifacts.
+- `$DATAFETCH_HOME/sessions/<sessionId>/execute/<trajectoryId>/` — committed execute artifacts eligible for learning.
 - `$DATAFETCH_HOME/active-session` — plain-text pointer to the current session id (managed by `datafetch session new|resume`).
 
 ## Custom verbs
 
-Four real CLI verbs back the agent loop. They all hit the localhost data plane:
+These CLI verbs back the agent loop. They all hit the localhost data plane:
 
 ```
 datafetch session new --tenant <id> [--mount <id>...] [--json]
@@ -34,8 +43,14 @@ datafetch session end <sessionId>
 datafetch session switch --tenant <id> [--mount <id>...]
 datafetch session current
 
-datafetch tsx -e '<source>'         # run a one-liner
-datafetch tsx <file>                # run a saved snippet
+datafetch plan -e '<source>'        # exploratory run; cannot crystallise
+datafetch plan <file>               # exploratory saved trajectory
+
+datafetch execute -e '<source>'     # committed run; can crystallise
+datafetch execute <file>            # committed saved trajectory
+
+datafetch tsx -e '<source>'         # legacy unphased snippet
+datafetch tsx <file>                # legacy unphased saved snippet
 
 datafetch man <fn>                  # render NAME / SYNOPSIS / INPUT / OUTPUT / EXAMPLES
 datafetch apropos <kw>              # semantic search across /lib/ intents
@@ -84,7 +99,7 @@ The frontmatter follows Claude Code's skill format: `name`, `description`
 user's task, call it directly:
 
 ```bash
-datafetch tsx -e "console.log(JSON.stringify(await df.lib.<name>(<input>)))"
+datafetch execute -e "console.log(JSON.stringify(await df.lib.<name>(<input>)))"
 ```
 
 Use the example in the frontmatter as a guide for the input shape. Do
@@ -93,11 +108,12 @@ not re-compose the chain by hand; the wrapper already encodes it.
 ### Tier 3 — Base primitives
 
 The seed functions (`pickFiling`, `executeTableMath`, retrieval handles
-on `df.db.<coll>`, etc.) live at `$DATAFETCH_HOME/lib/__seed__/`. These
+on `df.db.<ident>`, etc.) live at `$DATAFETCH_HOME/lib/__seed__/`. These
 have no frontmatter. Compose from them only when no trajectory or tool
 fits.
 
 ```bash
+cat $DATAFETCH_HOME/df.d.ts                 # exact df.db.* and df.lib.* names
 ls $DATAFETCH_HOME/lib/__seed__/
 head -25 $DATAFETCH_HOME/lib/__seed__/<name>.ts   # signature + JSDoc
 cat   $DATAFETCH_HOME/lib/__seed__/<name>.ts      # full body if you need it as a template
@@ -107,6 +123,10 @@ Primitives always need to be grounded in the substrate via `df.db.<coll>.*`
 calls — never construct filing/case data by hand. If the substrate seems
 unavailable, that is the exception worth investigating, not a reason to
 fabricate inputs. (See "Don't fabricate" below.)
+
+Use the collection identifiers exactly as `df.d.ts` prints them. For a
+live Atlas FinQA mount this is usually `df.db.finqaCases`, not
+`df.db.cases`.
 
 ## Why this order matters — the compounding effect
 
@@ -127,8 +147,10 @@ see this task pattern in the available tools either. Reuse begets reuse.
 ## Don't fabricate
 
 If `df.db.<coll>.*` calls fail, your snippets error, or the data plane
-seems off — investigate. Read the error. Try `curl http://localhost:8080/health`.
-Read `cat $DATAFETCH_HOME/server.log`. Try a smaller query.
+seems off — investigate. Read the error. Try
+`curl ${DATAFETCH_SERVER_URL:-http://localhost:8080}/health`.
+Read `cat $DATAFETCH_HOME/server.log`. Read `cat $DATAFETCH_HOME/df.d.ts`.
+Try a smaller query.
 
 What you must NOT do is construct filing or case data inline ("a mock
 filing with these values…") to bypass the substrate. That produces
@@ -166,9 +188,26 @@ EOF
 
 `df.lib.myFunction(input)` is callable from the next `datafetch tsx` snippet.
 
+## Plan, Then Execute
+
+Use `datafetch plan` to search, sample, inspect available tools, write
+temporary skills/functions, and draft the trajectory. A plan run may be
+broad, but it is not the final answer and it cannot crystallise.
+
+Use `datafetch execute` for the committed trajectory that answers the
+user. The execute source should contain the whole repeatable workflow:
+retrieval calls, deterministic transforms, and any skill-driven agent
+steps. This is the artifact future agents can find, replay, and learn
+from.
+
+Do not answer from plan output. If the plan identified the right shape,
+write or reuse the TypeScript trajectory and run it with
+`datafetch execute`.
+
 ## Result envelope
 
-Every `datafetch tsx` run prints the snippet's stdout/stderr, then a separator and the envelope:
+Every `datafetch plan`, `datafetch execute`, and legacy `datafetch tsx`
+run prints the snippet's stdout/stderr, then a separator and the envelope:
 
 ```
 --- envelope ---
@@ -177,16 +216,37 @@ Every `datafetch tsx` run prints the snippet's stdout/stderr, then a separator a
   "mode": "novel" | "interpreted" | "llm-backed" | "cache" | "compiled",
   "functionName": "<name-of-crystallised-fn-if-any>",
   "callPrimitives": ["db.cases.findExact", "lib.pickFiling", ...],
+  "phase": "plan" | "execute",
+  "crystallisable": true | false,
+  "artifactDir": "/path/to/session/artifact",
   "cost": { "tier": 0|1|2|3|4, "tokens": {...}, "ms": {...}, "llmCalls": n },
   "exitCode": 0
 }
 ```
 
-`mode: "novel"` and `cost.tier: 4` mean a from-scratch composition. `mode: "interpreted"` and `cost.tier: 2` mean a crystallised `df.lib.<name>` was used. Successful first-time ad-hoc compositions become candidates for crystallisation — re-run a similar query and the next envelope should report `mode: "interpreted"`.
+`phase: "plan"` and `crystallisable: false` mean exploratory work only.
+`phase: "execute"` and `crystallisable: true` mean the committed run can
+be learned from. `mode: "novel"` and `cost.tier: 4` mean a from-scratch
+composition. `mode: "interpreted"` and `cost.tier: 2` mean a crystallised
+`df.lib.<name>` was used. Successful first-time execute compositions
+become candidates for crystallisation — re-run a similar query and the
+next envelope should report `mode: "interpreted"`.
 
 ## Compose your full task in one snippet
 
-The data plane records what runs through `df.*`. If you extract data via `df.db.<coll>.findExact(...)` and then process it outside the `datafetch tsx` snippet (calling your own LLM, transforming locally, coming back for the next bit), the trajectory will be fragmented and the observer cannot crystallise a useful function from it. Compose the whole task in one `tsx` snippet whenever you can.
+The data plane records what runs through `df.*`. If you extract data via `df.db.<coll>.findExact(...)` and then process it outside the committed `datafetch execute` snippet (calling your own LLM, transforming locally, coming back for the next bit), the trajectory will be fragmented and the observer cannot crystallise a useful function from it. Compose the whole committed task in one `execute` snippet whenever you can.
+
+For table-math questions, do not hide the important workflow in ad hoc local
+JavaScript. The committed `datafetch execute` run should call the reusable
+chain explicitly: retrieve candidates with `df.db.*`, select the filing with a
+`df.lib.*` helper or learned function, infer the table plan with
+`df.lib.inferTableMathPlan`, and compute with `df.lib.executeTableMath`. Inline
+arithmetic is fine only after the reusable primitives have been called and
+recorded.
+
+Treat broad reads like `df.db.<coll>.findExact({})` as samples unless you pass
+an explicit limit or pagination strategy. A default sample is useful in plan
+mode; it is not proof that a term or filing is absent from the full mount.
 
 ## Pointers
 

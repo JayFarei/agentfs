@@ -32,9 +32,11 @@ import {
 } from "../adapter/runtime.js";
 import { atlasMount } from "../adapter/atlasMount.js";
 import { publishMount, type MountHandle } from "../adapter/publishMount.js";
+import { searchLibrary, type RankedFunction } from "../discovery/librarySearch.js";
 import { installFlueDispatcher } from "../flue/install.js";
 import { installObserver, type InstallObserverResult } from "../observer/install.js";
 import { installSnippetRuntime } from "../snippet/install.js";
+import { DiskLibraryResolver } from "../snippet/library.js";
 import { readTrajectory } from "../sdk/index.js";
 import type {
   CollectionHandle,
@@ -167,11 +169,21 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
       }
     }
 
-    // 5. Q2 — invoke the crystallised function directly.
+    // 5. Q2 — discover, then invoke the crystallised function directly.
     if (noCache && crystallised) {
       println(`[demo] --no-cache: deleting ${crystallised.path}`);
       await fsp.rm(crystallised.path, { force: true });
     }
+
+    const discovered =
+      noCache || !crystallised
+        ? null
+        : await discoverLearnedFunction({
+            baseDir,
+            tenantId: tenant,
+            question: Q2_QUESTION,
+            expectedName: crystallised.name,
+          });
 
     println("");
     println("=== Q2 (interpreted) ========================================");
@@ -187,7 +199,7 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
         question: Q2_QUESTION,
         mountIdent: casesIdent,
         crystallisedName:
-          noCache || !crystallised ? null : crystallised.name,
+          noCache || !discovered ? null : discovered.name,
       }),
       label: "Q2",
     });
@@ -233,6 +245,37 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
   }
 }
 
+async function discoverLearnedFunction(args: {
+  baseDir: string;
+  tenantId: string;
+  question: string;
+  expectedName: string;
+}): Promise<RankedFunction> {
+  const resolver = new DiskLibraryResolver({ baseDir: args.baseDir });
+  const matches = await searchLibrary({
+    baseDir: args.baseDir,
+    tenantId: args.tenantId,
+    resolver,
+    query: args.question,
+  });
+  const top = matches[0];
+  if (!top) {
+    throw new Error(
+      `discovery failed: no learned function matched Q2 intent ${JSON.stringify(args.question)}`,
+    );
+  }
+  println(
+    `[demo] discovery top=${top.name} kind=${top.kind} score=${top.score.toFixed(3)}`,
+  );
+  println(`[demo] discovery invocation=${top.invocation}`);
+  if (top.name !== args.expectedName) {
+    throw new Error(
+      `discovery failed: top match ${top.name} did not equal crystallised ${args.expectedName}`,
+    );
+  }
+  return top;
+}
+
 // --- Mount ident resolution ------------------------------------------------
 
 // Pick the collection ident that looks like the FinQA cases collection. In
@@ -262,8 +305,8 @@ function pickCasesIdent(mountId: string): string {
 function q1Snippet(args: { question: string; mountIdent: string }): string {
   // The demo's job is to compose findSimilar + pickFiling + inferTableMathPlan
   // + executeTableMath into a multi-step novel trajectory the observer can
-  // crystallise. Q1 records the pickFiling sub-call as the topic so the
-  // crystallised slug becomes `crystallise_pickfiling_<hash>`.
+  // crystallise. The observer now names the function by the task shape
+  // (`crystallise_range_table_metric_<hash>`) instead of the first helper.
   return [
     `const cands = await df.db.${args.mountIdent}.findSimilar(${JSON.stringify(args.question)}, 5);`,
     `console.log("[Q1] candidates=" + cands.length);`,

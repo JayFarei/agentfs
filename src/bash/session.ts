@@ -60,6 +60,7 @@ import {
   renderSkillMd,
   type OrientationContext,
 } from "./orientation.js";
+import { ReadOnlyFs } from "./fs/readOnly.js";
 import type { MountReader } from "./mountReader.js";
 import type { SessionCtx, SnippetRuntime } from "./snippetRuntime.js";
 import type { LibraryResolver } from "../sdk/index.js";
@@ -258,12 +259,21 @@ export class BashSession {
     if (!this.bash) {
       throw new Error("BashSession: not initialised");
     }
-    const result = await this.bash.exec(command);
-    return {
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-    };
+    try {
+      const result = await this.bash.exec(command);
+      return {
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        stdout: "",
+        stderr: `${message}\n`,
+        exitCode: 1,
+      };
+    }
   }
 
   // Flush /lib/ in-memory contents back to disk under
@@ -342,7 +352,7 @@ export class BashSession {
     const mounts: Array<{ mountPoint: string; filesystem: IFileSystem }> = [];
     for (const mountId of this.mountIds) {
       const mfs = await buildMountFs(this.mountReader, mountId);
-      mounts.push({ mountPoint: `/db/${mountId}`, filesystem: mfs });
+      mounts.push({ mountPoint: `/db/${mountId}`, filesystem: new ReadOnlyFs(mfs) });
     }
 
     // 2. Build the /lib/ overlay.
@@ -405,10 +415,12 @@ export class BashSession {
         beforeRun,
       }),
       createManCommand({
+        baseDir: this.baseDir,
         resolveTenant: () => this.tenantId,
         resolveLibrary: () => this.libraryResolver,
       }),
       createAproposCommand({
+        baseDir: this.baseDir,
         resolveTenant: () => this.tenantId,
         resolveLibrary: () => this.libraryResolver,
       }),

@@ -203,7 +203,7 @@ async function main(): Promise<void> {
     const ok =
       r.exitCode === 0 &&
       r.stdout.includes(STUB_FN_NAME) &&
-      r.stdout.includes("(df.lib)");
+      r.stdout.includes("(primitive)");
     results.push({
       name: "apropos double smoke",
       pass: ok,
