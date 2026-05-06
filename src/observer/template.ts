@@ -174,7 +174,10 @@ type BindArgs = {
 // input, decide whether it's a parameter (literal value carried in from
 // outside) or a reference to an earlier call's output (derived). The
 // detection rule for refs: if the field's value matches an earlier call's
-// output structurally (deep-equal), bind to that output's variable name.
+// output or object/array subtree structurally (deep-equal), bind to that
+// output expression. This keeps intermediate values such as
+// `const picked = candidates[0]` inside the crystallised body instead of
+// leaking them into the public input schema.
 function bindInputs(args: BindArgs): Record<string, TemplateInputBinding> {
   const { call, callIndex, outputs, params, literalDedup } = args;
   const out: Record<string, TemplateInputBinding> = {};
@@ -270,21 +273,75 @@ function literalKeyOf(sample: unknown, jsType: TypeLabel): string | null {
 }
 
 // Walk the outputs map looking for one that deep-equals `value`. Returns
-// the variable name (e.g. `out0`) of the matched output. We match the
-// whole output, not a sub-tree (sub-tree matching would need a
-// path-walker; the MVP doesn't need it).
+// the output expression (e.g. `out0` or `out0[0]`) of the matched output
+// or structured sub-tree.
 function matchEarlierOutput(
   value: unknown,
   outputs: Map<number, unknown>,
   beforeIndex: number,
 ): string | null {
-  for (let i = 0; i < beforeIndex; i += 1) {
+  for (let i = beforeIndex - 1; i >= 0; i -= 1) {
     const candidate = outputs.get(i);
-    if (deepEqual(value, candidate)) {
-      return `out${i}`;
-    }
+    const ref = matchOutputRef(value, candidate, `out${i}`);
+    if (ref !== null) return ref;
   }
   return null;
+}
+
+function matchOutputRef(
+  value: unknown,
+  candidate: unknown,
+  baseRef: string,
+): string | null {
+  if (deepEqual(value, candidate)) return baseRef;
+  if (isArraySubset(value, candidate)) return baseRef;
+  if (!isStructuredValue(value)) return null;
+  return matchStructuredSubtree(value, candidate, baseRef);
+}
+
+function isArraySubset(value: unknown, candidate: unknown): boolean {
+  if (!Array.isArray(value) || !Array.isArray(candidate)) return false;
+  if (value.length === 0 || value.length >= candidate.length) return false;
+  return value.every((item) =>
+    candidate.some((candidateItem) => deepEqual(item, candidateItem)),
+  );
+}
+
+function matchStructuredSubtree(
+  value: unknown,
+  candidate: unknown,
+  baseRef: string,
+): string | null {
+  if (Array.isArray(candidate)) {
+    for (let i = 0; i < candidate.length; i += 1) {
+      const childRef = `${baseRef}[${i}]`;
+      const child = candidate[i];
+      if (deepEqual(value, child)) return childRef;
+      const nested = matchStructuredSubtree(value, child, childRef);
+      if (nested !== null) return nested;
+    }
+    return null;
+  }
+
+  if (candidate !== null && typeof candidate === "object") {
+    for (const [key, child] of Object.entries(candidate as Record<string, unknown>)) {
+      const childRef = `${baseRef}${propertyAccess(key)}`;
+      if (deepEqual(value, child)) return childRef;
+      const nested = matchStructuredSubtree(value, child, childRef);
+      if (nested !== null) return nested;
+    }
+  }
+
+  return null;
+}
+
+function isStructuredValue(value: unknown): boolean {
+  return value !== null && typeof value === "object";
+}
+
+function propertyAccess(key: string): string {
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)) return `.${key}`;
+  return `[${JSON.stringify(key)}]`;
 }
 
 // Loose deep-equal that recurses into arrays + plain objects. Sufficient
@@ -399,21 +456,72 @@ function shapeHashHex(input: string): string {
 function canonicalShape(steps: TemplateStep[]): string {
   return steps
     .map((s) => {
-      const fields = Object.keys(s.inputBindings).sort().join(",");
+      const fields = Object.entries(s.inputBindings)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([field, binding]) => {
+          const target =
+            binding.kind === "ref" ? `ref:${binding.ref}` : "param";
+          return `${field}=${target}`;
+        })
+        .join(",");
       return `${s.primitive}(${fields})`;
     })
     .join("|");
 }
 
-// Topic slug for the function name. Drawn from the first lib.* call's
-// primitive label, falling back to the trajectory.question.
+// Topic slug for the function name. Prefer user-intent shape over trace
+// internals: a call chain ending in executeTableMath should advertise
+// table-metric reuse, not the first helper it happened to call. This keeps
+// the `crystallise_` prefix for compatibility while making the middle of the
+// name useful to `apropos`, grep, and humans.
 function pickTopic(trajectory: TrajectoryRecord): string {
+  const text = trajectoryIntentText(trajectory);
+  const primitives = new Set(trajectory.calls.map((c) => c.primitive));
+
+  if (primitives.has("lib.executeTableMath")) {
+    if (/\brange\b/.test(text)) return "range_table_metric";
+    if (/\b(change|delta|difference|increase|decrease)\b/.test(text)) {
+      return "compare_table_metric";
+    }
+    if (/\b(ratio|percent|percentage|margin)\b/.test(text)) {
+      return "ratio_table_metric";
+    }
+    return "table_metric";
+  }
+
+  if (primitives.has("lib.inferTableMathPlan")) return "table_math_plan";
+  if (primitives.has("lib.locateFigure")) return "locate_table_figure";
+  if (primitives.has("lib.pickFiling")) return "filing_question";
+
   const firstLib = trajectory.calls.find((c) => c.primitive.startsWith("lib."));
   if (firstLib) {
-    const tail = firstLib.primitive.slice("lib.".length);
-    return sanitizeSlug(tail);
+    return sanitizeSlug(firstLib.primitive.slice("lib.".length));
   }
   return sanitizeSlug(trajectory.question || "snippet");
+}
+
+function trajectoryIntentText(trajectory: TrajectoryRecord): string {
+  const parts: string[] = [trajectory.question ?? ""];
+  for (const call of trajectory.calls) {
+    collectStrings(call.input, parts);
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+function collectStrings(value: unknown, into: string[]): void {
+  if (typeof value === "string") {
+    into.push(value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, into);
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const v of Object.values(value as Record<string, unknown>)) {
+      collectStrings(v, into);
+    }
+  }
 }
 
 // Safe identifier. Preserves the input's case (so `priorTickers` stays
