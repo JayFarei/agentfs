@@ -6,6 +6,7 @@ import type { LibrarySnapshot } from "../src/observer/template.js";
 
 const EMPTY_LIB: LibrarySnapshot = {
   shapeHashes: new Set<string>(),
+  learnedNames: new Set<string>(),
 };
 
 function buildTrajectory(
@@ -130,7 +131,7 @@ describe("shouldCrystallise", () => {
     if (!out.ok) expect(out.reason).toContain("composition pattern");
   });
 
-  it("rejects plan-phase trajectories because only committed artifacts can crystallise", () => {
+  it("rejects plan-phase trajectories because only committed artifacts can be learned from", () => {
     const traj = buildTrajectory({
       calls: VALID_CALLS,
       mode: "novel",
@@ -179,7 +180,28 @@ describe("shouldCrystallise", () => {
     if (!out.ok) expect(out.reason).toContain("validation");
   });
 
-  it("rejects trajectories that already call a crystallised tool", () => {
+  it("rejects trajectories that already call a learned interface", () => {
+    const calls: TrajectoryRecord["calls"] = [
+      VALID_CALLS[0]!,
+      {
+        ...VALID_CALLS[1]!,
+        primitive: "lib.rangeTableMetric",
+      },
+    ];
+    const traj = buildTrajectory({ calls, mode: "interpreted" });
+    const out = shouldCrystallise({
+      trajectory: traj,
+      shapeHash: "nested",
+      existing: {
+        shapeHashes: new Set<string>(),
+        learnedNames: new Set<string>(["rangeTableMetric"]),
+      },
+    });
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.reason).toContain("reuse evidence");
+  });
+
+  it("still rejects legacy crystallise-prefixed learned calls", () => {
     const calls: TrajectoryRecord["calls"] = [
       VALID_CALLS[0]!,
       {
@@ -190,7 +212,7 @@ describe("shouldCrystallise", () => {
     const traj = buildTrajectory({ calls, mode: "interpreted" });
     const out = shouldCrystallise({
       trajectory: traj,
-      shapeHash: "nested",
+      shapeHash: "nested-legacy",
       existing: EMPTY_LIB,
     });
     expect(out.ok).toBe(false);
@@ -231,10 +253,11 @@ describe("shouldCrystallise", () => {
     if (!out.ok) expect(out.reason).toContain("did not return a list");
   });
 
-  it("rejects when shape-hash already crystallised", () => {
+  it("rejects when shape-hash already learned", () => {
     const traj = buildTrajectory({ calls: VALID_CALLS });
     const existing: LibrarySnapshot = {
       shapeHashes: new Set<string>(["fresh"]),
+      learnedNames: new Set<string>(["rangeTableMetric"]),
     };
     const out = shouldCrystallise({
       trajectory: traj,
@@ -242,7 +265,7 @@ describe("shouldCrystallise", () => {
       existing,
     });
     expect(out.ok).toBe(false);
-    if (!out.ok) expect(out.reason).toContain("already crystallised");
+    if (!out.ok) expect(out.reason).toContain("already learned");
   });
 
   it("rejects when a call output has an error key", () => {

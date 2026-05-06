@@ -355,7 +355,7 @@ async function main(): Promise<void> {
     });
   }
 
-  // 5. cost.tier === 4 (novel ad-hoc composition, no crystallised wrapper)
+  // 5. cost.tier === 4 (novel ad-hoc composition, no learned interface)
   const cost =
     (trajectoryRecord?.["cost"] as
       | { tier: number; llmCalls: number; tokens?: { hot: number; cold: number } }

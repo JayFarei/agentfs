@@ -311,7 +311,7 @@ async function main(): Promise<void> {
     | { kind: "skipped"; reason: string };
 
   checks.push({
-    name: "observer returned crystallised",
+    name: "observer returned learned interface",
     pass: observeResult.kind === "crystallised",
     detail:
       observeResult.kind === "crystallised"
@@ -324,48 +324,48 @@ async function main(): Promise<void> {
     return;
   }
 
-  // 5. Inspect the crystallised file.
+  // 5. Inspect the learned interface file.
   let crystallisedSource = "";
   try {
     crystallisedSource = await fsp.readFile(observeResult.path, "utf8");
-    checks.push({ name: "crystallised file written", pass: true });
+    checks.push({ name: "learned interface file written", pass: true });
   } catch (err) {
     checks.push({
-      name: "crystallised file written",
+      name: "learned interface file written",
       pass: false,
       detail: err instanceof Error ? err.message : String(err),
     });
   }
   checks.push({
-    name: "crystallised file uses fn({ factory",
+    name: "learned interface file uses fn({ factory",
     pass: crystallisedSource.includes("fn<"),
     detail: crystallisedSource.slice(0, 400),
   });
   checks.push({
-    name: "crystallised file calls df.db.cases.findSimilar",
+    name: "learned interface file calls df.db.cases.findSimilar",
     pass: crystallisedSource.includes("df.db.cases.findSimilar"),
   });
   checks.push({
-    name: "crystallised file calls df.lib.pickFiling and df.lib.locateFigure",
+    name: "learned interface file calls df.lib.pickFiling and df.lib.locateFigure",
     pass:
       crystallisedSource.includes("df.lib.pickFiling") &&
       crystallisedSource.includes("df.lib.locateFigure"),
   });
   checks.push({
-    name: "crystallised file carries @shape-hash header",
+    name: "learned interface file carries @shape-hash header",
     pass: /@shape-hash:\s*[0-9a-f]{8,}/.test(crystallisedSource),
   });
 
   // 6. Resolve via the LibraryResolver to confirm it loads.
   const resolved = await libraryResolver.resolve(TENANT, observeResult.name);
   checks.push({
-    name: "DiskLibraryResolver loads the crystallised function",
+    name: "DiskLibraryResolver loads the learned interface",
     pass: resolved !== null,
     detail: resolved === null ? "resolve returned null" : `spec.intent=${resolved.spec.intent}`,
   });
 
   // 7. Run the second snippet that calls the new function directly.
-  // The crystallised function exposes all the external parameters the
+  // The learned interface exposes all the external parameters the
   // originating trajectory carried (see template.ts param dedup); we
   // pass each one. For the demo's "same intent shape, different params"
   // story (personas.md §2), agents will read `man <fn>` to see this
@@ -377,7 +377,7 @@ const out = await df.lib.${observeResult.name}({
   question: "net revenues 2017",
   priorTickers: ["MA"],
 });
-console.log("crystallised-result=" + JSON.stringify(out.value));
+console.log("learned-interface-result=" + JSON.stringify(out.value));
 `;
 
   const result2 = await snippetRuntime.run({
@@ -507,7 +507,7 @@ function finalizeAndExit(
   if (debug?.secondStderr) console.log("--- 2nd snippet stderr ---\n" + debug.secondStderr);
   if (debug?.crystallised) {
     console.log(
-      `--- crystallised file (first 40 lines) ${debug.crystallised.path} ---\n` +
+      `--- learned interface file (first 40 lines) ${debug.crystallised.path} ---\n` +
         debug.crystallised.firstLines,
     );
   }

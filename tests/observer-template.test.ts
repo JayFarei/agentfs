@@ -129,7 +129,7 @@ describe("extractTemplate", () => {
     });
   });
 
-  it("produces a deterministic shapeHash and crystallise_<topic>_<hash> name", () => {
+  it("produces a deterministic shapeHash and semantic learned-interface name", () => {
     const traj = buildTrajectory([
       {
         index: 0,
@@ -152,7 +152,7 @@ describe("extractTemplate", () => {
     const b = extractTemplate(traj);
     expect(a.shapeHash).toBe(b.shapeHash);
     expect(a.shapeHash).toMatch(/^[0-9a-f]{8}$/);
-    expect(a.name).toMatch(/^crystallise_[a-zA-Z0-9_]+_[0-9a-f]{8}$/);
+    expect(a.name).toBe("filingQuestion");
     // Topic should be semantic, not tied to the first lib.* primitive name.
     expect(a.topic).toBe("filing_question");
   });
@@ -197,7 +197,7 @@ describe("extractTemplate", () => {
     );
     const tpl = extractTemplate(traj);
     expect(tpl.topic).toBe("range_table_metric");
-    expect(tpl.name).toMatch(/^crystallise_range_table_metric_[0-9a-f]{8}$/);
+    expect(tpl.name).toBe("rangeTableMetric");
   });
 
   it("keeps selected search results internal instead of exposing filing as input", () => {
@@ -339,23 +339,25 @@ describe("readLibrarySnapshot", () => {
   it("returns an empty set when the tenant overlay is missing", async () => {
     const snap = await readLibrarySnapshot({ baseDir, tenantId: "absent" });
     expect(snap.shapeHashes.size).toBe(0);
+    expect(snap.learnedNames.size).toBe(0);
   });
 
-  it("collects every @shape-hash: marker in the tenant overlay", async () => {
+  it("collects every learned-interface marker in the tenant overlay", async () => {
     const tenantDir = path.join(baseDir, "lib", "acme");
     await mkdir(tenantDir, { recursive: true });
     await writeFile(
       path.join(tenantDir, "first.ts"),
-      "// Crystallised\n// @shape-hash: aaaaaaaa\nexport const first = () => null;\n",
+      "// Learned\n// @shape-hash: aaaaaaaa\nexport const first = () => null;\n",
       "utf8",
     );
     await writeFile(
       path.join(tenantDir, "second.ts"),
-      "// Crystallised\n// @shape-hash: bbbbbbbb\nexport const second = () => null;\n",
+      "// Learned\n// @shape-hash: bbbbbbbb\nexport const second = () => null;\n",
       "utf8",
     );
     const snap = await readLibrarySnapshot({ baseDir, tenantId: "acme" });
     expect(Array.from(snap.shapeHashes).sort()).toEqual(["aaaaaaaa", "bbbbbbbb"]);
+    expect(Array.from(snap.learnedNames).sort()).toEqual(["first", "second"]);
   });
 
   it("skips files without a @shape-hash: marker", async () => {
@@ -373,5 +375,6 @@ describe("readLibrarySnapshot", () => {
     );
     const snap = await readLibrarySnapshot({ baseDir, tenantId: "acme" });
     expect(Array.from(snap.shapeHashes)).toEqual(["deadbeef"]);
+    expect(Array.from(snap.learnedNames)).toEqual(["crystal"]);
   });
 });

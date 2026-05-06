@@ -154,7 +154,7 @@ into a file (\`echo /db/finqa-2024 > /tmp/mount\`) and \`cat\` it back.
 Every \`df.lib.<fn>\` and \`df.db.<coll>.<method>\` call returns a uniform
 \`Result<T>\` shape: \`{ value, mode, cost, provenance, escalations,
 warnings? }\`. The \`mode\` field tells you whether the runtime hit a
-crystallised function (\`interpreted\`), an LLM-backed body
+learned interface (\`interpreted\`), an LLM-backed body
 (\`llm-backed\`), or a from-scratch composition (\`novel\`). The \`cost\`
 field is what a user-facing dashboard plots over time. Print the whole
 envelope (\`JSON.stringify(r, null, 2)\`) when debugging.

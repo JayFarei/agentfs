@@ -178,7 +178,7 @@ async function materialiseWorkspace(args: {
   await linkOrMakeDir(
     path.join(config.baseDir, "lib", config.tenantId),
     path.join(root, "lib"),
-    "# lib\n\nTenant-local learned functions appear here.\n",
+    "# lib\n\nTenant-local learned interfaces appear here.\n",
   );
   await writeScriptTemplates(root, config);
 }
@@ -199,7 +199,7 @@ async function writeAgentMemory(
     "Important paths:",
     "- `df.d.ts` is the typed executable surface.",
     "- `db/` is read-only dataset context, descriptors, samples, and stats.",
-    "- `lib/` is the tenant learned-function surface.",
+    "- `lib/` is the tenant learned-interface surface.",
     "- `scripts/scratch.ts` is for exploratory code.",
     "- `scripts/answer.ts` is the visible intent program to commit.",
     "- `tmp/runs/N/` contains notebook-style outputs from `datafetch run`.",

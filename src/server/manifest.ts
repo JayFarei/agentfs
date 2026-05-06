@@ -2,7 +2,7 @@
 //
 // Produces a TypeScript declaration file that lists every available `df.*`
 // callable for a given tenant: collection handles from registered mounts,
-// crystallised tools (with their YAML-frontmatter description as JSDoc),
+// learned interfaces (with their YAML-frontmatter description as JSDoc),
 // and seed/tenant primitives (with intent + schema as JSDoc).
 //
 // Mirrors the pattern Cloudflare Code Mode uses: instead of advertising
@@ -13,7 +13,7 @@
 //
 // Regeneration is cheap and idempotent. Called from /v1/connect (so the
 // manifest reflects the active workspace at session boot) and from the
-// observer's authoring path (so a freshly-crystallised tool appears
+// observer's authoring path (so a freshly learned interface appears
 // immediately in the manifest the next caller reads).
 
 import { promises as fsp } from "node:fs";
@@ -114,7 +114,7 @@ async function renderManifest(opts: RegenerateManifestOpts): Promise<string> {
   out.push("  lib: {");
 
   if (tools.length > 0) {
-    out.push("    // ─── Tools (intent-complete; call directly when description matches) ───");
+    out.push("    // ─── Learned Interfaces (intent-complete; call directly when description matches) ───");
     out.push("");
     for (const t of tools) out.push(...renderEntry(t, /* asTool */ true));
   }

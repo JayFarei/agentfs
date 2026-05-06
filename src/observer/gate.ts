@@ -1,39 +1,39 @@
 // Crystallisation gate.
 //
-// Conservative heuristic deciding whether a saved trajectory should be
-// crystallised into a /lib/<tenant>/<name>.ts file. Phase 5 (R6) wants
-// the observer to "only propose crystallisation when the trajectory looks
-// complete and the call graph is plausible".
+// Conservative heuristic deciding whether a saved trajectory should be learned
+// into a /lib/<tenant>/<name>.ts interface. Phase 5 (R6) wants the observer to
+// "only propose crystallisation when the trajectory looks complete and the call
+// graph is plausible".
 //
 // The gate is intentionally simple — it errs on the side of skipping. A
 // permissive observer would write garbage /lib/ files; a strict one only
-// crystallises shapes the runtime can mechanically replay. Per the plan's
+// learns shapes the runtime can mechanically replay. Per the plan's
 // Architecture and design.md §8.3, the production form requires N >= 3
 // convergent trajectories before promotion. The MVP collapses N to 1
-// (every qualifying trajectory crystallises immediately) so the demo
+// (every qualifying trajectory is learned immediately) so the demo
 // shows turn 5 of personas.md §3 ("Coming back the next day"). The
 // shape-hash de-dup below means re-running the same snippet doesn't
-// produce a second crystallised copy.
+// produce a second learned-interface copy.
 //
 // Heuristics applied (all must pass):
 //   1. Phase metadata, when present, must identify a committed execute
-//      artifact. Plan attempts are exploration and cannot crystallise.
+//      artifact. Plan attempts are exploration and cannot be learned from.
 //   2. >= 2 distinct primitive calls in the trajectory.
 //   3. The trajectory's `errored` flag is false AND no call has a
 //      thrown-error output (no `error`/`errors`/`stack` key on its
 //      output). Error-path detection lives on the trajectory's `errored`
 //      field, NOT on `mode` — per PRD §8.1, `mode: "novel"` means
 //      "first-time successful ad-hoc composition" (tier 4).
-//   4. Mode is "novel" (first-time composition we want to crystallise)
+//   4. Mode is "novel" (first-time composition we want to learn)
 //      or "interpreted" (already-composed; usually filtered by the
 //      shape-hash dedup below). LLM-backed / cache trajectories are
-//      excluded per D-015 — the observer crystallises composition
+//      excluded per D-015 — the observer learns composition
 //      patterns, not standalone LLM functions or cached results.
 //   5. The first call is a substrate retrieval (`db.*`) returning a list,
 //      and at least one subsequent call is a `lib.*` whose input
 //      references the first call's output (data-flow check).
 //   6. The shape-hash isn't already represented in the on-disk
-//      /lib/<tenant>/ overlay (avoid re-crystallising).
+//      /lib/<tenant>/ overlay (avoid re-learning the same shape).
 
 import type { TrajectoryRecord } from "../sdk/index.js";
 
@@ -45,8 +45,8 @@ export type GateOutcome =
 
 export type ShouldCrystalliseArgs = {
   trajectory: TrajectoryRecord;
-  // Pre-computed shape hash from the template extractor. Used to check
-  // against `existingHashes` so we don't re-crystallise the same shape.
+  // Pre-computed shape hash from the template extractor. Used to check against
+  // `existing.shapeHashes` so we don't re-learn the same shape.
   shapeHash: string;
   existing: LibrarySnapshot;
 };
@@ -65,7 +65,7 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
   ) {
     return {
       ok: false,
-      reason: `trajectory.phase is "${trajectory.phase}"; only committed artifacts can crystallise`,
+      reason: `trajectory.phase is "${trajectory.phase}"; only committed artifacts can be learned from`,
     };
   }
   if (
@@ -80,7 +80,7 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
   if (trajectory.crystallisable === false) {
     return {
       ok: false,
-      reason: "trajectory.crystallisable=false; only committed artifacts can crystallise",
+      reason: "trajectory.crystallisable=false; only committed artifacts can be learned from",
     };
   }
 
@@ -126,22 +126,22 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
   if (trajectory.mode !== "novel" && trajectory.mode !== "interpreted") {
     return {
       ok: false,
-      reason: `trajectory.mode is "${trajectory.mode}"; observer only crystallises composition patterns (mode "novel" or "interpreted"). Per D-015 the agent authors LLM-backed functions directly.`,
+      reason: `trajectory.mode is "${trajectory.mode}"; observer only learns composition patterns (mode "novel" or "interpreted"). Per D-015 the agent authors LLM-backed functions directly.`,
     };
   }
 
-  // Interpreted trajectories that already dispatched through a crystallised
-  // wrapper should reinforce that wrapper, not crystallise a second wrapper
-  // around it. The current generated names use `crystallise_*`; once names
-  // become fully semantic this check should move to the library metadata
-  // layer, but this protects the observed nested-wrapper failure now.
-  const crystallisedCall = trajectory.calls.find((c) =>
-    /^lib\.crystallise_/.test(c.primitive),
+  // Interpreted trajectories that already dispatched through a learned
+  // interface should reinforce that interface, not learn a second wrapper
+  // around it. Semantic names are recognised through the library metadata
+  // snapshot; the old `crystallise_*` prefix remains supported for legacy
+  // files already present on disk.
+  const learnedCall = trajectory.calls.find((c) =>
+    callsKnownLearnedInterface(c.primitive, existing),
   );
-  if (crystallisedCall) {
+  if (learnedCall) {
     return {
       ok: false,
-      reason: `trajectory already calls crystallised tool ${crystallisedCall.primitive}; treat as reuse evidence, not a new template`,
+      reason: `trajectory already calls learned interface ${learnedCall.primitive}; treat as reuse evidence, not a new template`,
     };
   }
 
@@ -180,11 +180,11 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
 
   // 6. Shape-hash de-dup. The existing snapshot is built from the on-disk
   //    /lib/<tenant>/*.ts files; any file whose body comment carries the
-  //    same `@shape-hash:` tag means we already crystallised this shape.
+  //    same `@shape-hash:` tag means we already learned this shape.
   if (existing.shapeHashes.has(shapeHash)) {
     return {
       ok: false,
-      reason: `call shape already crystallised (shapeHash=${shapeHash})`,
+      reason: `call shape already learned (shapeHash=${shapeHash})`,
     };
   }
 
@@ -197,6 +197,15 @@ function answerValidationAccepted(value: unknown): boolean {
 }
 
 // --- Helpers ---------------------------------------------------------------
+
+function callsKnownLearnedInterface(
+  primitive: string,
+  existing: LibrarySnapshot,
+): boolean {
+  if (!primitive.startsWith("lib.")) return false;
+  const name = primitive.slice("lib.".length);
+  return existing.learnedNames.has(name) || name.startsWith("crystallise_");
+}
 
 // A call's output shape that "looks like an error" — defensive check; the
 // trajectory recorder doesn't store thrown exceptions per se (it bubbles

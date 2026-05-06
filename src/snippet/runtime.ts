@@ -144,15 +144,20 @@ export class DiskSnippetRuntime implements SnippetRuntime {
     //      - errored snippet              → mode unchanged (default
     //        "interpreted"), `errored=true`. The observer gate skips on
     //        `errored`, NOT on mode.
-    //      - successful run that invoked a crystallised wrapper
-    //        (df.lib.crystallise_*) → "interpreted", tier 2.
-    //      - successful first-time composition (no crystallised wrapper)
+    //      - successful run that invoked a learned interface from the tenant
+    //        overlay → "interpreted", tier 2.
+    //      - successful first-time composition (no learned interface)
     //        → "novel", tier 4 (full ReAct / ad-hoc composition).
+    const usedLearnedInterface = await calledLearnedInterface({
+      snapshot: recorder.snapshot,
+      baseDir: sessionCtx.baseDir,
+      tenantId: sessionCtx.tenantId,
+    });
     if (error || effectiveExitCode !== 0) {
       recorder.setErrored(true);
       // Leave mode at the recorder's default ("interpreted"); error-path
       // gating uses `errored`.
-    } else if (calledCrystallisedWrapper(recorder.snapshot)) {
+    } else if (usedLearnedInterface) {
       recorder.setMode("interpreted");
       // Tier accumulator already reflects substrate (2) / LLM (3) max.
     } else {
@@ -393,16 +398,26 @@ async function dirExists(dir: string): Promise<boolean> {
 
 // --- Helpers ---------------------------------------------------------------
 
-// True iff any recorded call resolved through a crystallised /lib/<tenant>
-// wrapper. The observer authors files named `crystallise_<topic>_<hash>`,
-// so the call list contains a `lib.crystallise_*` entry whenever the
-// snippet invoked one. Distinguishes Q2's interpreted replay from Q1's
-// novel ad-hoc composition.
-function calledCrystallisedWrapper(
-  snapshot: { calls: ReadonlyArray<{ primitive: string }> },
-): boolean {
-  for (const call of snapshot.calls) {
-    if (call.primitive.startsWith("lib.crystallise")) return true;
+// True iff any recorded call resolved through a learned /lib/<tenant>
+// interface. Semantic names are detected by reading the tenant overlay file for
+// `@shape-hash`; the legacy `crystallise_*` prefix is kept as a compatibility
+// path for older generated interfaces.
+async function calledLearnedInterface(args: {
+  snapshot: { calls: ReadonlyArray<{ primitive: string }> };
+  baseDir: string;
+  tenantId: string;
+}): Promise<boolean> {
+  for (const call of args.snapshot.calls) {
+    if (!call.primitive.startsWith("lib.")) continue;
+    const name = call.primitive.slice("lib.".length);
+    if (name.startsWith("crystallise")) return true;
+    const file = path.join(args.baseDir, "lib", args.tenantId, `${name}.ts`);
+    try {
+      const content = await fsp.readFile(file, "utf8");
+      if (/@shape-hash:\s*[0-9a-f]{8,}/.test(content)) return true;
+    } catch {
+      // Seed primitives or missing files are not learned interfaces.
+    }
   }
   return false;
 }

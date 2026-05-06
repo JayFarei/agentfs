@@ -10,7 +10,8 @@
 //     reshaping the template extractor doesn't know how to handle.
 //
 // The author writes to `<baseDir>/lib/<tenantId>/<name>.ts`. It refuses to
-// overwrite. Validation: after writing, it asks the supplied
+// overwrite unless a later workspace HEAD supersedes the same learned shape.
+// Validation: after writing, it asks the supplied
 // LibraryResolver to load the file; if loading fails (TS error, missing
 // fn export, schema parse), it deletes the file and returns the failure
 // so the observer can surface a clean `kind: "skipped"`.
@@ -125,8 +126,8 @@ export async function authorFunction(
     };
   }
 
-  // Refresh the typed API manifest and workspace memory so the newly
-  // crystallised tool shows up in df.d.ts / AGENTS.md on the next read.
+  // Refresh the typed API manifest and workspace memory so the newly learned
+  // interface shows up in df.d.ts / AGENTS.md on the next read.
   // Lazy imports keep the observer module light for runDemo and smoke tests.
   void (async () => {
     try {
@@ -191,7 +192,7 @@ function generatePureSource(args: GenerateArgs): string | null {
     trajectory.calls[trajectory.calls.length - 1]!.output,
   );
 
-  // The crystallised file lives at <baseDir>/lib/<tenantId>/<name>.ts,
+  // The learned interface file lives at <baseDir>/lib/<tenantId>/<name>.ts,
   // outside the repo tree. We use an absolute file:// URL to the SDK
   // barrel so the import resolves regardless of where baseDir lives —
   // same trick as snippet/install.ts seed shim.
@@ -206,7 +207,7 @@ function generatePureSource(args: GenerateArgs): string | null {
     `import { fn } from "${sdkUrl}";`,
     `import * as v from "${valibotUrl}";`,
     "",
-    `// Crystallised composition. The function body uses the snippet runtime's`,
+    `// Learned interface composition. The function body uses the snippet runtime's`,
     `// global \`df\` to call the same primitives the originating trajectory`,
     `// recorded.`,
     `declare const df: {`,
@@ -428,7 +429,7 @@ function pickExample(args: PickExampleArgs): Record<string, unknown> | null {
 
 function intentString(template: CallTemplate): string {
   const seq = template.steps.map((s) => s.primitive).join(" -> ");
-  return `reusable learned function for the ${template.topic} intent shape; internally composes ${seq}`;
+  return `reusable learned interface for the ${template.topic} intent shape; internally composes ${seq}`;
 }
 
 function headerComment(args: {
@@ -436,7 +437,7 @@ function headerComment(args: {
   trajectory: TrajectoryRecord;
 }): string {
   return [
-    `// Crystallised by datafetch observer from trajectory ${args.trajectory.id}.`,
+    `// Learned by datafetch observer from trajectory ${args.trajectory.id}.`,
     `// @shape-hash: ${args.template.shapeHash}`,
     `// @origin-trajectory: ${args.trajectory.id}`,
     `// @origin-question: ${JSON.stringify(args.trajectory.question)}`,
@@ -445,7 +446,7 @@ function headerComment(args: {
   ].join("\n");
 }
 
-// YAML frontmatter at the very top of the crystallised file. Mirrors the
+// YAML frontmatter at the very top of the learned interface file. Mirrors the
 // format Claude Code skills use at `~/.claude/skills/<name>/SKILL.md`:
 // `name` + a `description` block whose text gives the agent enough signal
 // to decide whether to call the wrapper directly vs compose from primitives.
@@ -471,7 +472,7 @@ function frontmatter(args: {
   // Indent the description's body by two spaces so YAML's `|` block
   // scalar parses cleanly. Newlines inside the block are preserved.
   const descLines = [
-    `Learned datafetch function for questions shaped like:`,
+    `Learned datafetch interface for questions shaped like:`,
     `  "${userQuestion.replace(/"/g, '\\"')}"`,
     `Internally chains: ${callGraph}.`,
     `Use when the user's question has the same task shape, even if`,
@@ -484,6 +485,7 @@ function frontmatter(args: {
   return [
     "/* ---",
     `name: ${args.template.name}`,
+    `status: provisional`,
     `description: |`,
     description,
     `trajectory: ${args.trajectory.id}`,
@@ -527,7 +529,7 @@ function sdkIndexUrl(): string {
   return `file://${target.replace(/\\/g, "/")}`;
 }
 
-// Locate valibot's ESM entry as a file:// URL. The crystallised wrapper
+// Locate valibot's ESM entry as a file:// URL. The learned interface
 // lives at <baseDir>/lib/<tenantId>/<name>.ts (outside the repo tree),
 // so the bare `valibot` specifier wouldn't resolve at import time. We
 // embed the absolute URL in the generated source instead. Node 20.6+

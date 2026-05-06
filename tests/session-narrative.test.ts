@@ -38,7 +38,7 @@ describe("renderSessionNarrative", () => {
       sessionId,
       phase: "execute",
       id: "traj_20260506120100_exec01",
-      source: "console.log(await df.lib.crystallise_range_table_metric_x({ query: 'q' }));",
+      source: "console.log(await df.lib.rangeTableMetric({ query: 'q' }));",
       stdout: "{\"answer\":190}\n",
       result: {
         trajectoryId: "traj_20260506120100_exec01",
@@ -48,21 +48,22 @@ describe("renderSessionNarrative", () => {
         mode: "interpreted",
         callPrimitives: [
           "db.cases.search",
-          "lib.crystallise_range_table_metric_x",
+          "lib.rangeTableMetric",
         ],
       },
     });
+    await writeLearnedInterface({ baseDir, tenantId: "acme", name: "rangeTableMetric" });
 
     const rendered = await renderSessionNarrative({ baseDir, sessionId });
 
     expect(rendered).toContain("artifacts: 1 plan, 1 execute, 0 failed");
     expect(rendered).toContain("contract: one execute artifact");
     expect(rendered).toContain(
-      "reuse: 1 execute artifact(s) invoked learned crystallised tools",
+      "reuse: 1 execute artifact(s) invoked learned interfaces",
     );
     expect(rendered).toContain("PLAN traj_20260506120000_plan01");
     expect(rendered).toContain("EXECUTE traj_20260506120100_exec01");
-    expect(rendered).toContain("lib.crystallise_range_table_metric_x");
+    expect(rendered).toContain("lib.rangeTableMetric");
     expect(rendered).toContain("{\"answer\":190}");
   });
 });
@@ -99,4 +100,17 @@ async function writeArtifact(args: {
   );
   await writeFile(path.join(dir, "stdout.txt"), args.stdout);
   await writeFile(path.join(dir, "stderr.txt"), "");
+}
+
+async function writeLearnedInterface(args: {
+  baseDir: string;
+  tenantId: string;
+  name: string;
+}): Promise<void> {
+  const dir = path.join(args.baseDir, "lib", args.tenantId);
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, `${args.name}.ts`),
+    "/* ---\nname: rangeTableMetric\ndescription: |\n  test\ntrajectory: traj\nshape-hash: deadbeef\n--- */\n// @shape-hash: deadbeef\nexport const rangeTableMetric = () => null;\n",
+  );
 }

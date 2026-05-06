@@ -71,7 +71,7 @@ describe("authorFunction", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
-  it("authors intent-shaped wrappers that can be called without intermediate filing input", async () => {
+  it("authors intent-shaped learned interfaces that can be called without intermediate filing input", async () => {
     const trajectory = buildIntentTrajectory();
     const template = extractTemplate(trajectory);
     const resolver: LibraryResolver = {
@@ -94,7 +94,7 @@ describe("authorFunction", () => {
     expect(authored.source).toContain("filing: out0[0]");
   });
 
-  it("can supersede an existing crystallised file when the workspace HEAD advances", async () => {
+  it("can supersede an existing learned interface file when the workspace HEAD advances", async () => {
     const trajectory = buildIntentTrajectory();
     const template = extractTemplate(trajectory);
     const dir = path.join(baseDir, "lib", "acme");

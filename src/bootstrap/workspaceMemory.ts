@@ -122,7 +122,7 @@ export async function renderWorkspaceMemory(
     "- Do not answer from `tmp/runs/N` output. Convert the validated plan into `scripts/answer.ts`, commit it, then answer from `result/answer.json`.",
   );
   lines.push(
-    "- Make probabilistic steps explicit as reusable `df.lib.*` calls or `fn({ body: agent(...) })` functions with skill markdown sidecars.",
+    "- Make probabilistic steps explicit as reusable `df.lib.*` interfaces or `fn({ body: agent(...) })` functions with skill markdown sidecars.",
   );
   lines.push("");
   lines.push("A validated plan should establish:");
@@ -179,7 +179,7 @@ export async function renderWorkspaceMemory(
     }
   }
 
-  lines.push("## Learned And Seeded TypeScript Surface");
+  lines.push("## Learned Interface And Seeded TypeScript Surface");
   lines.push("");
   if (opts.tenantId === undefined) {
     lines.push("- Tenant-specific library listing appears after session connect.");
@@ -191,13 +191,13 @@ export async function renderWorkspaceMemory(
     const tools = library.filter((entry) => entry.isTool);
     const primitives = library.filter((entry) => !entry.isTool);
     if (tools.length > 0) {
-      lines.push("### Learned Tools");
+      lines.push("### Learned Interfaces");
       lines.push("");
       for (const entry of tools.slice(0, 12)) {
         lines.push(`- \`df.lib.${entry.name}\`: ${entry.intent}`);
       }
       if (tools.length > 12) {
-        lines.push(`- ... ${tools.length - 12} more learned tools in \`df.d.ts\`.`);
+        lines.push(`- ... ${tools.length - 12} more learned interfaces in \`df.d.ts\`.`);
       }
       lines.push("");
     }

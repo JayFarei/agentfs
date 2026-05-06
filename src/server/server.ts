@@ -44,7 +44,7 @@ import { SessionStore } from "./sessionStore.js";
 export type CreateServerOpts = {
   // Override the on-disk workspace root. Defaults to defaultBaseDir().
   baseDir?: string;
-  // Tenant id for the observer (controls where crystallised /lib/ files
+  // Tenant id for the observer (controls where learned /lib/ files
   // land for trajectories driven by /v1/bash and /v1/snippets that don't
   // pin a session-bound tenant).
   tenantId?: string;
@@ -68,7 +68,7 @@ export async function createServer(
   );
   await installFlueDispatcher({ baseDir });
   // Multi-tenant: don't pin a tenantId at install time. The observer
-  // worker routes crystallised /lib/ writes by trajectory.tenantId
+  // worker routes learned /lib/ writes by trajectory.tenantId
   // (which the snippet runtime sets from sessionCtx). Pinning here
   // silently filters out every trajectory whose session tenant differs
   // from the boot-time default. An explicit override via opts.tenantId

@@ -1,17 +1,17 @@
 // Observer worker.
 //
 // In-process, fire-and-forget from the snippet runtime's perspective. The
-// worker reads a saved trajectory, runs the crystallisation gate, and (if
-// the gate passes) dispatches the authoring step. No file watcher; no
+// worker reads a saved trajectory, runs the learning gate, and (if the gate
+// passes) dispatches the authoring step. No file watcher; no
 // background daemon. The snippet runtime's `onTrajectorySaved` callback is
 // the trigger.
 //
 // Per design.md §8.3 + plan Phase 5: the production form clusters >=3
-// trajectories before crystallising. The MVP collapses N to 1 (every
-// qualifying trajectory crystallises immediately) so the demo can show
+// trajectories before learning an interface. The MVP collapses N to 1 (every
+// qualifying trajectory learns immediately) so the demo can show
 // turn 5 of personas.md §3 ("Coming back the next day"). The shape-hash
 // de-dup in the gate keeps re-running the same snippet from producing a
-// second crystallised file.
+// second learned-interface file.
 
 import path from "node:path";
 
@@ -153,14 +153,15 @@ export class Observer {
       tenantId: trajectory.tenantId,
     });
 
-    const gateSnapshot =
-      allowOverwrite && snapshot.shapeHashes.has(template.shapeHash)
-        ? {
-            shapeHashes: new Set(
-              [...snapshot.shapeHashes].filter((h) => h !== template.shapeHash),
-            ),
-          }
-        : snapshot;
+  const gateSnapshot =
+    allowOverwrite && snapshot.shapeHashes.has(template.shapeHash)
+      ? {
+          shapeHashes: new Set(
+            [...snapshot.shapeHashes].filter((h) => h !== template.shapeHash),
+          ),
+          learnedNames: snapshot.learnedNames,
+        }
+      : snapshot;
 
     const gate = shouldCrystallise({
       trajectory,

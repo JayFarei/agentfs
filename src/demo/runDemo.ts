@@ -8,18 +8,18 @@
 //   2. Publish the FinQA mount (live Atlas if ATLAS_URI is set; otherwise
 //      register an in-memory stub MountRuntime so the demo runs offline).
 //   3. Q1: a multi-step novel composition over chemicals revenue. Streams
-//      to stdout, waits for the observer to crystallise a /lib/<name>.ts.
-//   4. Q2: a snippet that calls the crystallised df.lib.<name> directly
+//      to stdout, waits for the observer to learn a /lib/<name>.ts interface.
+//   4. Q2: a snippet that calls the learned df.lib.<name> interface directly
 //      with the same intent shape but different params (coal revenue).
 //   5. Print a side-by-side cost panel comparing both envelopes.
-//   6. If --no-cache, delete the crystallised file before Q2 and re-run
+//   6. If --no-cache, delete the learned interface file before Q2 and re-run
 //      Q2 as a fresh composition — shows the cold path always works.
 //
 // The composition Q1 builds is:
 //   df.db.cases.findSimilar → df.lib.pickFiling → df.lib.inferTableMathPlan
 //   → df.lib.executeTableMath
 //
-// The crystallised file is the same shape the observer's __smoke__ smokes;
+// The learned interface file is the same shape the observer's __smoke__ smokes;
 // Q2 invokes it through `df.lib.<name>(input)`.
 
 import { promises as fsp } from "node:fs";
@@ -86,6 +86,15 @@ export type SnippetSummary = {
 const Q1_QUESTION =
   "what is the range of chemicals revenue between 2014 and 2018";
 const Q2_QUESTION = "what is the range of coal revenue between 2014 and 2018";
+const SEED_LIBRARY_PRIMITIVES = new Set([
+  "lib.arithmeticDivide",
+  "lib.executeTableMath",
+  "lib.inferTableMathPlan",
+  "lib.locateFigure",
+  "lib.pickFiling",
+  "lib.sentenceUnits",
+  "lib.titleOrQuoteUnits",
+]);
 
 export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
   const tenant = opts.tenant ?? "demo-tenant";
@@ -151,7 +160,7 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
       label: "Q1",
     });
 
-    // 4. Wait for the observer's async crystallisation to land.
+    // 4. Wait for the observer's async learning pass to land.
     let crystallised:
       | { name: string; path: string }
       | null = null;
@@ -162,14 +171,14 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
       });
       if (crystallised) {
         println(
-          `[demo] observer crystallised ${crystallised.name} at ${crystallised.path}`,
+          `[demo] observer learned ${crystallised.name} at ${crystallised.path}`,
         );
       } else {
-        println("[demo] observer did not crystallise (see warnings above)");
+        println("[demo] observer did not learn an interface (see warnings above)");
       }
     }
 
-    // 5. Q2 — discover, then invoke the crystallised function directly.
+    // 5. Q2 — discover, then invoke the learned interface directly.
     if (noCache && crystallised) {
       println(`[demo] --no-cache: deleting ${crystallised.path}`);
       await fsp.rm(crystallised.path, { force: true });
@@ -261,7 +270,7 @@ async function discoverLearnedFunction(args: {
   const top = matches[0];
   if (!top) {
     throw new Error(
-      `discovery failed: no learned function matched Q2 intent ${JSON.stringify(args.question)}`,
+      `discovery failed: no learned interface matched Q2 intent ${JSON.stringify(args.question)}`,
     );
   }
   println(
@@ -270,7 +279,7 @@ async function discoverLearnedFunction(args: {
   println(`[demo] discovery invocation=${top.invocation}`);
   if (top.name !== args.expectedName) {
     throw new Error(
-      `discovery failed: top match ${top.name} did not equal crystallised ${args.expectedName}`,
+      `discovery failed: top match ${top.name} did not equal learned interface ${args.expectedName}`,
     );
   }
   return top;
@@ -305,8 +314,8 @@ function pickCasesIdent(mountId: string): string {
 function q1Snippet(args: { question: string; mountIdent: string }): string {
   // The demo's job is to compose findSimilar + pickFiling + inferTableMathPlan
   // + executeTableMath into a multi-step novel trajectory the observer can
-  // crystallise. The observer now names the function by the task shape
-  // (`crystallise_range_table_metric_<hash>`) instead of the first helper.
+  // learn. The observer names the interface by the task shape
+  // (`rangeTableMetric`) while keeping the shape hash in metadata.
   return [
     `const cands = await df.db.${args.mountIdent}.findSimilar(${JSON.stringify(args.question)}, 5);`,
     `console.log("[Q1] candidates=" + cands.length);`,
@@ -332,8 +341,8 @@ function q2Snippet(args: {
   crystallisedName: string | null;
 }): string {
   if (args.crystallisedName) {
-    // Crystallised path — invoke the function the observer wrote. The
-    // crystallised composition's input shape mirrors the originating
+    // Learned-interface path — invoke the function the observer wrote. The
+    // learned composition's input shape mirrors the originating
     // trajectory's external parameters (see template.ts param dedup).
     // Q1 carried a single dedup'd `query` parameter (the shared question
     // string across findSimilar+pickFiling+inferTableMathPlan) plus a
@@ -355,8 +364,8 @@ function q2Snippet(args: {
     ].join("\n");
   }
   // Fallback: same composition as Q1, different question string. Used
-  // when --no-cache deletes the crystallised file or when crystallisation
-  // skipped (e.g. the trajectory shape didn't qualify).
+  // when --no-cache deletes the learned interface file or when learning skipped
+  // (e.g. the trajectory shape didn't qualify).
   return q1Snippet({ question: args.question, mountIdent: args.mountIdent }).replace(
     /\[Q1\]/g,
     "[Q2]",
@@ -404,7 +413,7 @@ async function runSnippet(args: RunSnippetArgs): Promise<SnippetSummary> {
       // sub-calls complete first per TrajectoryRecorder.call's
       // post-await push). For a novel composition this is the leaf
       // primitive (e.g. `executeTableMath`); for an interpreted replay
-      // this is the crystallised wrapper.
+      // this is the learned interface.
       if (!functionName) {
         const libCalls = callPrimitives.filter((p) => p.startsWith("lib."));
         const lastLib = libCalls[libCalls.length - 1];
@@ -478,7 +487,7 @@ async function awaitCrystallisation(args: {
   if (result.kind === "crystallised") {
     return { name: result.name, path: result.path };
   }
-  println(`[demo] crystallisation skipped: ${result.reason}`);
+  println(`[demo] learning skipped: ${result.reason}`);
   return null;
 }
 
@@ -550,22 +559,21 @@ function printCostPanel(args: {
   }
   if (args.crystallised) {
     println("");
-    println(`Crystallised: ${args.crystallised.name}`);
-    println(`             ${args.crystallised.path}`);
+    println(`Learned interface: ${args.crystallised.name}`);
+    println(`                   ${args.crystallised.path}`);
   }
 }
 
 // Render the recorded call lists for Q1 and Q2 side-by-side. The visible
 // property (call-graph collapse) is:
-//   - Q1 has one top-level chain of N df.* calls (no crystallised wrapper).
-//   - Q2 has a single top-level wrapper call (`lib.crystallise_*`) whose
+//   - Q1 has one top-level chain of N df.* calls (no learned interface).
+//   - Q2 has a single top-level learned interface call (`lib.<semanticName>`) whose
 //     body re-fans-out to the same N inner calls. Trajectory-wise both
-//     contain N+1 entries (Q2's last entry is the wrapper) but the user-
+//     contain N+1 entries (Q2's last entry is the learned interface) but the user-
 //     visible top-level surface collapses from N to 1.
 //
-// We label Q2's last `lib.*` entry as the wrapper and indent the earlier
-// entries as its children when the wrapper name starts with
-// `crystallise_`. Otherwise we render flat.
+// We label Q2's last non-seed `lib.*` entry as the learned interface and indent
+// the earlier entries as its children. Otherwise we render flat.
 function printCallChains(args: {
   q1: SnippetSummary;
   q2: SnippetSummary;
@@ -583,12 +591,12 @@ function printCallChains(args: {
   println("");
 
   const q2Calls = args.q2.callPrimitives;
-  const wrapperIdx = findWrapperIndex(q2Calls);
-  if (wrapperIdx >= 0) {
-    const wrapper = q2Calls[wrapperIdx]!;
-    const inner = q2Calls.filter((_, i) => i !== wrapperIdx);
+  const learnedInterfaceIdx = findLearnedInterfaceIndex(q2Calls);
+  if (learnedInterfaceIdx >= 0) {
+    const learnedInterface = q2Calls[learnedInterfaceIdx]!;
+    const inner = q2Calls.filter((_, i) => i !== learnedInterfaceIdx);
     println("Q2 — top-level chain (interpreted replay):");
-    println(`  1. ${wrapper}`);
+    println(`  1. ${learnedInterface}`);
     if (inner.length > 0) {
       println(`     (internally invokes ${inner.length} sub-call${inner.length === 1 ? "" : "s"}:)`);
       for (let i = 0; i < inner.length; i += 1) {
@@ -609,19 +617,23 @@ function printCallChains(args: {
 
   // Property summary line.
   const q1Top = args.q1.callPrimitives.length;
-  const q2Top = wrapperIdx >= 0 ? 1 : q2Calls.length;
+  const q2Top = learnedInterfaceIdx >= 0 ? 1 : q2Calls.length;
   println("");
   println(
     `Top-level surface: Q1 has ${q1Top} call${q1Top === 1 ? "" : "s"}; Q2 has ${q2Top} call${q2Top === 1 ? "" : "s"} (collapse: ${q1Top - q2Top >= 0 ? q1Top - q2Top : 0}).`,
   );
 }
 
-function findWrapperIndex(callPrimitives: string[]): number {
-  // The wrapper is the LAST `lib.crystallise_*` entry in the trajectory
-  // (post-await push order). If none, return -1.
+function findLearnedInterfaceIndex(callPrimitives: string[]): number {
+  // The learned interface is the LAST non-seed `lib.*` entry in the trajectory
+  // (post-await push order). If none, return -1. The legacy crystallise prefix
+  // remains accepted for existing generated files.
   for (let i = callPrimitives.length - 1; i >= 0; i -= 1) {
     const p = callPrimitives[i]!;
-    if (p.startsWith("lib.crystallise")) return i;
+    if (!p.startsWith("lib.")) continue;
+    if (p.startsWith("lib.crystallise") || !SEED_LIBRARY_PRIMITIVES.has(p)) {
+      return i;
+    }
   }
   return -1;
 }

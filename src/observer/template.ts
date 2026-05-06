@@ -7,18 +7,18 @@
 //     `lib.locateFigure`, ...).
 //   - for each call, an InputBindings map: which input fields are derived
 //     from earlier-call outputs vs. external parameters.
-//   - the parameter list the crystallised function exposes.
+//   - the parameter list the learned interface exposes.
 //
 // The shape hash is a 32-bit non-cryptographic shape over the canonical step list (NOT the question
 // text). The hash collapses any two trajectories that walk the same
 // primitives in the same order with the same data-flow shape into a single
-// entry; the authoring step uses it as the file's identity.
+// entry; the authoring step uses it as the learned interface's dedupe key.
 //
 // Naming convention:
-//   crystallise_<topicSlug>_<shapeHash8>
-// where <topicSlug> is derived from the first lib call's intent (or the
-// trajectory.question if no lib call is present), and <shapeHash8> is the
-// first 8 hex chars of a 32-bit non-cryptographic shape over the canonical steps.
+//   <semanticTopicName>
+// where <semanticTopicName> is a lower-camel intent shape such as
+// `rangeTableMetric`. The shape hash stays in file metadata as the stable
+// dedupe/provenance key instead of leaking into the user-facing name.
 
 import { promises as fsp } from "node:fs";
 import path from "node:path";
@@ -27,7 +27,7 @@ import type { PrimitiveCallRecord, TrajectoryRecord } from "../sdk/index.js";
 
 // --- Public types ----------------------------------------------------------
 
-// One parameter the crystallised function exposes. `derivedFromCallIndex`
+// One parameter the learned interface exposes. `derivedFromCallIndex`
 // is set when the parameter's shape is determined by an earlier call's
 // output (e.g. `candidates` is the output of the first db.* call). When
 // `derivedFromCallIndex` is set, the parameter is internal to the body
@@ -59,7 +59,7 @@ export type TemplateInputBinding =
   // output).
   | { kind: "ref"; ref: string };
 
-// One step in the crystallised composition.
+// One step in the learned composition.
 export type TemplateStep = {
   primitive: string;
   // Field name -> binding. The authoring step renders these as the call
@@ -86,7 +86,7 @@ export type CallTemplate = {
   // Variable name returned by the function; matches the last step's
   // `outputName`.
   finalOutputBinding: string;
-  // Stable name for the crystallised function file.
+  // Stable user-facing name for the learned interface file.
   name: string;
   // Topic slug derived from the trajectory; surfaces in the function
   // intent string and the file name.
@@ -96,12 +96,13 @@ export type CallTemplate = {
   shapeHash: string;
 };
 
-// Snapshot of a tenant's existing /lib/ overlay used by the gate to
-// avoid re-crystallising. The observer builds this once per `observe()`
-// call by listing files under `<baseDir>/lib/<tenantId>/*.ts` and
+// Snapshot of a tenant's existing /lib/ overlay used by the gate to avoid
+// re-learning the same interface. The observer builds this once per
+// `observe()` call by listing files under `<baseDir>/lib/<tenantId>/*.ts` and
 // scanning each for the `@shape-hash:` marker.
 export type LibrarySnapshot = {
   shapeHashes: Set<string>;
+  learnedNames: Set<string>;
 };
 
 // --- extractTemplate -------------------------------------------------------
@@ -142,7 +143,7 @@ export function extractTemplate(trajectory: TrajectoryRecord): CallTemplate {
   const finalOutputBinding = steps[steps.length - 1]!.outputName;
   const shapeHash = shapeHashHex(canonicalShape(steps));
   const topic = pickTopic(trajectory);
-  const name = `crystallise_${topic}_${shapeHash.slice(0, 8)}`;
+  const name = semanticName(topic);
 
   return {
     parameters: params,
@@ -176,7 +177,7 @@ type BindArgs = {
 // detection rule for refs: if the field's value matches an earlier call's
 // output or object/array subtree structurally (deep-equal), bind to that
 // output expression. This keeps intermediate values such as
-// `const picked = candidates[0]` inside the crystallised body instead of
+// `const picked = candidates[0]` inside the learned body instead of
 // leaking them into the public input schema.
 function bindInputs(args: BindArgs): Record<string, TemplateInputBinding> {
   const { call, callIndex, outputs, params, literalDedup } = args;
@@ -469,11 +470,11 @@ function canonicalShape(steps: TemplateStep[]): string {
     .join("|");
 }
 
-// Topic slug for the function name. Prefer user-intent shape over trace
+// Topic slug for the interface name. Prefer user-intent shape over trace
 // internals: a call chain ending in executeTableMath should advertise
 // table-metric reuse, not the first helper it happened to call. This keeps
-// the `crystallise_` prefix for compatibility while making the middle of the
-// name useful to `apropos`, grep, and humans.
+// the name useful to `apropos`, grep, and humans while leaving the shape hash
+// as metadata.
 function pickTopic(trajectory: TrajectoryRecord): string {
   const text = trajectoryIntentText(trajectory);
   const primitives = new Set(trajectory.calls.map((c) => c.primitive));
@@ -541,22 +542,46 @@ function sanitizeSlug(input: string): string {
   return sanitizeIdent(input).toLowerCase();
 }
 
+function semanticName(topic: string): string {
+  const clean = sanitizeIdent(topic);
+  const parts = clean.split(/_+/).filter(Boolean);
+  if (parts.length === 0) return "learnedInterface";
+  if (parts.length === 1) {
+    return lowerFirst(parts[0]!);
+  }
+  return [
+    parts[0]!.toLowerCase(),
+    ...parts.slice(1).map((p) => upperFirst(p.toLowerCase())),
+  ].join("");
+}
+
+function lowerFirst(input: string): string {
+  if (input.length === 0) return input;
+  return `${input[0]!.toLowerCase()}${input.slice(1)}`;
+}
+
+function upperFirst(input: string): string {
+  if (input.length === 0) return input;
+  return `${input[0]!.toUpperCase()}${input.slice(1)}`;
+}
+
 // --- LibrarySnapshot -------------------------------------------------------
 
 // Build a LibrarySnapshot by scanning `<baseDir>/lib/<tenantId>/*.ts`
-// for the `@shape-hash:` marker. Files without the marker (e.g. the
-// agent's hand-authored functions) are ignored.
+// for the `@shape-hash:` marker. Files without the marker (e.g. the agent's
+// hand-authored functions) are not learned interfaces.
 export async function readLibrarySnapshot(args: {
   baseDir: string;
   tenantId: string;
 }): Promise<LibrarySnapshot> {
   const dir = path.join(args.baseDir, "lib", args.tenantId);
   const hashes = new Set<string>();
+  const names = new Set<string>();
   let entries: import("node:fs").Dirent[];
   try {
     entries = await fsp.readdir(dir, { withFileTypes: true });
   } catch {
-    return { shapeHashes: hashes };
+    return { shapeHashes: hashes, learnedNames: names };
   }
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
@@ -568,7 +593,10 @@ export async function readLibrarySnapshot(args: {
       continue;
     }
     const m = content.match(/@shape-hash:\s*([0-9a-f]{8,})/);
-    if (m && m[1]) hashes.add(m[1]);
+    if (m && m[1]) {
+      hashes.add(m[1]);
+      names.add(entry.name.slice(0, -3));
+    }
   }
-  return { shapeHashes: hashes };
+  return { shapeHashes: hashes, learnedNames: names };
 }

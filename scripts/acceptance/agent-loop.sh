@@ -6,11 +6,11 @@
 #
 #   Q1: mount an intent workspace, explore with datafetch run, commit visible
 #       scripts/answer.ts through df.answer(...), and assert the observer writes
-#       a learned lib/test-jay/crystallise_*.ts function from that committed
+#       a semantic learned interface under lib/test-jay/ from that committed
 #       trajectory.
 #   Q2: mount a second intent workspace for a similar intent, require discovery
 #       through apropos/man, commit a final answer, and assert the committed
-#       lineage invokes the learned function instead of recomposing from scratch.
+#       lineage invokes the learned interface instead of recomposing from scratch.
 #
 # Required env: ATLAS_URI.
 # Optional env: ATLAS_DB_NAME (default atlasfs_hackathon),
@@ -209,14 +209,14 @@ assert_workspace_commit() {
   replay_traj="$(jq -r '.trajectoryId // empty' "$replay" 2>/dev/null || true)"
   lineage_traj="$(jq -r '.id // .trajectoryId // empty' "$lineage" 2>/dev/null || true)"
   assert_eq "$head_traj" "$replay_traj" "$label replay is generated from HEAD" || true
-  assert_eq "$head_traj" "$lineage_traj" "$label lineage is current HEAD trajectory" || true
+  assert_eq "$head_traj" "$lineage_traj" "$label lineage is current accepted HEAD" || true
 
   if [[ -n "$expected_learned" ]]; then
     if jq -e --arg name "lib.$expected_learned" '[.calls[]?.primitive] | index($name) != null' "$lineage" >/dev/null 2>&1; then
-      printf '[PASS] %s lineage calls learned function lib.%s\n' "$label" "$expected_learned"
+      printf '[PASS] %s lineage calls learned interface lib.%s\n' "$label" "$expected_learned"
       PASS_COUNT=$((PASS_COUNT + 1))
     else
-      printf '[FAIL] %s lineage does not call learned function lib.%s\n' "$label" "$expected_learned" >&2
+      printf '[FAIL] %s lineage does not call learned interface lib.%s\n' "$label" "$expected_learned" >&2
       jq '[.calls[]?.primitive]' "$lineage" >&2 || true
       FAIL_COUNT=$((FAIL_COUNT + 1))
     fi
@@ -239,13 +239,38 @@ assert_workspace_run_written() {
   fi
 }
 
-wait_for_crystallised() {
+learned_interface_count() {
+  local dir="$DATAFETCH_HOME/lib/test-jay"
+  local count=0
+  [[ -d "$dir" ]] || {
+    printf '0\n'
+    return
+  }
+  local file
+  while IFS= read -r -d '' file; do
+    if grep -Eq '@shape-hash:\s*[0-9a-f]{8,}' "$file" 2>/dev/null; then
+      count=$((count + 1))
+    fi
+  done < <(find "$dir" -maxdepth 1 -type f -name '*.ts' -print0 2>/dev/null)
+  printf '%s\n' "$count"
+}
+
+wait_for_learned_interface() {
   local timeout_ticks="${1:-20}"
   CRYSTALLISED_FILE=""
   CRYSTALLISED_NAME=""
   for _ in $(seq 1 "$timeout_ticks"); do
-    if compgen -G "$DATAFETCH_HOME/lib/test-jay/crystallise_*.ts" >/dev/null 2>&1; then
-      CRYSTALLISED_FILE="$(ls -t "$DATAFETCH_HOME/lib/test-jay"/crystallise_*.ts 2>/dev/null | head -n 1 || true)"
+    local latest=""
+    local file
+    while IFS= read -r -d '' file; do
+      if grep -Eq '@shape-hash:\s*[0-9a-f]{8,}' "$file" 2>/dev/null; then
+        if [[ -z "$latest" || "$file" -nt "$latest" ]]; then
+          latest="$file"
+        fi
+      fi
+    done < <(find "$DATAFETCH_HOME/lib/test-jay" -maxdepth 1 -type f -name '*.ts' -print0 2>/dev/null)
+    if [[ -n "$latest" ]]; then
+      CRYSTALLISED_FILE="$latest"
       CRYSTALLISED_NAME="$(basename "$CRYSTALLISED_FILE" .ts)"
       return 0
     fi
@@ -319,7 +344,7 @@ write_troubleshooting_artifact() {
     --arg q2Intent "$Q2_INTENT" \
     --arg q1Workspace "${Q1_WORKSPACE:-}" \
     --arg q2Workspace "${Q2_WORKSPACE:-}" \
-    --arg crystallisedName "${CRYSTALLISED_NAME:-}" \
+    --arg learnedInterfaceName "${CRYSTALLISED_NAME:-}" \
     --argjson passCount "$PASS_COUNT" \
     --argjson failCount "$FAIL_COUNT" \
     '{
@@ -333,7 +358,7 @@ write_troubleshooting_artifact() {
       failCount: $failCount,
       q1: { intent: $q1Intent, workspace: $q1Workspace },
       q2: { intent: $q2Intent, workspace: $q2Workspace },
-      crystallisedName: $crystallisedName,
+      learnedInterfaceName: $learnedInterfaceName,
       files: {
         clientSummary: "client-summary.md",
         serverSummary: "server-summary.md",
@@ -360,7 +385,7 @@ write_troubleshooting_artifact() {
     printf -- '- Q1 workspace: %s\n' "${Q1_WORKSPACE:-}"
     printf -- '- Q2 intent: %s\n' "$Q2_INTENT"
     printf -- '- Q2 workspace: %s\n' "${Q2_WORKSPACE:-}"
-    printf -- '- learned function: %s\n\n' "${CRYSTALLISED_NAME:-}"
+    printf -- '- learned interface: %s\n\n' "${CRYSTALLISED_NAME:-}"
     printf '## Q1 Transcript Head\n\n```text\n'
     if [[ -f "$dir/q1.out" ]]; then sed -n '1,160p' "$dir/q1.out"; fi
     printf '\n```\n\n'
@@ -372,7 +397,7 @@ write_troubleshooting_artifact() {
   {
     printf '# Server/VFS view\n\n'
     printf -- '- original DATAFETCH_HOME: %s\n' "$DATAFETCH_HOME"
-    printf -- '- learned function: %s\n\n' "${CRYSTALLISED_NAME:-}"
+    printf -- '- learned interface: %s\n\n' "${CRYSTALLISED_NAME:-}"
     printf '## Workspace Results\n\n'
     for pair in "q1:${Q1_WORKSPACE:-}" "q2:${Q2_WORKSPACE:-}"; do
       local label="${pair%%:*}"
@@ -381,7 +406,7 @@ write_troubleshooting_artifact() {
       printf '### %s\n\n' "$label"
       printf -- '- tmp runs: %s\n' "$(workspace_run_count "$workspace")"
       printf -- '- commits: %s\n' "$(workspace_commit_count "$workspace")"
-      printf -- '- HEAD trajectory: %s\n' "$(workspace_head_trajectory "$workspace")"
+      printf -- '- current accepted HEAD: %s\n' "$(workspace_head_trajectory "$workspace")"
       if [[ -f "$workspace/result/answer.json" ]]; then
         printf '\nanswer.json:\n\n```json\n'
         jq . "$workspace/result/answer.json" 2>/dev/null || cat "$workspace/result/answer.json"
@@ -404,7 +429,7 @@ write_troubleshooting_artifact() {
     printf '# Agent action trajectory\n\n'
     printf -- '- status: %s\n' "$status"
     printf -- '- pass/fail: %s passed, %s failed\n' "$PASS_COUNT" "$FAIL_COUNT"
-    printf -- '- learned function: %s\n\n' "${CRYSTALLISED_NAME:-}"
+    printf -- '- learned interface: %s\n\n' "${CRYSTALLISED_NAME:-}"
     printf '## Q1 Committed Source\n\n```ts\n'
     sed -n '1,220p' "${Q1_WORKSPACE:-}/result/source.ts" 2>/dev/null || true
     printf '\n```\n\n'
@@ -432,33 +457,33 @@ write_troubleshooting_artifact() {
     printf -- '- status: %s\n' "$status"
     printf -- '- Q1 intent: %s\n' "$Q1_INTENT"
     printf -- '- Q2 intent: %s\n' "$Q2_INTENT"
-    printf -- '- learned function: %s\n\n' "${CRYSTALLISED_NAME:-none}"
+    printf -- '- learned interface: %s\n\n' "${CRYSTALLISED_NAME:-none}"
 
     printf '## Q1 worktree\n\n'
     printf -- '- workspace: %s\n' "${Q1_WORKSPACE:-}"
     printf -- '- exploratory runs: %s\n' "$(workspace_run_count "${Q1_WORKSPACE:-}")"
-    printf -- '- accepted commits: %s\n' "$(workspace_commit_count "${Q1_WORKSPACE:-}")"
-    printf -- '- HEAD trajectory: %s\n\n' "$q1_head"
+    printf -- '- commit attempts: %s\n' "$(workspace_commit_count "${Q1_WORKSPACE:-}")"
+    printf -- '- current accepted HEAD: %s\n\n' "$q1_head"
     if [[ -f "${Q1_WORKSPACE:-}/result/answer.json" ]]; then
       printf 'Final answer envelope:\n\n```json\n'
       jq '{status, value, unit, evidence, coverage, missing, derivation}' "${Q1_WORKSPACE:-}/result/answer.json" 2>/dev/null || cat "${Q1_WORKSPACE:-}/result/answer.json"
       printf '\n```\n\n'
     fi
 
-    printf '## Promotion\n\n'
-    printf -- '- learned function file: %s\n' "${CRYSTALLISED_FILE:-none}"
+    printf '## Learned Interface Promotion\n\n'
+    printf -- '- learned interface file: %s\n' "${CRYSTALLISED_FILE:-none}"
     printf -- '- origin trajectory in learned file: %s\n' "${learned_origin:-none}"
     if [[ -n "$q1_head" && "$learned_origin" == "$q1_head" ]]; then
-      printf -- '- verdict: promoted from current Q1 HEAD\n\n'
+      printf -- '- verdict: learned from current Q1 HEAD\n\n'
     else
-      printf -- '- verdict: promotion origin differs from Q1 HEAD\n\n'
+      printf -- '- verdict: learning origin differs from Q1 HEAD\n\n'
     fi
 
     printf '## Q2 worktree\n\n'
     printf -- '- workspace: %s\n' "${Q2_WORKSPACE:-}"
     printf -- '- exploratory runs: %s\n' "$(workspace_run_count "${Q2_WORKSPACE:-}")"
-    printf -- '- accepted commits: %s\n' "$(workspace_commit_count "${Q2_WORKSPACE:-}")"
-    printf -- '- HEAD trajectory: %s\n\n' "$q2_head"
+    printf -- '- commit attempts: %s\n' "$(workspace_commit_count "${Q2_WORKSPACE:-}")"
+    printf -- '- current accepted HEAD: %s\n\n' "$q2_head"
     if [[ -f "${Q2_WORKSPACE:-}/result/source.ts" ]]; then
       printf 'Committed source:\n\n```ts\n'
       sed -n '1,220p' "${Q2_WORKSPACE:-}/result/source.ts" 2>/dev/null || true
@@ -487,10 +512,10 @@ write_troubleshooting_artifact() {
     --argjson q2Runs "$(workspace_run_count "${Q2_WORKSPACE:-}")" \
     --argjson q2Commits "$(workspace_commit_count "${Q2_WORKSPACE:-}")" \
     '{
-      q1: {runs: $q1Runs, commits: $q1Commits, headTrajectory: $q1Head},
-      q2: {runs: $q2Runs, commits: $q2Commits, headTrajectory: $q2Head},
-      promotion: {
-        learnedName: $learnedName,
+      q1: {runs: $q1Runs, commitAttempts: $q1Commits, currentAcceptedHead: $q1Head},
+      q2: {runs: $q2Runs, commitAttempts: $q2Commits, currentAcceptedHead: $q2Head},
+      learnedInterfacePromotion: {
+        learnedInterfaceName: $learnedName,
         originTrajectory: $learnedOrigin,
         originMatchesQ1Head: ($learnedOrigin != "" and $learnedOrigin == $q1Head)
       }
@@ -501,11 +526,11 @@ write_troubleshooting_artifact() {
     --arg learnedOrigin "$learned_origin" \
     --arg learnedName "${CRYSTALLISED_NAME:-}" \
     '{
-      learnedName: $learnedName,
+      learnedInterfaceName: $learnedName,
       q1HeadTrajectory: $q1Head,
       learnedOriginTrajectory: $learnedOrigin,
-      promotedFromHead: ($learnedOrigin != "" and $learnedOrigin == $q1Head),
-      check: "learned function origin should match the current Q1 workspace HEAD"
+      learnedFromHead: ($learnedOrigin != "" and $learnedOrigin == $q1Head),
+      check: "learned interface origin should match the current Q1 workspace HEAD"
     }' > "$dir/promotion-verdict.json"
 
   cat > "$dir/README.md" <<EOF
@@ -516,7 +541,7 @@ write_troubleshooting_artifact() {
 - serverUrl: ${DATAFETCH_SERVER_URL:-}
 - q1 workspace: ${Q1_WORKSPACE:-}
 - q2 workspace: ${Q2_WORKSPACE:-}
-- learned function: ${CRYSTALLISED_NAME:-}
+- learned interface: ${CRYSTALLISED_NAME:-}
 - pass/fail: $PASS_COUNT passed, $FAIL_COUNT failed
 
 Start with:
@@ -639,37 +664,37 @@ fi
 assert_workspace_run_written "Q1" "$Q1_WORKSPACE"
 assert_workspace_commit "Q1" "$Q1_WORKSPACE"
 
-step "Q1: waiting up to 10s for observer crystallisation"
-if wait_for_crystallised 20; then
-  printf '[PASS] observer wrote learned function %s\n' "$CRYSTALLISED_NAME"
+step "Q1: waiting up to 10s for observer learned-interface write"
+if wait_for_learned_interface 20; then
+  printf '[PASS] observer wrote learned interface %s\n' "$CRYSTALLISED_NAME"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  printf '[FAIL] no crystallise_*.ts under lib/test-jay/ within 10s\n' >&2
+  printf '[FAIL] no learned interface with @shape-hash under lib/test-jay/ within 10s\n' >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
-if [[ -n "$CRYSTALLISED_NAME" && "$CRYSTALLISED_NAME" =~ ^crystallise_range_table_metric_[0-9a-f]{8}$ ]]; then
-  printf '[PASS] learned function name is intent-shaped (%s)\n' "$CRYSTALLISED_NAME"
+if [[ -n "$CRYSTALLISED_NAME" && "$CRYSTALLISED_NAME" == "rangeTableMetric" ]]; then
+  printf '[PASS] learned interface name is semantic (%s)\n' "$CRYSTALLISED_NAME"
   PASS_COUNT=$((PASS_COUNT + 1))
 elif [[ -n "$CRYSTALLISED_NAME" ]]; then
-  printf '[FAIL] learned function name is not intent-shaped: %s\n' "$CRYSTALLISED_NAME" >&2
+  printf '[FAIL] learned interface name is not semantic: %s\n' "$CRYSTALLISED_NAME" >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
 if [[ -n "${CRYSTALLISED_FILE:-}" && -f "$CRYSTALLISED_FILE" ]]; then
   Q1_HEAD_TRAJ="$(workspace_head_trajectory "$Q1_WORKSPACE")"
   if grep -Fq "@origin-trajectory: $Q1_HEAD_TRAJ" "$CRYSTALLISED_FILE"; then
-    printf '[PASS] learned function originated from Q1 workspace HEAD %s\n' "$Q1_HEAD_TRAJ"
+    printf '[PASS] learned interface originated from Q1 workspace HEAD %s\n' "$Q1_HEAD_TRAJ"
     PASS_COUNT=$((PASS_COUNT + 1))
   else
-    printf '[FAIL] learned function did not originate from Q1 workspace HEAD %s\n' "$Q1_HEAD_TRAJ" >&2
+    printf '[FAIL] learned interface did not originate from Q1 workspace HEAD %s\n' "$Q1_HEAD_TRAJ" >&2
     grep -F '@origin-trajectory:' "$CRYSTALLISED_FILE" >&2 || true
     FAIL_COUNT=$((FAIL_COUNT + 1))
   fi
 fi
 
 # ---- Q2: discover and reuse the learned interface --------------------------
-PRE_Q2_CRYSTALLISED_COUNT=$(find "$DATAFETCH_HOME/lib/test-jay" -maxdepth 1 -name 'crystallise_*.ts' 2>/dev/null | wc -l | tr -d ' ' || true)
+PRE_Q2_CRYSTALLISED_COUNT=$(learned_interface_count)
 mount_workspace q2-coal "$Q2_INTENT"
 Q2_WORKSPACE="$MOUNTED_WORKSPACE"
 
@@ -697,13 +722,13 @@ Use the VFS workspace contract only. Do not use \`datafetch session\`, \`datafet
 Required workflow:
 1. Read \`AGENTS.md\`, \`df.d.ts\`, and inspect \`lib/\`.
 2. Run \`datafetch apropos --json "range coal revenue 2014 2018"\`.
-3. If a learned function fits, inspect it with \`datafetch man <name>\` and write \`scripts/answer.ts\` so the committed code calls that learned \`df.lib.<name>\` function directly.
+3. If a learned interface fits, inspect it with \`datafetch man <name>\` and write \`scripts/answer.ts\` so the committed code calls that learned \`df.lib.<name>\` interface directly.
 4. You may use \`datafetch run scripts/scratch.ts\` once to inspect output shape, but the final answer must come from \`datafetch commit scripts/answer.ts\`.
 5. Answer only from \`result/answer.json\` and \`result/validation.json\`.
 
-The learned function from Q1, if present, is: ${CRYSTALLISED_NAME:-none}.
+The learned interface from Q1, if present, is: ${CRYSTALLISED_NAME:-none}.
 
-If no learned function fits, commit a visible full chain with db retrieval, filing selection, table-plan inference, table math, and \`df.answer(...)\`. If exact coverage is missing, return \`partial\` or \`unsupported\` with evidence and reason. Do not fabricate a number and do not answer from tmp run output.
+If no learned interface fits, commit a visible full chain with db retrieval, filing selection, table-plan inference, table math, and \`df.answer(...)\`. If exact coverage is missing, return \`partial\` or \`unsupported\` with evidence and reason. Do not fabricate a number and do not answer from tmp run output.
 PROMPT
 )
 Q2_OUT="$DATAFETCH_HOME/q2.out"
@@ -723,13 +748,13 @@ if [[ -f "$Q2_OUT" ]]; then
 fi
 assert_workspace_commit "Q2" "$Q2_WORKSPACE" "$CRYSTALLISED_NAME"
 
-step "Q2: assert no nested crystallised wrapper was created"
-POST_Q2_CRYSTALLISED_COUNT=$(find "$DATAFETCH_HOME/lib/test-jay" -maxdepth 1 -name 'crystallise_*.ts' 2>/dev/null | wc -l | tr -d ' ' || true)
+step "Q2: assert no nested learned interface was created"
+POST_Q2_CRYSTALLISED_COUNT=$(learned_interface_count)
 if [[ "$POST_Q2_CRYSTALLISED_COUNT" == "$PRE_Q2_CRYSTALLISED_COUNT" ]]; then
-  printf '[PASS] crystallised function count stayed at %s\n' "$POST_Q2_CRYSTALLISED_COUNT"
+  printf '[PASS] learned interface count stayed at %s\n' "$POST_Q2_CRYSTALLISED_COUNT"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  printf '[FAIL] crystallised function count changed from %s to %s after Q2\n' "$PRE_Q2_CRYSTALLISED_COUNT" "$POST_Q2_CRYSTALLISED_COUNT" >&2
+  printf '[FAIL] learned interface count changed from %s to %s after Q2\n' "$PRE_Q2_CRYSTALLISED_COUNT" "$POST_Q2_CRYSTALLISED_COUNT" >&2
   ls -la "$DATAFETCH_HOME/lib/test-jay" >&2 || true
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi

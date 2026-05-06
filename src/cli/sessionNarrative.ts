@@ -32,11 +32,14 @@ export async function renderSessionNarrative(args: {
   sessionId: string;
 }): Promise<string> {
   const artifacts = await loadArtifacts(args);
+  const learnedInterfaceNames = await loadLearnedInterfaceNames(args.baseDir);
   const plans = artifacts.filter((a) => a.phase === "plan");
   const executes = artifacts.filter((a) => a.phase === "execute");
   const failed = artifacts.filter((a) => (a.result.exitCode ?? 0) !== 0);
   const learnedExecutes = executes.filter((a) =>
-    (a.result.callPrimitives ?? []).some((p) => p.startsWith("lib.crystallise_")),
+    (a.result.callPrimitives ?? []).some((p) =>
+      isLearnedInterfacePrimitive(p, learnedInterfaceNames),
+    ),
   );
 
   const lines: string[] = [];
@@ -58,10 +61,10 @@ export async function renderSessionNarrative(args: {
   }
   if (learnedExecutes.length > 0) {
     lines.push(
-      `reuse: ${learnedExecutes.length} execute artifact(s) invoked learned crystallised tools`,
+      `reuse: ${learnedExecutes.length} execute artifact(s) invoked learned interfaces`,
     );
   } else {
-    lines.push(`reuse: no execute artifact invoked a learned crystallised tool`);
+    lines.push(`reuse: no execute artifact invoked a learned interface`);
   }
   lines.push("");
   lines.push("## timeline");
@@ -73,6 +76,50 @@ export async function renderSessionNarrative(args: {
   }
 
   return `${lines.join("\n").trimEnd()}\n`;
+}
+
+async function loadLearnedInterfaceNames(baseDir: string): Promise<Set<string>> {
+  const names = new Set<string>();
+  const root = path.join(baseDir, "lib");
+  let tenantDirs: import("node:fs").Dirent[];
+  try {
+    tenantDirs = await fsp.readdir(root, { withFileTypes: true });
+  } catch {
+    return names;
+  }
+
+  for (const tenantDir of tenantDirs) {
+    if (!tenantDir.isDirectory()) continue;
+    const dir = path.join(root, tenantDir.name);
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
+      const file = path.join(dir, entry.name);
+      try {
+        const content = await fsp.readFile(file, "utf8");
+        if (/@shape-hash:\s*[0-9a-f]{8,}/.test(content)) {
+          names.add(entry.name.slice(0, -3));
+        }
+      } catch {
+        // Ignore unreadable files; diagnostics should stay best-effort.
+      }
+    }
+  }
+  return names;
+}
+
+function isLearnedInterfacePrimitive(
+  primitive: string,
+  learnedInterfaceNames: Set<string>,
+): boolean {
+  if (!primitive.startsWith("lib.")) return false;
+  const name = primitive.slice("lib.".length);
+  return learnedInterfaceNames.has(name) || name.startsWith("crystallise_");
 }
 
 async function loadArtifacts(args: {
