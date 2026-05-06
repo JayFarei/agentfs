@@ -19,6 +19,7 @@ import path from "node:path";
 import { defaultBaseDir } from "../paths.js";
 
 import { jsonRequest, resolveServerUrl } from "./httpClient.js";
+import { renderSessionNarrative } from "./sessionNarrative.js";
 import type { Flags } from "./types.js";
 
 // --- Types we mirror from the server side --------------------------------
@@ -267,6 +268,17 @@ export async function cmdSessionCurrent(
   process.stdout.write(`${active ?? "none"}\n`);
 }
 
+// `datafetch session narrative [sessionId]`
+export async function cmdSessionNarrative(
+  positionals: string[],
+  flags: Flags,
+): Promise<void> {
+  const baseDir = baseDirFromFlags(flags);
+  const sessionId =
+    positionals[0] ?? (await resolveActiveSession(flags, baseDir)).sessionId;
+  process.stdout.write(await renderSessionNarrative({ baseDir, sessionId }));
+}
+
 // Dispatch table — `cmdSession` is the single entry point bound to the
 // `session` subcommand; sub-subcommands branch on positional[0].
 export async function cmdSession(
@@ -294,9 +306,12 @@ export async function cmdSession(
     case "current":
       await cmdSessionCurrent(rest, flags);
       return;
+    case "narrative":
+      await cmdSessionNarrative(rest, flags);
+      return;
     case undefined:
       throw new Error(
-        "session: subcommand required (new | list | resume | end | switch | current)",
+        "session: subcommand required (new | list | resume | end | switch | current | narrative)",
       );
     default:
       throw new Error(`session: unknown subcommand "${sub}"`);
