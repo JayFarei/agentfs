@@ -131,6 +131,21 @@ workspace_run_count() {
     | wc -l | tr -d ' '
 }
 
+workspace_commit_count() {
+  local workspace="$1"
+  if [[ ! -d "$workspace/result/commits" ]]; then
+    echo 0
+    return 0
+  fi
+  find "$workspace/result/commits" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+    | wc -l | tr -d ' '
+}
+
+workspace_head_trajectory() {
+  local workspace="$1"
+  jq -r '.trajectoryId // empty' "$workspace/result/HEAD.json" 2>/dev/null || true
+}
+
 mount_workspace() {
   local slug="$1"
   local intent="$2"
@@ -168,12 +183,17 @@ assert_workspace_commit() {
   local answer="$workspace/result/answer.json"
   local validation="$workspace/result/validation.json"
   local lineage="$workspace/result/lineage.json"
+  local head="$workspace/result/HEAD.json"
+  local replay="$workspace/result/tests/replay.json"
 
   assert_file_exists "$workspace/result/source.ts" "$label committed source" || true
   assert_file_exists "$workspace/result/answer.md" "$label answer markdown" || true
   assert_file_exists "$answer" "$label answer json" || true
   assert_file_exists "$validation" "$label validation json" || true
   assert_file_exists "$lineage" "$label lineage json" || true
+  assert_file_exists "$head" "$label HEAD pointer" || true
+  assert_file_exists "$replay" "$label replay test" || true
+  assert_file_glob "$workspace/result/commits/[0-9][0-9][0-9]/answer.json" "$label commit history" || true
 
   assert_json_field "$validation" ".accepted" "true" "$label commit accepted" || true
   assert_json_truthy "$answer" '.status == "answered" or .status == "partial" or .status == "unsupported"' "$label answer status allowed"
@@ -181,6 +201,15 @@ assert_workspace_commit() {
   assert_json_truthy "$answer" '.status == "unsupported" or .derivation != null' "$label answer has visible derivation"
   assert_json_truthy "$lineage" '.phase == "commit"' "$label lineage phase commit"
   assert_json_truthy "$lineage" '[.calls[]? | select(.primitive | startswith("lib."))] | length > 0' "$label lineage records lib.* call"
+  assert_json_truthy "$head" '.commit != null and .trajectoryId != null' "$label HEAD records current commit"
+  assert_json_truthy "$replay" '.kind == "workspace-head-replay" and .expected.status != null' "$label replay captures answer status"
+
+  local head_traj replay_traj lineage_traj
+  head_traj="$(workspace_head_trajectory "$workspace")"
+  replay_traj="$(jq -r '.trajectoryId // empty' "$replay" 2>/dev/null || true)"
+  lineage_traj="$(jq -r '.id // .trajectoryId // empty' "$lineage" 2>/dev/null || true)"
+  assert_eq "$head_traj" "$replay_traj" "$label replay is generated from HEAD" || true
+  assert_eq "$head_traj" "$lineage_traj" "$label lineage is current HEAD trajectory" || true
 
   if [[ -n "$expected_learned" ]]; then
     if jq -e --arg name "lib.$expected_learned" '[.calls[]?.primitive] | index($name) != null' "$lineage" >/dev/null 2>&1; then
@@ -271,6 +300,7 @@ write_troubleshooting_artifact() {
         answerValidation,
         callCount: (.calls | length),
         calls: [.calls[]?.primitive],
+        sourcePath,
         artifactDir
       })
     ' "$DATAFETCH_HOME/trajectories"/*.json > "$trajectories_summary" 2>/dev/null || true
@@ -308,6 +338,9 @@ write_troubleshooting_artifact() {
         clientSummary: "client-summary.md",
         serverSummary: "server-summary.md",
         actionTrajectory: "action-trajectory.md",
+        diagnosticNarrative: "diagnostic-narrative.md",
+        episodeMetrics: "episode-metrics.json",
+        promotionVerdict: "promotion-verdict.json",
         trajectorySummary: "trajectory-summary.json",
         workspacesDir: "workspaces/",
         trajectoriesDir: "trajectories/",
@@ -347,6 +380,8 @@ write_troubleshooting_artifact() {
       [[ -z "$workspace" ]] && continue
       printf '### %s\n\n' "$label"
       printf -- '- tmp runs: %s\n' "$(workspace_run_count "$workspace")"
+      printf -- '- commits: %s\n' "$(workspace_commit_count "$workspace")"
+      printf -- '- HEAD trajectory: %s\n' "$(workspace_head_trajectory "$workspace")"
       if [[ -f "$workspace/result/answer.json" ]]; then
         printf '\nanswer.json:\n\n```json\n'
         jq . "$workspace/result/answer.json" 2>/dev/null || cat "$workspace/result/answer.json"
@@ -383,6 +418,96 @@ write_troubleshooting_artifact() {
     ' "$trajectories_summary" 2>/dev/null || true
   } > "$dir/action-trajectory.md"
 
+  local q1_head q2_head learned_origin
+  q1_head="$(workspace_head_trajectory "${Q1_WORKSPACE:-}")"
+  q2_head="$(workspace_head_trajectory "${Q2_WORKSPACE:-}")"
+  learned_origin=""
+  if [[ -n "${CRYSTALLISED_FILE:-}" && -f "$CRYSTALLISED_FILE" ]]; then
+    learned_origin="$(sed -n 's/^\/\/ @origin-trajectory: //p' "$CRYSTALLISED_FILE" | head -n 1)"
+  fi
+
+  {
+    printf '# Diagnostic narrative\n\n'
+    printf '## Scenario\n\n'
+    printf -- '- status: %s\n' "$status"
+    printf -- '- Q1 intent: %s\n' "$Q1_INTENT"
+    printf -- '- Q2 intent: %s\n' "$Q2_INTENT"
+    printf -- '- learned function: %s\n\n' "${CRYSTALLISED_NAME:-none}"
+
+    printf '## Q1 worktree\n\n'
+    printf -- '- workspace: %s\n' "${Q1_WORKSPACE:-}"
+    printf -- '- exploratory runs: %s\n' "$(workspace_run_count "${Q1_WORKSPACE:-}")"
+    printf -- '- accepted commits: %s\n' "$(workspace_commit_count "${Q1_WORKSPACE:-}")"
+    printf -- '- HEAD trajectory: %s\n\n' "$q1_head"
+    if [[ -f "${Q1_WORKSPACE:-}/result/answer.json" ]]; then
+      printf 'Final answer envelope:\n\n```json\n'
+      jq '{status, value, unit, evidence, coverage, missing, derivation}' "${Q1_WORKSPACE:-}/result/answer.json" 2>/dev/null || cat "${Q1_WORKSPACE:-}/result/answer.json"
+      printf '\n```\n\n'
+    fi
+
+    printf '## Promotion\n\n'
+    printf -- '- learned function file: %s\n' "${CRYSTALLISED_FILE:-none}"
+    printf -- '- origin trajectory in learned file: %s\n' "${learned_origin:-none}"
+    if [[ -n "$q1_head" && "$learned_origin" == "$q1_head" ]]; then
+      printf -- '- verdict: promoted from current Q1 HEAD\n\n'
+    else
+      printf -- '- verdict: promotion origin differs from Q1 HEAD\n\n'
+    fi
+
+    printf '## Q2 worktree\n\n'
+    printf -- '- workspace: %s\n' "${Q2_WORKSPACE:-}"
+    printf -- '- exploratory runs: %s\n' "$(workspace_run_count "${Q2_WORKSPACE:-}")"
+    printf -- '- accepted commits: %s\n' "$(workspace_commit_count "${Q2_WORKSPACE:-}")"
+    printf -- '- HEAD trajectory: %s\n\n' "$q2_head"
+    if [[ -f "${Q2_WORKSPACE:-}/result/source.ts" ]]; then
+      printf 'Committed source:\n\n```ts\n'
+      sed -n '1,220p' "${Q2_WORKSPACE:-}/result/source.ts" 2>/dev/null || true
+      printf '\n```\n\n'
+    fi
+    if [[ -f "${Q2_WORKSPACE:-}/result/answer.json" ]]; then
+      printf 'Final answer envelope:\n\n```json\n'
+      jq '{status, value, unit, evidence, coverage, missing, derivation}' "${Q2_WORKSPACE:-}/result/answer.json" 2>/dev/null || cat "${Q2_WORKSPACE:-}/result/answer.json"
+      printf '\n```\n\n'
+    fi
+
+    printf '## Server trajectory timeline\n\n'
+    jq -r '
+      .[]
+      | "- \(.id) phase=\(.phase // "legacy") accepted=\(.answerValidation.accepted // "-") calls=\((.calls // []) | join(" -> "))"
+    ' "$trajectories_summary" 2>/dev/null || true
+  } > "$dir/diagnostic-narrative.md"
+
+  jq -n \
+    --arg q1Head "$q1_head" \
+    --arg q2Head "$q2_head" \
+    --arg learnedOrigin "$learned_origin" \
+    --arg learnedName "${CRYSTALLISED_NAME:-}" \
+    --argjson q1Runs "$(workspace_run_count "${Q1_WORKSPACE:-}")" \
+    --argjson q1Commits "$(workspace_commit_count "${Q1_WORKSPACE:-}")" \
+    --argjson q2Runs "$(workspace_run_count "${Q2_WORKSPACE:-}")" \
+    --argjson q2Commits "$(workspace_commit_count "${Q2_WORKSPACE:-}")" \
+    '{
+      q1: {runs: $q1Runs, commits: $q1Commits, headTrajectory: $q1Head},
+      q2: {runs: $q2Runs, commits: $q2Commits, headTrajectory: $q2Head},
+      promotion: {
+        learnedName: $learnedName,
+        originTrajectory: $learnedOrigin,
+        originMatchesQ1Head: ($learnedOrigin != "" and $learnedOrigin == $q1Head)
+      }
+    }' > "$dir/episode-metrics.json"
+
+  jq -n \
+    --arg q1Head "$q1_head" \
+    --arg learnedOrigin "$learned_origin" \
+    --arg learnedName "${CRYSTALLISED_NAME:-}" \
+    '{
+      learnedName: $learnedName,
+      q1HeadTrajectory: $q1Head,
+      learnedOriginTrajectory: $learnedOrigin,
+      promotedFromHead: ($learnedOrigin != "" and $learnedOrigin == $q1Head),
+      check: "learned function origin should match the current Q1 workspace HEAD"
+    }' > "$dir/promotion-verdict.json"
+
   cat > "$dir/README.md" <<EOF
 # agent-loop troubleshooting artefact
 
@@ -401,6 +526,9 @@ jq . metadata.json
 sed -n '1,220p' client-summary.md
 sed -n '1,260p' server-summary.md
 sed -n '1,260p' action-trajectory.md
+sed -n '1,320p' diagnostic-narrative.md
+jq . episode-metrics.json
+jq . promotion-verdict.json
 jq 'map({id, mode, phase, crystallisable, answerValidation, calls})' trajectory-summary.json
 \`\`\`
 EOF
@@ -526,6 +654,18 @@ if [[ -n "$CRYSTALLISED_NAME" && "$CRYSTALLISED_NAME" =~ ^crystallise_range_tabl
 elif [[ -n "$CRYSTALLISED_NAME" ]]; then
   printf '[FAIL] learned function name is not intent-shaped: %s\n' "$CRYSTALLISED_NAME" >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+if [[ -n "${CRYSTALLISED_FILE:-}" && -f "$CRYSTALLISED_FILE" ]]; then
+  Q1_HEAD_TRAJ="$(workspace_head_trajectory "$Q1_WORKSPACE")"
+  if grep -Fq "@origin-trajectory: $Q1_HEAD_TRAJ" "$CRYSTALLISED_FILE"; then
+    printf '[PASS] learned function originated from Q1 workspace HEAD %s\n' "$Q1_HEAD_TRAJ"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    printf '[FAIL] learned function did not originate from Q1 workspace HEAD %s\n' "$Q1_HEAD_TRAJ" >&2
+    grep -F '@origin-trajectory:' "$CRYSTALLISED_FILE" >&2 || true
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
 fi
 
 # ---- Q2: discover and reuse the learned interface --------------------------

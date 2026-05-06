@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -92,5 +92,33 @@ describe("authorFunction", () => {
     expect(authored.source).not.toContain("input.filing");
     expect(authored.source).not.toContain('"filing": {');
     expect(authored.source).toContain("filing: out0[0]");
+  });
+
+  it("can supersede an existing crystallised file when the workspace HEAD advances", async () => {
+    const trajectory = buildIntentTrajectory();
+    const template = extractTemplate(trajectory);
+    const dir = path.join(baseDir, "lib", "acme");
+    const file = path.join(dir, `${template.name}.ts`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(file, "// older workspace commit\n", "utf8");
+
+    const resolver: LibraryResolver = {
+      resolve: async () => (() => Promise.resolve(null)) as never,
+      list: async () => [],
+    };
+
+    const authored = await authorFunction({
+      tenantId: "acme",
+      baseDir,
+      trajectory: { ...trajectory, id: "traj_new_head" },
+      template,
+      libraryResolver: resolver,
+      allowOverwrite: true,
+    });
+
+    expect(authored.kind).toBe("authored");
+    await expect(readFile(file, "utf8")).resolves.toContain(
+      "@origin-trajectory: traj_new_head",
+    );
   });
 });

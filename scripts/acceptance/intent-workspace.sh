@@ -2,7 +2,7 @@
 # scripts/acceptance/intent-workspace.sh
 #
 # Direct no-LLM acceptance test for the VFS-mounted intent workspace flow:
-#   mount -> run scratch -> commit answer.ts -> result/*
+#   mount -> run scratch -> commit answer.ts -> result/* + commit history/tests
 
 set -euo pipefail
 
@@ -69,9 +69,16 @@ assert_file_exists "$WORKSPACE/result/answer.md" "commit answer markdown"
 assert_file_exists "$WORKSPACE/result/answer.json" "commit answer json"
 assert_file_exists "$WORKSPACE/result/validation.json" "commit validation json"
 assert_file_exists "$WORKSPACE/result/lineage.json" "commit lineage json"
+assert_file_exists "$WORKSPACE/result/HEAD.json" "commit HEAD pointer"
+assert_file_exists "$WORKSPACE/result/tests/replay.json" "commit replay test"
+assert_file_exists "$WORKSPACE/result/commits/001/answer.json" "commit history answer"
+assert_file_exists "$WORKSPACE/result/commits/001/tests/replay.json" "commit history replay test"
 assert_json_field "$WORKSPACE/result/answer.json" ".status" "answered" "answer status"
 assert_json_field "$WORKSPACE/result/answer.json" ".value" "2" "answer value"
 assert_json_field "$WORKSPACE/result/validation.json" ".accepted" "true" "commit accepted"
+assert_json_field "$WORKSPACE/result/HEAD.json" ".commit" "001" "HEAD points to first accepted commit"
+assert_json_field "$WORKSPACE/result/tests/replay.json" ".expected.value" "2" "replay expected answer value"
+ACCEPTED_HEAD="$(jq -r '.trajectoryId // empty' "$WORKSPACE/result/HEAD.json")"
 
 if jq -e '.calls[]? | select(.primitive == "lib.arithmeticDivide")' "$WORKSPACE/result/lineage.json" >/dev/null; then
   printf '[PASS] commit lineage records df.lib.arithmeticDivide\n'
@@ -96,6 +103,9 @@ EOF
   fi
 )
 assert_json_field "$WORKSPACE/result/validation.json" ".accepted" "false" "plain commit validation rejected"
+assert_file_exists "$WORKSPACE/result/commits/002/validation.json" "rejected commit history validation"
+assert_json_field "$WORKSPACE/result/commits/002/validation.json" ".accepted" "false" "rejected attempt is recorded in commit history"
+assert_json_field "$WORKSPACE/result/HEAD.json" ".trajectoryId" "$ACCEPTED_HEAD" "rejected commit does not advance HEAD"
 
 printf '\nintent-workspace acceptance: %s passed, %s failed\n' "$PASS_COUNT" "$FAIL_COUNT"
 if (( FAIL_COUNT > 0 )); then

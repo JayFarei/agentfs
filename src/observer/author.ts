@@ -54,6 +54,9 @@ export type AuthorFunctionArgs = {
   trajectory: TrajectoryRecord;
   template: CallTemplate;
   libraryResolver: LibraryResolver;
+  // Workspace HEAD promotion is allowed to replace an older authored file
+  // with the same stable shape/name when a later accepted commit supersedes it.
+  allowOverwrite?: boolean;
   // Skill name to dispatch when the pure-composition path can't produce
   // valid source. Defaults to "finqa_codify_table_function".
   codifierSkill?: string;
@@ -73,7 +76,8 @@ export async function authorFunction(
   // shape-hash before we get here, but a name collision (e.g. a hand-
   // authored file that happens to share the slug) should not be
   // clobbered.
-  if (await fileExists(file)) {
+  const existingSource = await readExistingSource(file);
+  if (existingSource !== null && args.allowOverwrite !== true) {
     return { kind: "skipped", reason: `name already exists at ${file}` };
   }
 
@@ -110,7 +114,11 @@ export async function authorFunction(
   // resolver. If anything fails, clean up.
   const callable = await libraryResolver.resolve(tenantId, template.name);
   if (!callable) {
-    await fsp.rm(file, { force: true });
+    if (existingSource !== null) {
+      await fsp.writeFile(file, existingSource, "utf8");
+    } else {
+      await fsp.rm(file, { force: true });
+    }
     return {
       kind: "skipped",
       reason: `authored file failed to load (path=${pathTaken})`,
@@ -503,12 +511,11 @@ function safeJsonStringify(value: unknown): string {
   }
 }
 
-async function fileExists(p: string): Promise<boolean> {
+async function readExistingSource(p: string): Promise<string | null> {
   try {
-    await fsp.access(p);
-    return true;
+    return await fsp.readFile(p, "utf8");
   } catch {
-    return false;
+    return null;
   }
 }
 

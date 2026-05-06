@@ -31,6 +31,7 @@ import {
   extractTemplate,
   readLibrarySnapshot,
 } from "./template.js";
+import { resolveWorkspaceHeadForTrajectory } from "./workspaceHead.js";
 
 // --- Public types ----------------------------------------------------------
 
@@ -58,6 +59,10 @@ export type ObserverOpts = {
   // Override the resolver. Defaults to the SDK module-level singleton
   // wired by `installSnippetRuntime`.
   libraryResolver?: LibraryResolver;
+  // Workspace commits are written by the client after /v1/snippets returns.
+  // The observer waits briefly for result/HEAD.json before deciding whether
+  // this commit is still the current worktree HEAD.
+  workspaceHeadTimeoutMs?: number;
 };
 
 // --- Observer --------------------------------------------------------------
@@ -73,6 +78,7 @@ export class Observer {
   private readonly tenantId: string | null;
   private readonly codifierSkill: string;
   private readonly resolverOverride: LibraryResolver | null;
+  private readonly workspaceHeadTimeoutMs: number;
 
   // Test-friendly: every `observe(id)` call records its in-flight Promise
   // here so smoke tests can `await observer.observerPromise.get(id)`.
@@ -86,6 +92,7 @@ export class Observer {
     this.tenantId = opts.tenantId ?? null;
     this.codifierSkill = opts.codifierSkill ?? "finqa_codify_table_function";
     this.resolverOverride = opts.libraryResolver ?? null;
+    this.workspaceHeadTimeoutMs = opts.workspaceHeadTimeoutMs ?? 2_000;
   }
 
   async observe(trajectoryId: string): Promise<ObserveResult> {
@@ -117,6 +124,17 @@ export class Observer {
       };
     }
 
+    const workspaceHead = await resolveWorkspaceHeadForTrajectory(trajectory, {
+      timeoutMs: this.workspaceHeadTimeoutMs,
+    });
+    if (workspaceHead.kind === "stale") {
+      return {
+        kind: "skipped",
+        reason: workspaceHead.reason,
+      };
+    }
+    const allowOverwrite = workspaceHead.kind === "head";
+
     // Build the template + library snapshot.
     let template;
     try {
@@ -135,10 +153,19 @@ export class Observer {
       tenantId: trajectory.tenantId,
     });
 
+    const gateSnapshot =
+      allowOverwrite && snapshot.shapeHashes.has(template.shapeHash)
+        ? {
+            shapeHashes: new Set(
+              [...snapshot.shapeHashes].filter((h) => h !== template.shapeHash),
+            ),
+          }
+        : snapshot;
+
     const gate = shouldCrystallise({
       trajectory,
       shapeHash: template.shapeHash,
-      existing: snapshot,
+      existing: gateSnapshot,
     });
     if (!gate.ok) {
       return { kind: "skipped", reason: gate.reason };
@@ -159,6 +186,7 @@ export class Observer {
       template,
       libraryResolver: resolver,
       codifierSkill: this.codifierSkill,
+      allowOverwrite,
     });
 
     if (authored.kind === "skipped") {
@@ -171,4 +199,3 @@ export class Observer {
     };
   }
 }
-

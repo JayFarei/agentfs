@@ -170,16 +170,17 @@ setup_dataplane() {
   export DATAFETCH_HOME
   export DATAFETCH_SERVER_URL="http://localhost:$DF_PORT"
 
-  # Ensure `datafetch` is on PATH so Claude Code (which only allowlists
-  # `Bash(datafetch *)`) can actually invoke it. If the user has run
-  # `pnpm link --global` already, leave PATH alone. Otherwise drop a
-  # symlink under $DATAFETCH_HOME/bin/ and prepend.
-  if ! command -v datafetch >/dev/null 2>&1; then
-    mkdir -p "$DATAFETCH_HOME/bin"
-    ln -sf "$REPO_ROOT/bin/datafetch.mjs" "$DATAFETCH_HOME/bin/datafetch"
-    export PATH="$DATAFETCH_HOME/bin:$PATH"
-    debug "added $DATAFETCH_HOME/bin (symlink to bin/datafetch.mjs) to PATH"
-  fi
+  # Ensure the live harness uses the repo-local CLI under test. A global
+  # `datafetch` may be linked to an older checkout, which makes agent E2E
+  # results drift from the branch being validated.
+  mkdir -p "$DATAFETCH_HOME/bin"
+  ln -sf "$REPO_ROOT/bin/datafetch.mjs" "$DATAFETCH_HOME/bin/datafetch"
+  export PATH="$DATAFETCH_HOME/bin:$PATH"
+  mkdir -p "$DATAFETCH_HOME/zsh"
+  printf 'export PATH=%q:$PATH\n' "$DATAFETCH_HOME/bin" > "$DATAFETCH_HOME/zsh/.zshenv"
+  printf 'export PATH=%q:$PATH\n' "$DATAFETCH_HOME/bin" > "$DATAFETCH_HOME/zsh/.zlogin"
+  export ZDOTDIR="$DATAFETCH_HOME/zsh"
+  debug "prepended $DATAFETCH_HOME/bin (symlink to bin/datafetch.mjs) to PATH"
 
   step "tmp DATAFETCH_HOME=$DATAFETCH_HOME (port=$DF_PORT)"
 

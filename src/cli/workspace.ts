@@ -35,6 +35,21 @@ type SnippetResponse = {
   validation?: unknown;
 };
 
+type WorkspaceHead = {
+  version: 1;
+  commit: string;
+  trajectoryId?: string;
+  intent: string;
+  tenantId: string;
+  dataset: string;
+  source: string;
+  updatedAt: string;
+  answerPath: string;
+  validationPath: string;
+  lineagePath: string;
+  replayTestPath: string;
+};
+
 function flagString(flags: Flags, key: string): string | undefined {
   const v = flags[key];
   return typeof v === "string" ? v : undefined;
@@ -138,6 +153,8 @@ async function materialiseWorkspace(args: {
   await fsp.mkdir(path.join(root, "scripts"), { recursive: true });
   await fsp.mkdir(path.join(root, "tmp", "runs"), { recursive: true });
   await fsp.mkdir(path.join(root, "result"), { recursive: true });
+  await fsp.mkdir(path.join(root, "result", "commits"), { recursive: true });
+  await fsp.mkdir(path.join(root, "result", "tests"), { recursive: true });
   await fsp.mkdir(path.join(config.baseDir, "lib", config.tenantId), {
     recursive: true,
   });
@@ -187,6 +204,9 @@ async function writeAgentMemory(
     "- `scripts/answer.ts` is the visible intent program to commit.",
     "- `tmp/runs/N/` contains notebook-style outputs from `datafetch run`.",
     "- `result/` contains the final committed answer from `datafetch commit`.",
+    "- `result/commits/N/` is append-only commit history for this intent worktree.",
+    "- `result/HEAD.json` points at the current accepted commit that supersedes earlier attempts.",
+    "- `result/tests/replay.json` is the replay test generated from the current HEAD.",
     "",
     "Workflow:",
     "1. Inspect `df.d.ts`, `db/`, `lib/`, `datafetch apropos`, and `datafetch man`.",
@@ -280,6 +300,7 @@ async function runWorkspaceSnippet(args: {
     root: workspace.root,
     phase: args.phase,
     source,
+    sourcePath,
     response: res,
   });
 
@@ -295,6 +316,7 @@ async function writeWorkspaceResult(args: {
   root: string;
   phase: "run" | "commit";
   source: string;
+  sourcePath?: string;
   response: SnippetResponse;
 }): Promise<void> {
   if (args.phase === "run") {
@@ -315,31 +337,101 @@ async function writeWorkspaceResult(args: {
     return;
   }
 
-  const dir = path.join(args.root, "result");
+  const resultDir = path.join(args.root, "result");
+  const commitsRoot = path.join(resultDir, "commits");
+  const commitDir = await nextRunDir(commitsRoot);
+  const commitId = path.basename(commitDir);
+  const sourceLabel =
+    args.sourcePath === undefined
+      ? "<inline>"
+      : path.relative(args.root, args.sourcePath);
+  await writeCommitSnapshot({
+    root: args.root,
+    dir: commitDir,
+    commitId,
+    sourceLabel,
+    source: args.source,
+    response: args.response,
+  });
+
+  // Keep result/* as the easy-to-read current view for the client agent,
+  // while result/commits/* keeps the append-only worktree history.
+  await writeCommitSnapshot({
+    root: args.root,
+    dir: resultDir,
+    commitId,
+    sourceLabel,
+    source: args.source,
+    response: args.response,
+  });
+
+  if (validationAccepted(args.response.validation)) {
+    const workspace = await readWorkspaceConfig(args.root);
+    const head: WorkspaceHead = {
+      version: 1,
+      commit: commitId,
+      trajectoryId: args.response.trajectoryId,
+      intent: workspace.intent,
+      tenantId: workspace.tenantId,
+      dataset: workspace.dataset,
+      source: sourceLabel,
+      updatedAt: new Date().toISOString(),
+      answerPath: "answer.json",
+      validationPath: "validation.json",
+      lineagePath: "lineage.json",
+      replayTestPath: path.join("tests", "replay.json"),
+    };
+    await fsp.writeFile(
+      path.join(resultDir, "HEAD.json"),
+      `${JSON.stringify(head, null, 2)}\n`,
+      "utf8",
+    );
+  }
+}
+
+async function writeCommitSnapshot(args: {
+  root: string;
+  dir: string;
+  commitId: string;
+  sourceLabel: string;
+  source: string;
+  response: SnippetResponse;
+}): Promise<void> {
+  const { root, dir, commitId, sourceLabel, source, response } = args;
   await fsp.mkdir(dir, { recursive: true });
-  await fsp.writeFile(path.join(dir, "source.ts"), args.source, "utf8");
+  await fsp.writeFile(path.join(dir, "source.ts"), source, "utf8");
   await fsp.writeFile(
     path.join(dir, "answer.json"),
-    `${JSON.stringify(args.response.answer ?? null, null, 2)}\n`,
+    `${JSON.stringify(response.answer ?? null, null, 2)}\n`,
     "utf8",
   );
   await fsp.writeFile(
     path.join(dir, "validation.json"),
-    `${JSON.stringify(args.response.validation ?? null, null, 2)}\n`,
+    `${JSON.stringify(response.validation ?? null, null, 2)}\n`,
     "utf8",
   );
+  await fsp.writeFile(path.join(dir, "answer.md"), renderAnswerMarkdown(response), "utf8");
+  await copyLineage(response, path.join(dir, "lineage.json"));
+  const replay = await buildReplayTest({
+    root,
+    commitId,
+    source: sourceLabel,
+    response,
+  });
+  const testsDir = path.join(dir, "tests");
+  await fsp.mkdir(testsDir, { recursive: true });
   await fsp.writeFile(
-    path.join(dir, "answer.md"),
-    renderAnswerMarkdown(args.response),
+    path.join(testsDir, "replay.json"),
+    `${JSON.stringify(replay, null, 2)}\n`,
     "utf8",
   );
-  await copyLineage(args.response, path.join(dir, "lineage.json"));
 }
 
 async function copyLineage(
   response: SnippetResponse,
   target: string,
 ): Promise<void> {
+  await fsp.mkdir(path.dirname(target), { recursive: true });
   if (response.artifactDir) {
     try {
       await fsp.copyFile(path.join(response.artifactDir, "trajectory.json"), target);
@@ -361,6 +453,79 @@ async function copyLineage(
     )}\n`,
     "utf8",
   );
+}
+
+async function buildReplayTest(args: {
+  root: string;
+  commitId: string;
+  source: string;
+  response: SnippetResponse;
+}): Promise<Record<string, unknown>> {
+  const workspace = await readWorkspaceConfig(args.root);
+  const answer = normalizeObject(args.response.answer);
+  const validation = normalizeObject(args.response.validation);
+  return {
+    version: 1,
+    kind: "workspace-head-replay",
+    commit: args.commitId,
+    trajectoryId: args.response.trajectoryId,
+    tenantId: workspace.tenantId,
+    dataset: workspace.dataset,
+    intent: workspace.intent,
+    source: args.source,
+    expected: {
+      status: typeof answer?.["status"] === "string" ? answer["status"] : null,
+      ...(Object.prototype.hasOwnProperty.call(answer ?? {}, "value")
+        ? { value: answer?.["value"] }
+        : {}),
+      ...(typeof answer?.["unit"] === "string" ? { unit: answer["unit"] } : {}),
+      evidencePresent: evidencePresent(answer?.["evidence"]),
+      derivationPresent: answer?.["derivation"] !== undefined,
+      coverage: answer?.["coverage"] ?? null,
+      missing: answer?.["missing"] ?? null,
+    },
+    validation: {
+      accepted: validation?.["accepted"] === true,
+      learnable: validation?.["learnable"] === true,
+      blockers: Array.isArray(validation?.["blockers"])
+        ? validation?.["blockers"]
+        : [],
+    },
+    lineage: {
+      phase: args.response.phase,
+      calls: args.response.callPrimitives ?? [],
+      requiresDb: (args.response.callPrimitives ?? []).some((p) =>
+        p.startsWith("db."),
+      ),
+      requiresLib: (args.response.callPrimitives ?? []).some((p) =>
+        p.startsWith("lib."),
+      ),
+    },
+  };
+}
+
+function validationAccepted(value: unknown): boolean {
+  return normalizeObject(value)?.["accepted"] === true;
+}
+
+function normalizeObject(value: unknown): Record<string, unknown> | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function evidencePresent(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  return value !== null && value !== undefined;
+}
+
+async function readWorkspaceConfig(root: string): Promise<WorkspaceConfig> {
+  const raw = await fsp.readFile(
+    path.join(root, ".datafetch", "workspace.json"),
+    "utf8",
+  );
+  return JSON.parse(raw) as WorkspaceConfig;
 }
 
 async function readWorkspace(): Promise<{

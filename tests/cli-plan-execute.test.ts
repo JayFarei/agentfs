@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { serve } from "@hono/node-server";
 import http from "node:http";
 import os from "node:os";
@@ -42,13 +42,15 @@ async function withSnippetServer<T>(
       const raw = Buffer.concat(chunks).toString("utf8");
       const body = raw ? (JSON.parse(raw) as CapturedBody) : {};
       bodies.push(body);
+      const commitCount = bodies.filter((b) => b.phase === "commit").length;
+      const trajectoryId = `traj_${body.phase}_${bodies.length}`;
       res.setHeader("content-type", "application/json");
       res.end(
         JSON.stringify({
           stdout: "",
           stderr: "",
           exitCode: 0,
-          trajectoryId: `traj_${body.phase}`,
+          trajectoryId,
           phase: body.phase,
           crystallisable: body.phase === "execute" || body.phase === "commit",
           artifactDir: `/tmp/${body.phase}`,
@@ -58,8 +60,8 @@ async function withSnippetServer<T>(
             ? {
                 answer: {
                   status: "answered",
-                  value: 1,
-                  evidence: [{ ref: "x" }],
+                  value: commitCount,
+                  evidence: [{ ref: `x-${commitCount}` }],
                   derivation: { operation: "count" },
                 },
                 validation: { accepted: true, learnable: true, blockers: [] },
@@ -274,6 +276,101 @@ describe("datafetch plan/execute CLI", () => {
       ]);
       expect(bodies[0]?.sourcePath).toMatch(/scripts\/scratch\.ts$/);
       expect(bodies[1]?.sourcePath).toMatch(/scripts\/answer\.ts$/);
+    });
+  }, 30_000);
+
+  it("records commit history, mirrors the current HEAD, and emits a replay test", async () => {
+    const baseDir = await makeBaseDir();
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "df-intent-head-"));
+    tempDirs.push(workspace);
+
+    await withSnippetServer(async (serverUrl) => {
+      await mkdir(path.join(workspace, ".datafetch"), { recursive: true });
+      await mkdir(path.join(workspace, "scripts"), { recursive: true });
+      await writeFile(
+        path.join(workspace, ".datafetch", "workspace.json"),
+        `${JSON.stringify(
+          {
+            version: 1,
+            sessionId: "sess_workspace_head",
+            tenantId: "tenant-a",
+            mountIds: ["finqa"],
+            dataset: "finqa",
+            intent: "count rows",
+            baseDir,
+            serverUrl,
+            createdAt: "2026-05-06T00:00:00.000Z",
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+      await writeFile(
+        path.join(workspace, "scripts", "answer.ts"),
+        "return df.answer({ status: 'answered', value: 1, evidence: [{ ref: 'x' }], derivation: { operation: 'count' } })\n",
+        "utf8",
+      );
+
+      const env = {
+        ...process.env,
+        DATAFETCH_SESSION: "",
+        DATAFETCH_HOME: baseDir,
+      };
+
+      const first = await runCli(["commit", "scripts/answer.ts"], env, workspace);
+      expect(first.exitCode).toBe(0);
+
+      await writeFile(
+        path.join(workspace, "scripts", "answer.ts"),
+        "return df.answer({ status: 'answered', value: 2, evidence: [{ ref: 'x' }], derivation: { operation: 'count' } })\n",
+        "utf8",
+      );
+      const second = await runCli(["commit", "scripts/answer.ts"], env, workspace);
+      expect(second.exitCode).toBe(0);
+
+      const commits = await readdir(path.join(workspace, "result", "commits"));
+      expect(commits.sort()).toEqual(["001", "002"]);
+
+      const head = JSON.parse(
+        await readFile(path.join(workspace, "result", "HEAD.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(head).toMatchObject({
+        commit: "002",
+        trajectoryId: "traj_commit_2",
+        intent: "count rows",
+      });
+
+      await expect(
+        readFile(path.join(workspace, "result", "answer.json"), "utf8"),
+      ).resolves.toContain('"value": 2');
+      await expect(
+        readFile(
+          path.join(workspace, "result", "commits", "001", "answer.json"),
+          "utf8",
+        ),
+      ).resolves.toContain('"value": 1');
+
+      const replay = JSON.parse(
+        await readFile(path.join(workspace, "result", "tests", "replay.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(replay).toMatchObject({
+        kind: "workspace-head-replay",
+        trajectoryId: "traj_commit_2",
+        intent: "count rows",
+        expected: {
+          status: "answered",
+          value: 2,
+          evidencePresent: true,
+          derivationPresent: true,
+        },
+      });
+      await expect(
+        readFile(
+          path.join(workspace, "result", "commits", "002", "tests", "replay.json"),
+          "utf8",
+        ),
+      ).resolves.toContain('"trajectoryId": "traj_commit_2"');
     });
   }, 30_000);
 
