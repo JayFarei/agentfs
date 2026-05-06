@@ -2,6 +2,7 @@
 .agent-trace/
 .datafetch/
 .snippet-cache/
+artifacts/
 node_modules/
 dist/
 web/dist/

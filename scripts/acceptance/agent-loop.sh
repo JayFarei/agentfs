@@ -257,6 +257,7 @@ learned_interface_count() {
 
 wait_for_learned_interface() {
   local timeout_ticks="${1:-20}"
+  local expected_origin="${2:-}"
   CRYSTALLISED_FILE=""
   CRYSTALLISED_NAME=""
   for _ in $(seq 1 "$timeout_ticks"); do
@@ -264,6 +265,9 @@ wait_for_learned_interface() {
     local file
     while IFS= read -r -d '' file; do
       if grep -Eq '@shape-hash:\s*[0-9a-f]{8,}' "$file" 2>/dev/null; then
+        if [[ -n "$expected_origin" ]] && ! grep -Fq "@origin-trajectory: $expected_origin" "$file"; then
+          continue
+        fi
         if [[ -z "$latest" || "$file" -nt "$latest" ]]; then
           latest="$file"
         fi
@@ -664,12 +668,13 @@ fi
 assert_workspace_run_written "Q1" "$Q1_WORKSPACE"
 assert_workspace_commit "Q1" "$Q1_WORKSPACE"
 
-step "Q1: waiting up to 10s for observer learned-interface write"
-if wait_for_learned_interface 20; then
+Q1_HEAD_TRAJ="$(workspace_head_trajectory "$Q1_WORKSPACE")"
+step "Q1: waiting up to 10s for observer learned-interface write from HEAD $Q1_HEAD_TRAJ"
+if wait_for_learned_interface 20 "$Q1_HEAD_TRAJ"; then
   printf '[PASS] observer wrote learned interface %s\n' "$CRYSTALLISED_NAME"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  printf '[FAIL] no learned interface with @shape-hash under lib/test-jay/ within 10s\n' >&2
+  printf '[FAIL] no learned interface with @shape-hash and @origin-trajectory %s under lib/test-jay/ within 10s\n' "$Q1_HEAD_TRAJ" >&2
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
 
@@ -682,7 +687,6 @@ elif [[ -n "$CRYSTALLISED_NAME" ]]; then
 fi
 
 if [[ -n "${CRYSTALLISED_FILE:-}" && -f "$CRYSTALLISED_FILE" ]]; then
-  Q1_HEAD_TRAJ="$(workspace_head_trajectory "$Q1_WORKSPACE")"
   if grep -Fq "@origin-trajectory: $Q1_HEAD_TRAJ" "$CRYSTALLISED_FILE"; then
     printf '[PASS] learned interface originated from Q1 workspace HEAD %s\n' "$Q1_HEAD_TRAJ"
     PASS_COUNT=$((PASS_COUNT + 1))

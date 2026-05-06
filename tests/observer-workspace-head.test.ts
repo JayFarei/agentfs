@@ -94,6 +94,29 @@ describe("resolveWorkspaceHeadForTrajectory", () => {
     });
   });
 
+  it("waits for workspace HEAD to advance from the previous accepted commit", async () => {
+    const workspace = await workspaceWithHead("traj_previous");
+    const sourcePath = path.join(workspace, "scripts", "answer.ts");
+    const pending = resolveWorkspaceHeadForTrajectory(trajectory(sourcePath), {
+      timeoutMs: 500,
+      pollMs: 10,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await writeFile(
+      path.join(workspace, "result", "HEAD.json"),
+      `${JSON.stringify({ version: 1, commit: "003", trajectoryId: "traj_current" })}\n`,
+      "utf8",
+    );
+
+    await expect(pending).resolves.toMatchObject({
+      kind: "head",
+      workspaceRoot: workspace,
+      commit: "003",
+      allowOverwrite: true,
+    });
+  });
+
   it("rejects a superseded commit when workspace HEAD points elsewhere", async () => {
     const workspace = await workspaceWithHead("traj_newer");
     const out = await resolveWorkspaceHeadForTrajectory(

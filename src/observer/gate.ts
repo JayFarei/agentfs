@@ -236,20 +236,20 @@ function consumesEarlierOutput(
   if (!Array.isArray(upstream) || upstream.length === 0) return false;
   // Quick serialise-and-substring check. This is a loose heuristic but
   // covers the common case where the output of findSimilar(...) flows in
-  // as `{candidates: cands}` to pickFiling.
-  const upstreamJson = safeJson(upstream);
-  if (upstreamJson === null) return false;
-  // Use a feature of the upstream payload that is unlikely to collide
-  // with literal arguments: pick the first element's first string-valued
-  // field as a signature.
-  const signature = pickSignature(upstream);
-  if (signature === null) return false;
+  // as `{candidates: cands}` to pickFiling. Agents often filter/rerank the
+  // candidate list before the next primitive call, so checking only the
+  // first upstream row creates false negatives. Treat any distinctive row
+  // signature from the upstream result set as evidence of substrate flow.
+  const signatures = pickSignatures(upstream);
+  if (signatures.length === 0) return false;
   for (let i = firstDbIdx + 1; i < calls.length; i += 1) {
     const downstream = calls[i];
     if (!downstream) continue;
     const downstreamJson = safeJson(downstream.input);
     if (downstreamJson === null) continue;
-    if (downstreamJson.includes(signature)) return true;
+    if (signatures.some((signature) => downstreamJson.includes(signature))) {
+      return true;
+    }
   }
   return false;
 }
@@ -262,19 +262,38 @@ function safeJson(value: unknown): string | null {
   }
 }
 
-function pickSignature(arr: unknown[]): string | null {
+function pickSignatures(arr: unknown[]): string[] {
+  const preferredKeys = [
+    "id",
+    "caseId",
+    "filename",
+    "question",
+    "searchableText",
+    "program",
+  ];
+  const signatures: string[] = [];
+  const seen = new Set<string>();
+
   for (const item of arr) {
     if (item === null || typeof item !== "object" || Array.isArray(item)) {
       continue;
     }
     const rec = item as Record<string, unknown>;
-    for (const key of Object.keys(rec)) {
+    const keys = [
+      ...preferredKeys.filter((key) => Object.prototype.hasOwnProperty.call(rec, key)),
+      ...Object.keys(rec).filter((key) => !preferredKeys.includes(key)),
+    ];
+    for (const key of keys) {
       const v = rec[key];
       if (typeof v === "string" && v.length >= 4) {
-        // Plain string that's distinctive enough.
-        return JSON.stringify(v);
+        const signature = JSON.stringify(v);
+        if (!seen.has(signature)) {
+          seen.add(signature);
+          signatures.push(signature);
+          if (signatures.length >= 64) return signatures;
+        }
       }
     }
   }
-  return null;
+  return signatures;
 }

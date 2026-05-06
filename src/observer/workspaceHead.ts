@@ -53,7 +53,6 @@ export async function resolveWorkspaceHeadForTrajectory(
         };
       }
       lastReason = `workspace HEAD is ${headTrajectory || "<missing>"}; trajectory is ${trajectory.id}`;
-      break;
     }
     if (Date.now() >= deadline) break;
     await sleep(pollMs);

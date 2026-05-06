@@ -127,22 +127,19 @@ export async function authorFunction(
   }
 
   // Refresh the typed API manifest and workspace memory so the newly learned
-  // interface shows up in df.d.ts / AGENTS.md on the next read.
-  // Lazy imports keep the observer module light for runDemo and smoke tests.
-  void (async () => {
-    try {
-      const { regenerateManifest } = await import(
-        "../server/manifest.js"
-      );
-      const { regenerateWorkspaceMemory } = await import(
-        "../bootstrap/workspaceMemory.js"
-      );
-      await regenerateManifest({ baseDir, tenantId });
-      await regenerateWorkspaceMemory({ baseDir, tenantId });
-    } catch {
-      // best-effort
-    }
-  })();
+  // interface shows up in df.d.ts / AGENTS.md on the next read. This is
+  // awaited rather than fire-and-forget so tests and freshly mounted
+  // workspaces do not race background writes.
+  try {
+    const { regenerateManifest } = await import("../server/manifest.js");
+    const { regenerateWorkspaceMemory } = await import(
+      "../bootstrap/workspaceMemory.js"
+    );
+    await regenerateManifest({ baseDir, tenantId });
+    await regenerateWorkspaceMemory({ baseDir, tenantId });
+  } catch {
+    // best-effort
+  }
 
   return { kind: "authored", name: template.name, path: file, source };
 }

@@ -69,6 +69,42 @@ describe("shouldCrystallise", () => {
     expect(out).toEqual({ ok: true });
   });
 
+  it("approves visible filtered subsets of a db result set", () => {
+    const calls: TrajectoryRecord["calls"] = [
+      {
+        ...VALID_CALLS[0]!,
+        output: [
+          { id: "HFC/2018/page_43.pdf-5", question: "share repurchases" },
+          {
+            id: "UNP/2016/page_52.pdf-4",
+            filename: "UNP/2016/page_52.pdf",
+            question: "chemical revenue range",
+          },
+        ],
+      },
+      {
+        ...VALID_CALLS[1]!,
+        input: {
+          question: "chemicals revenue",
+          candidates: [
+            {
+              id: "UNP/2016/page_52.pdf-4",
+              filename: "UNP/2016/page_52.pdf",
+              question: "chemical revenue range",
+            },
+          ],
+        },
+      },
+    ];
+    const traj = buildTrajectory({ calls, mode: "novel" });
+    const out = shouldCrystallise({
+      trajectory: traj,
+      shapeHash: "filtered-subset",
+      existing: EMPTY_LIB,
+    });
+    expect(out).toEqual({ ok: true });
+  });
+
   it("rejects trajectories with fewer than 2 calls", () => {
     const traj = buildTrajectory({ calls: [VALID_CALLS[0]!] });
     const out = shouldCrystallise({
