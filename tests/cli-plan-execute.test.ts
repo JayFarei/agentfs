@@ -208,7 +208,9 @@ describe("datafetch plan/execute CLI", () => {
 
     await withSnippetServer(async (serverUrl, bodies) => {
       await mkdir(path.join(workspace, ".datafetch"), { recursive: true });
+      await mkdir(path.join(workspace, "lib", "skills"), { recursive: true });
       await mkdir(path.join(workspace, "scripts"), { recursive: true });
+      await mkdir(path.join(workspace, "tmp"), { recursive: true });
       await writeFile(
         path.join(workspace, ".datafetch", "workspace.json"),
         `${JSON.stringify(
@@ -233,6 +235,18 @@ describe("datafetch plan/execute CLI", () => {
         "console.log('scratch')\n",
         "utf8",
       );
+      await writeFile(
+        path.join(workspace, "lib", "localHelper.ts"),
+        "export const localHelper = 1;\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(workspace, "lib", "skills", "pick_evidence.md"),
+        "# Pick Evidence\n\nReturn JSON only.\n",
+        "utf8",
+      );
+      await writeFile(path.join(workspace, "tmp", "debug.txt"), "ignored\n", "utf8");
+      await writeFile(path.join(workspace, ".env"), "SECRET=ignored\n", "utf8");
       await writeFile(
         path.join(workspace, "scripts", "answer.ts"),
         "return df.answer({ status: 'answered', value: 1, evidence: [{ ref: 'x' }], derivation: { operation: 'count' } })\n",
@@ -286,7 +300,9 @@ describe("datafetch plan/execute CLI", () => {
 
     await withSnippetServer(async (serverUrl) => {
       await mkdir(path.join(workspace, ".datafetch"), { recursive: true });
+      await mkdir(path.join(workspace, "lib", "skills"), { recursive: true });
       await mkdir(path.join(workspace, "scripts"), { recursive: true });
+      await mkdir(path.join(workspace, "tmp"), { recursive: true });
       await writeFile(
         path.join(workspace, ".datafetch", "workspace.json"),
         `${JSON.stringify(
@@ -306,6 +322,18 @@ describe("datafetch plan/execute CLI", () => {
         )}\n`,
         "utf8",
       );
+      await writeFile(
+        path.join(workspace, "lib", "localHelper.ts"),
+        "export const localHelper = 1;\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(workspace, "lib", "skills", "pick_evidence.md"),
+        "# Pick Evidence\n\nReturn JSON only.\n",
+        "utf8",
+      );
+      await writeFile(path.join(workspace, "tmp", "debug.txt"), "ignored\n", "utf8");
+      await writeFile(path.join(workspace, ".env"), "SECRET=ignored\n", "utf8");
       await writeFile(
         path.join(workspace, "scripts", "answer.ts"),
         "return df.answer({ status: 'answered', value: 1, evidence: [{ ref: 'x' }], derivation: { operation: 'count' } })\n",
@@ -371,6 +399,37 @@ describe("datafetch plan/execute CLI", () => {
           "utf8",
         ),
       ).resolves.toContain('"trajectoryId": "traj_commit_2"');
+
+      const snapshot = JSON.parse(
+        await readFile(path.join(workspace, "result", "workspace", "manifest.json"), "utf8"),
+      ) as { files: Array<{ path: string }>; ignored?: unknown };
+      const snapshotPaths = snapshot.files.map((f) => f.path);
+      expect(snapshotPaths).toContain(".datafetchignore");
+      expect(snapshotPaths).toContain("scripts/answer.ts");
+      expect(snapshotPaths).toContain("lib/localHelper.ts");
+      expect(snapshotPaths).toContain("lib/skills/pick_evidence.md");
+      expect(snapshotPaths).not.toContain("tmp/debug.txt");
+      expect(snapshotPaths).not.toContain(".env");
+      expect(snapshotPaths).not.toContain("result/answer.json");
+      await expect(
+        readFile(
+          path.join(workspace, "result", "workspace", "files", "lib", "localHelper.ts"),
+          "utf8",
+        ),
+      ).resolves.toContain("localHelper");
+      await expect(
+        readFile(
+          path.join(
+            workspace,
+            "result",
+            "commits",
+            "002",
+            "workspace",
+            "manifest.json",
+          ),
+          "utf8",
+        ),
+      ).resolves.toContain('"scripts/answer.ts"');
     });
   }, 30_000);
 

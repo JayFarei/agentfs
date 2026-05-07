@@ -6,6 +6,11 @@ import { defaultBaseDir } from "../paths.js";
 import { jsonRequest, resolveServerUrl } from "./httpClient.js";
 import { writeActiveSession, type SessionRecord } from "./session.js";
 import type { Flags } from "./types.js";
+import {
+  DEFAULT_DATAFETCHIGNORE,
+  ensureDatafetchIgnore,
+  writeWorkspaceSnapshot,
+} from "./workspaceSnapshot.js";
 
 type WorkspaceConfig = {
   version: 1;
@@ -57,6 +62,7 @@ type WorkspaceHead = {
   validationPath: string;
   lineagePath: string;
   replayTestPath: string;
+  workspaceSnapshotPath: string;
 };
 
 function flagString(flags: Flags, key: string): string | undefined {
@@ -173,6 +179,7 @@ async function materialiseWorkspace(args: {
     `${JSON.stringify(config, null, 2)}\n`,
     "utf8",
   );
+  await ensureDatafetchIgnore(root);
   await writeAgentMemory(root, config);
   await copyIfExists(
     path.join(config.baseDir, "df.d.ts"),
@@ -389,6 +396,7 @@ async function writeWorkspaceResult(args: {
       validationPath: "validation.json",
       lineagePath: "lineage.json",
       replayTestPath: path.join("tests", "replay.json"),
+      workspaceSnapshotPath: path.join("workspace", "manifest.json"),
     };
     await fsp.writeFile(
       path.join(resultDir, "HEAD.json"),
@@ -434,6 +442,10 @@ async function writeCommitSnapshot(args: {
     `${JSON.stringify(replay, null, 2)}\n`,
     "utf8",
   );
+  await writeWorkspaceSnapshot({
+    root,
+    targetDir: path.join(dir, "workspace"),
+  });
 }
 
 async function copyLineage(
@@ -626,6 +638,10 @@ async function copyIfExists(
     await fsp.writeFile(target, fallback, "utf8");
   }
 }
+
+// Re-exported for tests and for keeping the workspace template colocated with
+// the rest of the mounted-folder materialisation contract.
+export { DEFAULT_DATAFETCHIGNORE };
 
 async function linkOrMakeDir(
   source: string,

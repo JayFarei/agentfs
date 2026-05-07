@@ -29,6 +29,7 @@ assert_file_exists "$WORKSPACE/CLAUDE.md" "workspace CLAUDE.md"
 assert_file_exists "$WORKSPACE/df.d.ts" "workspace df.d.ts"
 assert_file_exists "$WORKSPACE/scripts/scratch.ts" "workspace scratch.ts"
 assert_file_exists "$WORKSPACE/scripts/answer.ts" "workspace answer.ts"
+assert_file_exists "$WORKSPACE/.datafetchignore" "workspace datafetchignore"
 assert_file_exists "$WORKSPACE/.datafetch/workspace.json" "workspace metadata"
 
 step "running exploratory scratch script"
@@ -46,6 +47,18 @@ assert_file_exists "$WORKSPACE/tmp/runs/001/lineage.json" "run lineage artifact"
 assert_json_field "$WORKSPACE/tmp/runs/001/result.json" ".phase" "run" "run phase"
 
 step "committing visible answer program"
+mkdir -p "$WORKSPACE/lib/skills" "$WORKSPACE/tmp"
+cat > "$WORKSPACE/lib/localHelper.ts" <<'EOF'
+export function localHelper() {
+  return "visible dependency";
+}
+EOF
+cat > "$WORKSPACE/lib/skills/pick_evidence.md" <<'EOF'
+# Pick Evidence
+
+Return JSON only.
+EOF
+printf 'ignored\n' > "$WORKSPACE/tmp/debug.txt"
 cat > "$WORKSPACE/scripts/answer.ts" <<'EOF'
 const out = await df.lib.arithmeticDivide({ numerator: 6, denominator: 3 });
 return df.answer({
@@ -71,13 +84,21 @@ assert_file_exists "$WORKSPACE/result/validation.json" "commit validation json"
 assert_file_exists "$WORKSPACE/result/lineage.json" "commit lineage json"
 assert_file_exists "$WORKSPACE/result/HEAD.json" "commit HEAD pointer"
 assert_file_exists "$WORKSPACE/result/tests/replay.json" "commit replay test"
+assert_file_exists "$WORKSPACE/result/workspace/manifest.json" "commit workspace snapshot manifest"
+assert_file_exists "$WORKSPACE/result/workspace/files/scripts/answer.ts" "commit workspace snapshot answer source"
+assert_file_exists "$WORKSPACE/result/workspace/files/lib/localHelper.ts" "commit workspace snapshot lib helper"
+assert_file_exists "$WORKSPACE/result/workspace/files/lib/skills/pick_evidence.md" "commit workspace snapshot skill sidecar"
 assert_file_exists "$WORKSPACE/result/commits/001/answer.json" "commit history answer"
 assert_file_exists "$WORKSPACE/result/commits/001/tests/replay.json" "commit history replay test"
+assert_file_exists "$WORKSPACE/result/commits/001/workspace/manifest.json" "commit history workspace snapshot"
 assert_json_field "$WORKSPACE/result/answer.json" ".status" "answered" "answer status"
 assert_json_field "$WORKSPACE/result/answer.json" ".value" "2" "answer value"
 assert_json_field "$WORKSPACE/result/validation.json" ".accepted" "true" "commit accepted"
 assert_json_field "$WORKSPACE/result/HEAD.json" ".commit" "001" "HEAD points to first accepted commit"
 assert_json_field "$WORKSPACE/result/tests/replay.json" ".expected.value" "2" "replay expected answer value"
+assert_json_field "$WORKSPACE/result/workspace/manifest.json" '.files | map(.path) | index("scripts/answer.ts") != null' "true" "snapshot records answer.ts"
+assert_json_field "$WORKSPACE/result/workspace/manifest.json" '.files | map(.path) | index("lib/skills/pick_evidence.md") != null' "true" "snapshot records skill sidecar"
+assert_json_field "$WORKSPACE/result/workspace/manifest.json" '.files | map(.path) | index("tmp/debug.txt") == null' "true" "snapshot ignores tmp debug"
 ACCEPTED_HEAD="$(jq -r '.trajectoryId // empty' "$WORKSPACE/result/HEAD.json")"
 
 if jq -e '.calls[]? | select(.primitive == "lib.arithmeticDivide")' "$WORKSPACE/result/lineage.json" >/dev/null; then
