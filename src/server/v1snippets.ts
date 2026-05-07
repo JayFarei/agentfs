@@ -21,6 +21,7 @@ import type { SessionCtx, SnippetRuntime } from "../bash/snippetRuntime.js";
 import { summarizeCallScopes } from "../trajectory/callScope.js";
 
 import { SessionStore } from "./sessionStore.js";
+import { telemetryEnabled, writeTelemetryEvent } from "./telemetry.js";
 
 export type SnippetsAppDeps = {
   snippetRuntime: SnippetRuntime;
@@ -33,6 +34,7 @@ const snippetsRequestSchema = v.object({
   source: v.pipe(v.string(), v.minLength(1)),
   phase: v.optional(v.picklist(["plan", "execute", "run", "commit"])),
   sourcePath: v.optional(v.pipe(v.string(), v.minLength(1))),
+  telemetry: v.optional(v.boolean()),
 });
 
 export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
@@ -104,12 +106,14 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
     let nestedByRoot: ReturnType<
       typeof summarizeCallScopes
     >["nestedByRoot"] | undefined;
+    let trajectoryRecord: unknown;
     let phase = runResult.phase;
     let crystallisable = runResult.crystallisable;
     let artifactDir = runResult.artifactDir;
     if (runResult.trajectoryId) {
       try {
         const traj = await readTrajectory(runResult.trajectoryId, deps.baseDir);
+        trajectoryRecord = traj;
         mode = traj.mode;
         functionName = traj.provenance?.functionName;
         callPrimitives = traj.calls.map((call) => call.primitive);
@@ -124,6 +128,45 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
       } catch {
         // Leave best-effort trajectory-derived fields undefined.
       }
+    }
+
+    if (telemetryEnabled(parsed.output.telemetry)) {
+      await writeTelemetryEvent({
+        baseDir: deps.baseDir,
+        event: {
+          kind: "snippet-run",
+          session: {
+            sessionId: record.sessionId,
+            tenantId: record.tenantId,
+            mountIds: record.mountIds,
+          },
+          request: {
+            phase: parsed.output.phase ?? null,
+            sourcePath: parsed.output.sourcePath ?? null,
+            source: parsed.output.source,
+          },
+          response: {
+            stdout: runResult.stdout,
+            stderr: runResult.stderr,
+            exitCode: runResult.exitCode,
+            trajectoryId: runResult.trajectoryId,
+            cost: runResult.cost,
+            mode,
+            functionName,
+            callPrimitives,
+            clientCallPrimitives,
+            nestedCallPrimitives,
+            nestedCalls,
+            nestedByRoot,
+            phase,
+            crystallisable,
+            artifactDir,
+            answer: runResult.answer,
+            validation: runResult.validation,
+          },
+          trajectory: trajectoryRecord ?? null,
+        },
+      });
     }
 
     return c.json({

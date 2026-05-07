@@ -12,6 +12,8 @@
 //   POST /v1/mounts          provider publishes a mount (SSE stream).
 //   DELETE /v1/mounts/:id    explicit teardown.
 //   GET /v1/mounts           list registered mounts.
+//   POST /v1/catalog/sources register a mountable source URL.
+//   GET /v1/catalog/sources  list registered source URLs.
 //   POST /v1/bash            run one bash command in a persistent session.
 //   POST /v1/connect         create a session; persists to disk.
 //   GET /v1/sessions         list persisted sessions.
@@ -33,6 +35,7 @@ import { getLibraryResolver } from "../sdk/index.js";
 import { installSnippetRuntime } from "../snippet/install.js";
 
 import { createBashApp } from "./v1bash.js";
+import { createCatalogApp } from "./v1catalog.js";
 import { createConnectApp } from "./v1connect.js";
 import { createMountsApp } from "./v1mounts.js";
 import { createSessionsApp } from "./v1sessions.js";
@@ -88,6 +91,7 @@ export async function createServer(
   const app = new Hono();
   app.get("/health", (c) => c.json({ ok: true, baseDir }));
 
+  app.route("/v1/catalog", createCatalogApp({ baseDir }));
   app.route("/v1/mounts", createMountsApp({ baseDir }));
   app.route(
     "/v1/bash",

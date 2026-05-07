@@ -6,7 +6,8 @@
 // MountHandle exposing `status()`, `inventory()`, `read()`, and `on()`.
 //
 // MVP scope:
-//   - `source.kind === "atlas"` is the only supported substrate.
+//   - `source.kind === "atlas"` and `source.kind === "huggingface"` are the
+//     supported substrates.
 //   - `warmup: "lazy"` (default) returns immediately; bootstrap runs in the
 //     background and stage events stream out of `status()`.
 //   - `warmup: "eager"` blocks until the bootstrap completes.
@@ -37,6 +38,8 @@ import { promises as fs } from "node:fs";
 import type { MountInventory } from "../sdk/index.js";
 import { AtlasMountAdapter } from "./atlas/AtlasMountAdapter.js";
 import type { AtlasSource } from "./atlasMount.js";
+import { HuggingFaceMountAdapter } from "./huggingface/HuggingFaceMountAdapter.js";
+import type { HuggingFaceSource } from "./huggingfaceMount.js";
 import {
   emitMount,
   resolveBaseDir,
@@ -52,7 +55,7 @@ import { regenerateWorkspaceMemory } from "../bootstrap/workspaceMemory.js";
 
 // --- Public types ----------------------------------------------------------
 
-export type MountSource = AtlasSource;
+export type MountSource = AtlasSource | HuggingFaceSource;
 
 export type WarmupMode = "lazy" | "eager";
 
@@ -124,21 +127,8 @@ export type MountHandle = {
 export async function publishMount(
   args: PublishMountArgs,
 ): Promise<MountHandle> {
-  if (args.source.kind !== "atlas") {
-    // Exhaustiveness guard: when more adapters land, switch on `kind` here.
-    throw new Error(
-      `publishMount: unsupported source.kind "${
-        (args.source as { kind: string }).kind
-      }". MVP supports "atlas" only.`,
-    );
-  }
-
   const baseDir = args.baseDir ?? resolveBaseDir();
-  const adapter = new AtlasMountAdapter({
-    uri: args.source.uri,
-    db: args.source.db,
-    mountId: args.id,
-  });
+  const adapter = makeAdapter(args);
 
   const stream = emitMount({ adapter, mountId: args.id, baseDir });
 
@@ -243,4 +233,30 @@ export async function publishMount(
   }
 
   return handle;
+}
+
+function makeAdapter(
+  args: PublishMountArgs,
+): (AtlasMountAdapter | HuggingFaceMountAdapter) & { close?: () => Promise<void> } {
+  switch (args.source.kind) {
+    case "atlas":
+      return new AtlasMountAdapter({
+        uri: args.source.uri,
+        db: args.source.db,
+        mountId: args.id,
+      });
+    case "huggingface":
+      return new HuggingFaceMountAdapter({
+        dataset: args.source.dataset,
+        ...(args.source.config !== undefined ? { config: args.source.config } : {}),
+        ...(args.source.split !== undefined ? { split: args.source.split } : {}),
+        ...(args.source.endpoint !== undefined ? { endpoint: args.source.endpoint } : {}),
+      });
+    default: {
+      const neverSource = args.source as { kind: string };
+      throw new Error(
+        `publishMount: unsupported source.kind "${neverSource.kind}"`,
+      );
+    }
+  }
 }

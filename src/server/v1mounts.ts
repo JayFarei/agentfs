@@ -47,6 +47,15 @@ const atlasSourceSchema = v.object({
   db: v.pipe(v.string(), v.minLength(1)),
 });
 
+const huggingFaceSourceSchema = v.object({
+  kind: v.literal("huggingface"),
+  dataset: v.pipe(v.string(), v.minLength(1)),
+  config: v.optional(v.string()),
+  split: v.optional(v.string()),
+  sourceUrl: v.optional(v.string()),
+  endpoint: v.optional(v.string()),
+});
+
 const policySchema = v.object({
   access: v.optional(
     v.union([
@@ -59,7 +68,7 @@ const policySchema = v.object({
 
 const publishMountRequestSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
-  source: atlasSourceSchema,
+  source: v.union([atlasSourceSchema, huggingFaceSourceSchema]),
   warmup: v.optional(v.union([v.literal("lazy"), v.literal("eager")])),
   policy: v.optional(policySchema),
 });

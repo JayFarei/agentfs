@@ -13,6 +13,7 @@
 //   man <fn>                                     — render structured docs.
 //   apropos <kw>                                 — semantic search across /lib/.
 //   install-skill                                — copy SKILL.md into ~/.claude/skills/.
+//   add/list/inspect                             — server-side source catalog.
 
 import * as readline from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
@@ -43,6 +44,7 @@ import {
   cmdTsx,
 } from "./cli/agentVerbs.js";
 import { cmdInstallSkill } from "./cli/installSkill.js";
+import { cmdAdd, cmdInspect, cmdList } from "./cli/catalog.js";
 import { cmdCommit, cmdMount, cmdRun } from "./cli/workspace.js";
 
 loadProjectEnv();
@@ -53,7 +55,7 @@ loadProjectEnv();
 // (`--mount a --mount b`) accumulate into a string[]. Boolean flags
 // stand alone (`--json`, `--force`, `--no-cache`, `--help`).
 
-const BOOLEAN_FLAGS = new Set(["no-cache", "help", "json", "force"]);
+const BOOLEAN_FLAGS = new Set(["no-cache", "help", "json", "force", "telemetry"]);
 const REPEATABLE_FLAGS = new Set(["mount"]);
 
 // Short-flag aliases: a leading `-e <value>` is treated like `--e <value>`.
@@ -124,8 +126,16 @@ function usage(): void {
       "  datafetch publish <mount-id> [--uri <atlas-uri>] [--db <db-name>]",
       "    Publish a mount; stream warm-up stage events to stdout.",
       "",
+      "Dataset catalog (talks to the server over HTTP):",
+      "  datafetch add <dataset-url> [--id <local-id>]",
+      "    Register a supported dataset URL with the current data plane.",
+      "  datafetch list [--json]",
+      "    List registered datasets.",
+      "  datafetch inspect <source-id> [--json]",
+      "    Show metadata and starter mount command for one registered dataset.",
+      "",
       "Intent workspace:",
-      "  datafetch mount --tenant <id> --dataset <mount-id> --intent '<text>' [--path <dir>]",
+      "  datafetch mount [source-id] [--tenant <id>] [--dataset <mount-id>] --intent '<text>' [--path <dir>]",
       "    Create a VFS-style worktree for one user intent.",
       "  datafetch run [scripts/scratch.ts]",
       "    Run exploratory TypeScript; writes tmp/runs/N/.",
@@ -172,11 +182,15 @@ function usage(): void {
       "  --server <url>       data-plane base URL (default http://localhost:8080)",
       "  --session <id>       override the active session pointer",
       "  --base-dir <path>    override DATAFETCH_HOME",
+      "  --telemetry          ask the server to append this run to telemetry/events.jsonl",
       "",
       "Environment:",
       "  DATAFETCH_HOME       baseDir for /db/, /lib/, trajectories, sessions",
       "  DATAFETCH_SESSION    fallback session id when no --session flag is set",
       "  DATAFETCH_SERVER_URL fallback server base URL (default localhost:8080)",
+      "  DATAFETCH_TELEMETRY  set to 1/true/yes to log every snippet server-side",
+      "  DATAFETCH_TELEMETRY_LABEL label for benchmark/eval telemetry rows",
+      "  DATAFETCH_SEARCH_MODE label for baseline/learned/search-mode comparisons",
       "  ATLAS_URI            MongoDB Atlas connection string",
       "  PORT                 HTTP server port (server.ts only)",
     ].join("\n"),
@@ -390,6 +404,15 @@ async function main(): Promise<void> {
   switch (command) {
     case "publish":
       await cmdPublish(positionals, flags);
+      return;
+    case "add":
+      await cmdAdd(positionals, flags);
+      return;
+    case "list":
+      await cmdList(positionals, flags);
+      return;
+    case "inspect":
+      await cmdInspect(positionals, flags);
       return;
     case "mount":
       await cmdMount(positionals, flags);

@@ -4,6 +4,7 @@ import path from "node:path";
 import { defaultBaseDir } from "../paths.js";
 
 import { jsonRequest, resolveServerUrl } from "./httpClient.js";
+import { ensureCatalogSourceMounted } from "./catalog.js";
 import { writeActiveSession, type SessionRecord } from "./session.js";
 import type { Flags } from "./types.js";
 import {
@@ -85,13 +86,14 @@ function baseDirFromFlags(flags: Flags): string {
 }
 
 export async function cmdMount(
-  _positionals: string[],
+  positionals: string[],
   flags: Flags,
 ): Promise<void> {
-  const tenant = flagString(flags, "tenant");
-  const dataset = flagString(flags, "dataset") ?? flagString(flags, "mount");
+  const tenant =
+    flagString(flags, "tenant") ?? process.env["DATAFETCH_TENANT"] ?? "local";
+  const dataset =
+    flagString(flags, "dataset") ?? flagString(flags, "mount") ?? positionals[0];
   const intent = flagString(flags, "intent");
-  if (!tenant) throw new Error("mount: --tenant <id> is required");
   if (!dataset) throw new Error("mount: --dataset <id> is required");
   if (!intent) throw new Error("mount: --intent <text> is required");
 
@@ -104,6 +106,8 @@ export async function cmdMount(
   if (await pathExists(workspacePath)) {
     throw new Error(`mount: workspace already exists at ${workspacePath}`);
   }
+
+  await ensureCatalogSourceMounted({ datasetId: dataset, flags });
 
   const record = await jsonRequest<SessionRecord>({
     method: "POST",
@@ -315,6 +319,7 @@ async function runWorkspaceSnippet(args: {
       sessionId: workspace.config.sessionId,
       source,
       phase: args.phase,
+      ...(args.flags["telemetry"] === true ? { telemetry: true } : {}),
       ...(sourcePath !== undefined ? { sourcePath } : {}),
     },
   });

@@ -114,9 +114,11 @@ async function runSnippetCommand(
     source: string;
     phase?: SnippetPhase;
     sourcePath?: string;
+    telemetry?: boolean;
   } = { sessionId, source };
   if (phase !== undefined) body.phase = phase;
   if (sourcePath !== undefined) body.sourcePath = sourcePath;
+  if (flags["telemetry"] === true) body.telemetry = true;
 
   const res = await jsonRequest<SnippetResponse>({
     method: "POST",
