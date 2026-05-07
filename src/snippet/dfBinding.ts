@@ -132,16 +132,24 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
             // record a per-call trajectory row that captures input/output
             // for the inner call.
             const startedMs = performance.now();
-            const result = (await callable(input, {
-              tenant: dispatchCtx.tenant,
-              mount: dispatchCtx.mount,
-              cost: dispatchCtx.cost,
-              functionName: prop,
-              ...(dispatchCtx.trajectory
-                ? { trajectory: dispatchCtx.trajectory }
-                : {}),
-              ...(dispatchCtx.pins ? { pins: dispatchCtx.pins } : {}),
-            })) as Result<unknown>;
+            const stackBefore = dispatchCtx.callStack ?? [];
+            let result!: Result<unknown>;
+            try {
+              dispatchCtx.callStack = [...stackBefore, `lib.${prop}`];
+              result = (await callable(input, {
+                tenant: dispatchCtx.tenant,
+                mount: dispatchCtx.mount,
+                cost: dispatchCtx.cost,
+                functionName: prop,
+                ...(dispatchCtx.trajectory
+                  ? { trajectory: dispatchCtx.trajectory }
+                  : {}),
+                ...(dispatchCtx.pins ? { pins: dispatchCtx.pins } : {}),
+                callStack: dispatchCtx.callStack,
+              })) as Result<unknown>;
+            } finally {
+              dispatchCtx.callStack = stackBefore;
+            }
             const elapsedMs = performance.now() - startedMs;
 
             if (dispatchCtx.trajectory) {
@@ -150,7 +158,12 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
               // doesn't itself populate a trajectory record; the snippet
               // runtime is the one that knows about df.lib.<name> as a
               // primitive boundary, so we record here.
-              await recorder.call(`lib.${prop}`, input, async () => result.value);
+              await recorder.call(
+                `lib.${prop}`,
+                input,
+                async () => result.value,
+                scopeForStack(stackBefore),
+              );
             }
             void elapsedMs; // ms charging is done by the inner fn() / dispatcher.
             return result;
@@ -247,7 +260,12 @@ function makeDbCollectionBinding(args: DbBindingArgs): DbCollectionBinding {
     const exec = async (): Promise<unknown[]> => invoke(handle<unknown>());
     let output: unknown[];
     if (trajectory) {
-      output = await trajectory.call(primitiveLabel, input, exec);
+      output = await trajectory.call(
+        primitiveLabel,
+        input,
+        exec,
+        scopeForStack(dispatchCtx.callStack ?? []),
+      );
     } else {
       output = await exec();
     }
@@ -285,6 +303,16 @@ function makeDbCollectionBinding(args: DbBindingArgs): DbCollectionBinding {
         h.hybrid(query, boundedOpts),
       );
     },
+  };
+}
+
+function scopeForStack(stack: string[]) {
+  if (stack.length === 0) return undefined;
+  return {
+    depth: stack.length,
+    callPath: [...stack],
+    parentPrimitive: stack[stack.length - 1],
+    rootPrimitive: stack[0],
   };
 }
 

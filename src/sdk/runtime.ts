@@ -73,6 +73,10 @@ export type DispatchContext = {
   // fn() factory defaults this to `{}` when absent so `Provenance.pins`
   // is always populated.
   pins?: Record<string, string>;
+  // Stack of currently executing df.lib.* primitives. Diagnostics use this
+  // to distinguish client-visible calls from nested implementation work
+  // performed inside a learned interface.
+  callStack?: string[];
 };
 
 export type Provenance_ = Provenance; // re-export-friendly alias to avoid cycles

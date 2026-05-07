@@ -18,6 +18,7 @@ export {
 
 export type {
   PrimitiveCallRecord,
+  PrimitiveCallScope,
   TrajectoryRecord,
   TrajectoryProvenance,
 } from "../trajectory/recorder.js";

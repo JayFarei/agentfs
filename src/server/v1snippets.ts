@@ -18,6 +18,7 @@ import * as v from "valibot";
 
 import { readTrajectory } from "../sdk/index.js";
 import type { SessionCtx, SnippetRuntime } from "../bash/snippetRuntime.js";
+import { summarizeCallScopes } from "../trajectory/callScope.js";
 
 import { SessionStore } from "./sessionStore.js";
 
@@ -95,6 +96,14 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
     let mode: string | undefined;
     let functionName: string | undefined;
     let callPrimitives: string[] | undefined;
+    let clientCallPrimitives: string[] | undefined;
+    let nestedCallPrimitives: string[] | undefined;
+    let nestedCalls: ReturnType<
+      typeof summarizeCallScopes
+    >["nestedCalls"] | undefined;
+    let nestedByRoot: ReturnType<
+      typeof summarizeCallScopes
+    >["nestedByRoot"] | undefined;
     let phase = runResult.phase;
     let crystallisable = runResult.crystallisable;
     let artifactDir = runResult.artifactDir;
@@ -104,6 +113,11 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
         mode = traj.mode;
         functionName = traj.provenance?.functionName;
         callPrimitives = traj.calls.map((call) => call.primitive);
+        const scopeSummary = summarizeCallScopes(traj.calls);
+        clientCallPrimitives = scopeSummary.clientCallPrimitives;
+        nestedCallPrimitives = scopeSummary.nestedCallPrimitives;
+        nestedCalls = scopeSummary.nestedCalls;
+        nestedByRoot = scopeSummary.nestedByRoot;
         phase = phase ?? traj.phase;
         crystallisable = crystallisable ?? traj.crystallisable;
         artifactDir = artifactDir ?? traj.artifactDir;
@@ -121,6 +135,10 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
       mode,
       functionName,
       callPrimitives,
+      clientCallPrimitives,
+      nestedCallPrimitives,
+      nestedCalls,
+      nestedByRoot,
       phase,
       crystallisable,
       artifactDir,

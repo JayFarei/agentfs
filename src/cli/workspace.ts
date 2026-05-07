@@ -28,6 +28,15 @@ type SnippetResponse = {
   mode?: string;
   functionName?: string;
   callPrimitives?: string[];
+  clientCallPrimitives?: string[];
+  nestedCallPrimitives?: string[];
+  nestedCalls?: Array<{
+    primitive: string;
+    parent: string;
+    root: string;
+    depth: number;
+  }>;
+  nestedByRoot?: Array<{ root: string; count: number }>;
   phase?: string;
   crystallisable?: boolean;
   artifactDir?: string;
@@ -494,10 +503,19 @@ async function buildReplayTest(args: {
     lineage: {
       phase: args.response.phase,
       calls: args.response.callPrimitives ?? [],
+      clientCalls: args.response.clientCallPrimitives ?? [],
+      nestedCalls: args.response.nestedCalls ?? [],
+      nestedByRoot: args.response.nestedByRoot ?? [],
       requiresDb: (args.response.callPrimitives ?? []).some((p) =>
         p.startsWith("db."),
       ),
       requiresLib: (args.response.callPrimitives ?? []).some((p) =>
+        p.startsWith("lib."),
+      ),
+      clientRequiresDb: (args.response.clientCallPrimitives ?? []).some((p) =>
+        p.startsWith("db."),
+      ),
+      clientRequiresLib: (args.response.clientCallPrimitives ?? []).some((p) =>
         p.startsWith("lib."),
       ),
     },

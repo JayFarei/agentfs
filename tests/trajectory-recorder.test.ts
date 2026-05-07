@@ -58,6 +58,30 @@ describe("TrajectoryRecorder", () => {
     ]);
   });
 
+  it("can stamp optional execution scope on a primitive call", async () => {
+    const recorder = new TrajectoryRecorder({
+      tenantId: "t",
+      question: "q",
+    });
+    await recorder.call(
+      "db.cases.search",
+      { query: "q" },
+      async () => [],
+      {
+        depth: 1,
+        callPath: ["lib.rangeTableMetric"],
+        parentPrimitive: "lib.rangeTableMetric",
+        rootPrimitive: "lib.rangeTableMetric",
+      },
+    );
+    expect(recorder.snapshot.calls[0]!.scope).toEqual({
+      depth: 1,
+      callPath: ["lib.rangeTableMetric"],
+      parentPrimitive: "lib.rangeTableMetric",
+      rootPrimitive: "lib.rangeTableMetric",
+    });
+  });
+
   it("propagates the function's value AND records even when the body throws", async () => {
     const recorder = new TrajectoryRecorder({
       tenantId: "t",

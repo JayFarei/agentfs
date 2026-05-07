@@ -142,7 +142,28 @@ assert_answer_expectation() {
     assert_json_field "$answer" ".status" "$expected_status" "$label answer status is $expected_status" || true
   fi
   if [[ -n "$expected_value" ]]; then
-    assert_json_field "$answer" ".value" "$expected_value" "$label answer value is $expected_value" || true
+    if [[ ! -f "$answer" ]]; then
+      printf '[FAIL] %s answer value is %s (file missing: %s)\n' "$label" "$expected_value" "$answer" >&2
+      FAIL_COUNT=$((FAIL_COUNT + 1))
+      return 0
+    fi
+    local actual_value
+    actual_value="$(
+      jq -r '
+        if (.value | type) == "object" and (.value.value != null) then
+          .value.value
+        else
+          .value
+        end
+      ' "$answer" 2>/dev/null || echo "<jq-error>"
+    )"
+    if [[ "$actual_value" == "$expected_value" ]]; then
+      printf '[PASS] %s answer value is %s\n' "$label" "$expected_value"
+      PASS_COUNT=$((PASS_COUNT + 1))
+    else
+      printf '[FAIL] %s answer value is %s (expected=%q actual=%q)\n' "$label" "$expected_value" "$expected_value" "$actual_value" >&2
+      FAIL_COUNT=$((FAIL_COUNT + 1))
+    fi
   fi
 }
 
@@ -354,6 +375,24 @@ write_troubleshooting_artifact() {
         answerValidation,
         callCount: (.calls | length),
         calls: [.calls[]?.primitive],
+        clientCallCount: ([.calls[]? | select((.scope.depth // 0) == 0)] | length),
+        clientCalls: [.calls[]? | select((.scope.depth // 0) == 0) | .primitive],
+        nestedCallCount: ([.calls[]? | select((.scope.depth // 0) > 0)] | length),
+        nestedCalls: [
+          .calls[]?
+          | select((.scope.depth // 0) > 0)
+          | {
+              primitive,
+              parent: (.scope.parentPrimitive // "unknown"),
+              root: (.scope.rootPrimitive // "unknown"),
+              depth: (.scope.depth // 0)
+            }
+        ],
+        nestedByRoot: (
+          [.calls[]? | select((.scope.depth // 0) > 0) | (.scope.rootPrimitive // "unknown")]
+          | group_by(.)
+          | map({root: .[0], count: length})
+        ),
         sourcePath,
         artifactDir
       })
@@ -407,6 +446,7 @@ write_troubleshooting_artifact() {
         diagnosticNarrative: "diagnostic-narrative.md",
         episodeMetrics: "episode-metrics.json",
         promotionVerdict: "promotion-verdict.json",
+        callScopeSummary: "call-scope-summary.json",
         trajectorySummary: "trajectory-summary.json",
         workspacesDir: "workspaces/",
         trajectoriesDir: "trajectories/",
@@ -464,7 +504,7 @@ write_troubleshooting_artifact() {
     printf '## Trajectory Summary\n\n'
     jq -r '
       .[]
-      | "- \(.id) mode=\(.mode // "-") phase=\(.phase // "-") crystallisable=\(.crystallisable // "-") accepted=\(.answerValidation.accepted // "-") calls=\((.calls // []) | join(" -> "))"
+      | "- \(.id) mode=\(.mode // "-") phase=\(.phase // "-") crystallisable=\(.crystallisable // "-") accepted=\(.answerValidation.accepted // "-") client=\((.clientCalls // []) | join(" -> ")) nested=\(.nestedCallCount // 0)"
     ' "$trajectories_summary" 2>/dev/null || true
   } > "$dir/server-summary.md"
 
@@ -482,7 +522,7 @@ write_troubleshooting_artifact() {
     printf '## VFS Timeline\n\n'
     jq -r '
       .[]
-      | "- \(.id) phase=\(.phase // "legacy") mode=\(.mode // "-") crystallisable=\(.crystallisable // "-") accepted=\(.answerValidation.accepted // "-") callCount=\(.callCount // 0)\n  calls: \((.calls // []) | join(" -> "))\n  artifact: \(.artifactDir // "-")\n"
+      | "- \(.id) phase=\(.phase // "legacy") mode=\(.mode // "-") crystallisable=\(.crystallisable // "-") accepted=\(.answerValidation.accepted // "-") clientCallCount=\(.clientCallCount // 0) nestedCallCount=\(.nestedCallCount // 0)\n  client: \((.clientCalls // []) | join(" -> "))\n  nestedByRoot: \((.nestedByRoot // []) | map("\(.root):\(.count)") | join(", "))\n  artifact: \(.artifactDir // "-")\n"
     ' "$trajectories_summary" 2>/dev/null || true
   } > "$dir/action-trajectory.md"
 
@@ -543,9 +583,22 @@ write_troubleshooting_artifact() {
     printf '## Server trajectory timeline\n\n'
     jq -r '
       .[]
-      | "- \(.id) phase=\(.phase // "legacy") accepted=\(.answerValidation.accepted // "-") calls=\((.calls // []) | join(" -> "))"
+      | "- \(.id) phase=\(.phase // "legacy") accepted=\(.answerValidation.accepted // "-") client=\((.clientCalls // []) | join(" -> ")) nested=\(.nestedCallCount // 0)\n  nestedByRoot: \((.nestedByRoot // []) | map("\(.root):\(.count)") | join(", "))"
     ' "$trajectories_summary" 2>/dev/null || true
   } > "$dir/diagnostic-narrative.md"
+
+  jq '
+    map({
+      id,
+      phase,
+      accepted: (.answerValidation.accepted // null),
+      clientCallCount,
+      clientCalls,
+      nestedCallCount,
+      nestedCalls,
+      nestedByRoot
+    })
+  ' "$trajectories_summary" > "$dir/call-scope-summary.json" 2>/dev/null || printf '[]\n' > "$dir/call-scope-summary.json"
 
   jq -n \
     --arg q1Head "$q1_head" \
@@ -599,6 +652,7 @@ sed -n '1,260p' action-trajectory.md
 sed -n '1,320p' diagnostic-narrative.md
 jq . episode-metrics.json
 jq . promotion-verdict.json
+jq . call-scope-summary.json
 jq 'map({id, mode, phase, crystallisable, answerValidation, calls})' trajectory-summary.json
 \`\`\`
 EOF

@@ -95,6 +95,15 @@ async function runSnippetCommand(
     mode?: string;
     functionName?: string;
     callPrimitives?: string[];
+    clientCallPrimitives?: string[];
+    nestedCallPrimitives?: string[];
+    nestedCalls?: Array<{
+      primitive: string;
+      parent: string;
+      root: string;
+      depth: number;
+    }>;
+    nestedByRoot?: Array<{ root: string; count: number }>;
     phase?: SnippetPhase;
     crystallisable?: boolean;
     artifactDir?: string;

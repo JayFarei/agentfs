@@ -78,8 +78,9 @@ describe("demo CLI end-to-end (in-memory)", () => {
     expect(stdout).toContain("4. lib.executeTableMath");
 
     expect(stdout).toContain("Q2 — top-level chain (interpreted replay):");
-    expect(stdout).toContain("(internally invokes 4 sub-calls:)");
+    expect(stdout).toContain("(internally invokes 3 sub-calls:)");
     expect(stdout).toContain("├── db.cases.findSimilar");
+    expect(stdout).toContain("├── lib.inferTableMathPlan");
     expect(stdout).toContain("└── lib.executeTableMath");
 
     expect(stdout).toMatch(

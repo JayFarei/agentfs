@@ -8,7 +8,12 @@ import {
   makeMountRuntime,
   setMountRuntimeRegistry,
 } from "../src/adapter/runtime.js";
-import type { CollectionHandle, MountAdapter } from "../src/sdk/index.js";
+import {
+  setLibraryResolver,
+  type CollectionHandle,
+  type MountAdapter,
+} from "../src/sdk/index.js";
+import { DiskLibraryResolver } from "../src/snippet/library.js";
 import { DiskSnippetRuntime } from "../src/snippet/runtime.js";
 import { readTrajectory } from "../src/trajectory/recorder.js";
 
@@ -27,6 +32,7 @@ describe("DiskSnippetRuntime phase artifacts", () => {
     await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
     dirs.length = 0;
     setMountRuntimeRegistry(new InMemoryMountRuntimeRegistry());
+    setLibraryResolver(null);
   });
 
   it("records a plan run as a non-crystallisable session artifact", async () => {
@@ -331,6 +337,111 @@ describe("DiskSnippetRuntime phase artifacts", () => {
     expect(seenLimits).toEqual([10, 50]);
     const executeTrajectory = await readTrajectory(executeResult.trajectoryId!, baseDir);
     expect(executeTrajectory.calls[0]?.input).toMatchObject({ limit: 50 });
+  });
+
+  it("records nested implementation work separately from the outer lib call", async () => {
+    const baseDir = await tempBaseDir("df-runtime-call-scope-");
+    dirs.push(baseDir);
+    const libDir = path.join(baseDir, "lib", "tenant-a");
+    await mkdir(libDir, { recursive: true });
+    await writeFile(
+      path.join(libDir, "inner.ts"),
+      [
+        'import { fn } from "@datafetch/sdk";',
+        'import * as v from "valibot";',
+        "",
+        "export const inner = fn({",
+        '  intent: "inner helper",',
+        "  examples: [{ input: {}, output: { ok: true } }],",
+        "  input: v.object({}),",
+        "  output: v.unknown(),",
+        "  body: async () => ({ ok: true }),",
+        "});",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(libDir, "outer.ts"),
+      [
+        'import { fn } from "@datafetch/sdk";',
+        'import * as v from "valibot";',
+        "",
+        "declare const df: any;",
+        "",
+        "export const outer = fn({",
+        '  intent: "outer learned interface",',
+        "  examples: [{ input: {}, output: { count: 1 } }],",
+        "  input: v.object({}),",
+        "  output: v.unknown(),",
+        "  body: async () => {",
+        '    const rows = await df.db.cases.search("revenue", { limit: 1 });',
+        "    const inner = await df.lib.inner({});",
+        "    return { count: rows.length, inner: inner.value };",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    setLibraryResolver(new DiskLibraryResolver({ baseDir }));
+
+    const adapter: MountAdapter & { close: () => Promise<void> } = {
+      id: "scope-adapter",
+      capabilities: () => ({ vector: false, lex: true, stream: false, compile: false }),
+      probe: async () => ({ collections: [] }),
+      sample: async () => [],
+      collection: <T>(): CollectionHandle<T> => ({
+        findExact: async () => [],
+        search: async () => [{ id: "case-1" }] as T[],
+        findSimilar: async () => [],
+        hybrid: async () => [],
+      }),
+      close: async () => {},
+    };
+    const reg = new InMemoryMountRuntimeRegistry();
+    setMountRuntimeRegistry(reg);
+    reg.register(
+      "finqa",
+      makeMountRuntime({
+        mountId: "finqa",
+        adapter,
+        identMap: [{ ident: "cases", name: "cases" }],
+      }),
+    );
+
+    const runtime = new DiskSnippetRuntime();
+    const result = await runtime.run({
+      source: "const out = await df.lib.outer({}); console.log(JSON.stringify(out.value));",
+      phase: "commit",
+      sessionCtx: {
+        sessionId: "sess_call_scope",
+        tenantId: "tenant-a",
+        mountIds: ["finqa"],
+        baseDir,
+      },
+    });
+
+    expect(result.exitCode).toBe(1);
+    const trajectory = await readTrajectory(result.trajectoryId!, baseDir);
+    expect(trajectory.calls.map((call) => call.primitive)).toEqual([
+      "db.cases.search",
+      "lib.inner",
+      "lib.outer",
+    ]);
+    expect(trajectory.calls[0]?.scope).toMatchObject({
+      depth: 1,
+      parentPrimitive: "lib.outer",
+      rootPrimitive: "lib.outer",
+      callPath: ["lib.outer"],
+    });
+    expect(trajectory.calls[1]?.scope).toMatchObject({
+      depth: 1,
+      parentPrimitive: "lib.outer",
+      rootPrimitive: "lib.outer",
+      callPath: ["lib.outer"],
+    });
+    expect(trajectory.calls[2]?.scope).toBeUndefined();
   });
 });
 

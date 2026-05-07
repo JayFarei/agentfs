@@ -11,10 +11,22 @@ export type PrimitiveCallRecord = {
   output: unknown;
   startedAt: string;
   durationMs: number;
+  // Optional execution nesting metadata. Calls made directly by the client
+  // snippet have depth 0. Calls made while a df.lib.* function is executing
+  // carry that function in callPath/parentPrimitive so diagnostics can split
+  // client-visible calls from server-side implementation work.
+  scope?: PrimitiveCallScope;
   // Optional content-addressable pin for the artefact this call resolved
   // against. Populated by the snippet runtime once content-addressing lands;
   // safe to leave unset in earlier phases.
   pin?: string;
+};
+
+export type PrimitiveCallScope = {
+  depth: number;
+  callPath: string[];
+  parentPrimitive?: string;
+  rootPrimitive?: string;
 };
 
 // Per-trajectory provenance block. Intentionally a subset of the SDK
@@ -95,7 +107,8 @@ export class TrajectoryRecorder {
   async call<TInput, TOutput>(
     primitive: string,
     input: TInput,
-    fn: (input: TInput) => Promise<TOutput> | TOutput
+    fn: (input: TInput) => Promise<TOutput> | TOutput,
+    scope?: PrimitiveCallScope
   ): Promise<TOutput> {
     const startedWall = Date.now();
     const startedHr = performance.now();
@@ -108,7 +121,8 @@ export class TrajectoryRecorder {
       startedAt: new Date(startedWall).toISOString(),
       // Sub-millisecond resolution; the cost panel relies on fractional
       // ms to make the pure-TS hot path visible vs cold-path roundtrips.
-      durationMs: performance.now() - startedHr
+      durationMs: performance.now() - startedHr,
+      ...(scope ? { scope } : {})
     });
     return output;
   }

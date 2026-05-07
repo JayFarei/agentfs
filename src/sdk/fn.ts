@@ -120,6 +120,7 @@ function mergeDispatchContext(
     trajectory: partial.trajectory ?? base.trajectory,
     functionName: partial.functionName ?? base.functionName,
     pins: partial.pins ?? base.pins,
+    callStack: partial.callStack ?? base.callStack,
   };
   return merged;
 }

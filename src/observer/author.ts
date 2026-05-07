@@ -156,9 +156,11 @@ function generatePureSource(args: GenerateArgs): string | null {
   if (template.steps.length === 0) return null;
 
   // External parameters: those not derived from earlier-call outputs.
-  const externalParams = template.parameters.filter(
+  let externalParams = template.parameters.filter(
     (p) => p.derivedFromCallIndex === undefined,
   );
+  externalParams =
+    specializeExternalParams({ template, externalParams }) ?? externalParams;
 
   // Build the input/output schema fragments.
   const inputSchema = renderInputSchema(externalParams);
@@ -173,16 +175,10 @@ function generatePureSource(args: GenerateArgs): string | null {
   });
   if (example === null) return null;
 
-  // Render the body. Each step becomes a `const out<i> = await ...;` line.
-  const bodyLines: string[] = [];
-  for (let i = 0; i < template.steps.length; i += 1) {
-    const step = template.steps[i]!;
-    const expr = renderStepExpression(step, externalParams);
-    if (expr === null) return null;
-    bodyLines.push(`  const ${step.outputName} = ${expr};`);
-  }
-  bodyLines.push(`  return ${template.finalOutputBinding};`);
-  const body = bodyLines.join("\n");
+  const body =
+    renderSpecializedBody({ template, externalParams }) ??
+    renderReplayBody({ template, externalParams });
+  if (body === null) return null;
 
   // Sample output: the last call's output, JSON-stringified.
   const exampleOutputJson = safeJsonStringify(
@@ -238,6 +234,156 @@ function generatePureSource(args: GenerateArgs): string | null {
 }
 
 // --- Source helpers --------------------------------------------------------
+
+function renderReplayBody(args: {
+  template: CallTemplate;
+  externalParams: TemplateParameter[];
+}): string | null {
+  const { template, externalParams } = args;
+  const bodyLines: string[] = [];
+  for (let i = 0; i < template.steps.length; i += 1) {
+    const step = template.steps[i]!;
+    const expr = renderStepExpression(step, externalParams);
+    if (expr === null) return null;
+    bodyLines.push(`  const ${step.outputName} = ${expr};`);
+  }
+  bodyLines.push(`  return ${template.finalOutputBinding};`);
+  return bodyLines.join("\n");
+}
+
+function renderSpecializedBody(args: {
+  template: CallTemplate;
+  externalParams: TemplateParameter[];
+}): string | null {
+  if (args.template.name === "rangeTableMetric") {
+    return renderRangeTableMetricBody(args);
+  }
+  return null;
+}
+
+function renderRangeTableMetricBody(args: {
+  template: CallTemplate;
+  externalParams: TemplateParameter[];
+}): string | null {
+  const { template, externalParams } = args;
+  const retrieval = template.steps.find((step) => step.primitive.startsWith("db."));
+  const infer = template.steps.find(
+    (step) => step.primitive === "lib.inferTableMathPlan",
+  );
+  const execute = template.steps.find(
+    (step) => step.primitive === "lib.executeTableMath",
+  );
+  if (!retrieval || !infer || !execute) return null;
+
+  const questionExpr =
+    bindingExpr(infer.inputBindings["question"], externalParams) ??
+    fallbackQuestionExpr(externalParams);
+  if (questionExpr === null) return null;
+
+  const retrievalExpr =
+    renderRangeTableCandidateRetrieval({
+      template,
+      fallbackRetrieval: retrieval,
+      externalParams,
+      questionExpr,
+    }) ?? renderStepExpression(retrieval, externalParams);
+  if (retrievalExpr === null) return null;
+
+  return [
+    `  const isNumericTableMathResult = (value: unknown): boolean => {`,
+    `    if (!value || typeof value !== "object") return false;`,
+    `    const result = value as { answer?: unknown; roundedAnswer?: unknown };`,
+    `    return (`,
+    `      (typeof result.answer === "number" && Number.isFinite(result.answer)) ||`,
+    `      (typeof result.roundedAnswer === "number" &&`,
+    `        Number.isFinite(result.roundedAnswer))`,
+    `    );`,
+    `  };`,
+    `  const ${retrieval.outputName} = ${retrievalExpr};`,
+    `  const candidates = Array.isArray(${retrieval.outputName}) ? ${retrieval.outputName} : [];`,
+    `  const failures: Array<{ reason: string; message?: string }> = [];`,
+    `  for (const candidate of candidates) {`,
+    `    try {`,
+    `      const plan = (await df.lib.inferTableMathPlan({`,
+    `        question: ${questionExpr},`,
+    `        filing: candidate,`,
+    `      })).value as { years?: unknown[] };`,
+    `      if (!Array.isArray(plan.years) || plan.years.length === 0) {`,
+    `        failures.push({ reason: "missing_year_coverage" });`,
+    `        continue;`,
+    `      }`,
+    `      const result = (await df.lib.executeTableMath({`,
+    `        filing: candidate,`,
+    `        plan,`,
+    `      })).value;`,
+    `      if (isNumericTableMathResult(result)) return result;`,
+    `      failures.push({ reason: "non_numeric_result" });`,
+    `    } catch (error) {`,
+    `      failures.push({`,
+    `        reason: "candidate_failed",`,
+    `        message: error instanceof Error ? error.message : String(error),`,
+    `      });`,
+    `    }`,
+    `  }`,
+    `  return {`,
+    `    answer: null,`,
+    `    roundedAnswer: null,`,
+    `    operation: "range",`,
+    `    evidence: [],`,
+    `    failures,`,
+    `  };`,
+  ].join("\n");
+}
+
+function fallbackQuestionExpr(params: TemplateParameter[]): string | null {
+  const direct = params.find(
+    (param) => param.name === "query" || param.name === "question",
+  );
+  if (direct) return `input.${jsonProp(direct.name)}`;
+  const stringParam = params.find((param) => param.jsType === "string");
+  return stringParam ? `input.${jsonProp(stringParam.name)}` : null;
+}
+
+function specializeExternalParams(args: {
+  template: CallTemplate;
+  externalParams: TemplateParameter[];
+}): TemplateParameter[] | null {
+  if (args.template.name !== "rangeTableMetric") return null;
+  const query =
+    args.externalParams.find((param) => param.name === "query") ??
+    args.externalParams.find((param) => param.name === "question") ??
+    args.externalParams.find((param) => param.jsType === "string");
+  if (!query) return null;
+  const limit = args.externalParams.find(
+    (param) => param.name === "limit" && param.jsType === "number",
+  );
+  return limit ? [query, limit] : [query];
+}
+
+function renderRangeTableCandidateRetrieval(args: {
+  template: CallTemplate;
+  fallbackRetrieval: TemplateStep;
+  externalParams: TemplateParameter[];
+  questionExpr: string;
+}): string | null {
+  const caseIdent = caseCollectionIdent(args.template);
+  if (!caseIdent) return null;
+  const limitExpr =
+    bindingExpr(args.fallbackRetrieval.inputBindings["limit"], args.externalParams) ??
+    (args.externalParams.some((param) => param.name === "limit")
+      ? `input.${jsonProp("limit")}`
+      : "20");
+  return `await df.db.${caseIdent}.findSimilar(${args.questionExpr}, ${limitExpr})`;
+}
+
+function caseCollectionIdent(template: CallTemplate): string | null {
+  for (const step of template.steps) {
+    if (!step.primitive.startsWith("db.")) continue;
+    const [, ident] = step.primitive.split(".");
+    if (ident && ident.toLowerCase() === "finqacases") return ident;
+  }
+  return null;
+}
 
 function renderInputType(params: TemplateParameter[]): string {
   if (params.length === 0) return "Record<string, unknown>";
@@ -425,7 +571,7 @@ function pickExample(args: PickExampleArgs): Record<string, unknown> | null {
 // --- Misc helpers ----------------------------------------------------------
 
 function intentString(template: CallTemplate): string {
-  const seq = template.steps.map((s) => s.primitive).join(" -> ");
+  const seq = callGraphDescription(template);
   return `reusable learned interface for the ${template.topic} intent shape; internally composes ${seq}`;
 }
 
@@ -461,9 +607,7 @@ function frontmatter(args: {
 }): string {
   const userQuestion =
     longestStringValue(args.example) ?? args.trajectory.question;
-  const callGraph = args.template.steps
-    .map((s) => s.primitive)
-    .join(" -> ");
+  const callGraph = callGraphDescription(args.template);
   const inputKeys = args.externalParams.map((p) => p.name).join(", ");
 
   // Indent the description's body by two spaces so YAML's `|` block
@@ -490,6 +634,22 @@ function frontmatter(args: {
     "--- */",
     "",
   ].join("\n");
+}
+
+function callGraphDescription(template: CallTemplate): string {
+  if (template.name === "rangeTableMetric") {
+    const retrieval = template.steps.find((step) => step.primitive.startsWith("db."));
+    const hasInfer = template.steps.some(
+      (step) => step.primitive === "lib.inferTableMathPlan",
+    );
+    const hasExecute = template.steps.some(
+      (step) => step.primitive === "lib.executeTableMath",
+    );
+    if (retrieval && hasInfer && hasExecute) {
+      return `${retrieval.primitive} -> candidate validation loop -> lib.inferTableMathPlan -> lib.executeTableMath`;
+    }
+  }
+  return template.steps.map((s) => s.primitive).join(" -> ");
 }
 
 function longestStringValue(obj: Record<string, unknown>): string | null {
