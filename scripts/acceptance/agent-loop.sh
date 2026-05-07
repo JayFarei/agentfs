@@ -152,6 +152,8 @@ assert_answer_expectation() {
       jq -r '
         if (.value | type) == "object" and (.value.value != null) then
           .value.value
+        elif (.value | type) == "object" and (.value.range != null) then
+          .value.range
         else
           .value
         end

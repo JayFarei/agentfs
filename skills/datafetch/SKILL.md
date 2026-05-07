@@ -181,7 +181,7 @@ TENANT=$(jq -r .tenantId $DATAFETCH_HOME/sessions/$(cat $DATAFETCH_HOME/active-s
 mkdir -p $DATAFETCH_HOME/lib/$TENANT
 
 cat > $DATAFETCH_HOME/lib/$TENANT/myFunction.ts <<'EOF'
-import { fn, llm } from "@datafetch/sdk";
+import { fn, agent } from "@datafetch/sdk";
 import * as v from "valibot";
 
 export const myFunction = fn({
@@ -189,12 +189,18 @@ export const myFunction = fn({
   examples: [{ input: { /* ... */ }, output: { /* ... */ } }],
   input:  v.object({ /* ... */ }),
   output: v.object({ /* ... */ }),
-  body:   /* pure TS, llm({prompt, model}), or agent({skill, model}) */,
+  body:   /* pure TS or agent({prompt, model}) / agent({skill, model}) */,
 });
 EOF
 ```
 
 `df.lib.myFunction(input)` is callable from the next `datafetch tsx` snippet.
+
+Use pure TypeScript for deterministic parsing, normalization, and arithmetic.
+Use `agent({ prompt, model })` when the step requires probabilistic judgment
+or language generation. Use `agent({ skill, model })` when the prompt is long,
+reused, or worth storing as `/lib/<tenant>/skills/<name>.md`. Do not use the
+deprecated `llm(...)` alias in newly authored functions.
 
 ## Plan, Then Execute
 

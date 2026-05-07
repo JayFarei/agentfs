@@ -3,7 +3,8 @@
 #
 # Drives a task that requires writing an `agent({prompt})` function. Asserts:
 #   - the function file exists at the expected path
-#   - the trajectory shows mode == "llm-backed" and cost.llmCalls >= 1
+#   - the authored function uses agent({prompt}), not the deprecated llm() alias
+#   - the trajectory called the authored function and cost.llmCalls >= 1
 #
 # Required env: ATLAS_URI.
 # Optional env: ATLAS_DB_NAME, DF_TEST_PORT, AGENT_LOOP_TIMEOUT,
@@ -56,7 +57,7 @@ if [[ -z "${ATLAS_URI:-}" ]]; then
   printf '[FAIL] ATLAS_URI is required\n' >&2
   exit 2
 fi
-for tool in tmux jq curl; do
+for tool in tmux jq curl rg; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     printf '[FAIL] required tool not on PATH: %s\n' "$tool" >&2
     exit 2
@@ -133,8 +134,49 @@ fi
 # ---- Step: assert the file was authored ------------------------------------
 assert_file_exists "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts" \
   "summariseFiling.ts authored under lib/test-jay/"
+if rg -Uq 'body\s*:\s*agent\s*\(\s*\{[\s\S]*prompt\s*:' "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts" && \
+   ! rg -q 'llm\s*\(' "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts"; then
+  printf '[PASS] summariseFiling.ts uses agent({prompt}) surface\n'
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  printf '[FAIL] summariseFiling.ts did not use agent({prompt}) cleanly\n' >&2
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
 
-# ---- Step: latest trajectory shows llm-backed mode + llmCalls >= 1 ---------
+# ---- Step: controlled runtime call proves the body is actually agent-backed --
+VERIFY_OUT="$DATAFETCH_HOME/agent-body-verify.out"
+VERIFY_JSON="$DATAFETCH_HOME/agent-body-verify.json"
+if dft tsx -e '
+const rows = await df.db.finqaCases.findExact({}, 1);
+const caseId = rows[0]?.id;
+const r = await df.lib.summariseFiling({ caseId });
+console.log(JSON.stringify(r));
+' > "$VERIFY_OUT" 2>&1; then
+  awk '/^\{/{ print; exit }' "$VERIFY_OUT" > "$VERIFY_JSON"
+  if jq -e '.mode == "llm-backed"' "$VERIFY_JSON" >/dev/null 2>&1; then
+    printf '[PASS] controlled call result mode == llm-backed\n'
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    printf '[FAIL] controlled call result mode was not llm-backed\n' >&2
+    cat "$VERIFY_OUT" >&2 || true
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+  VERIFY_LLMCALLS=$(jq -r '(.cost.llmCalls // 0)' "$VERIFY_JSON" 2>/dev/null || echo 0)
+  if [[ "$VERIFY_LLMCALLS" =~ ^[0-9]+$ ]] && (( VERIFY_LLMCALLS >= 1 )); then
+    printf '[PASS] controlled call cost.llmCalls (%s) >= 1\n' "$VERIFY_LLMCALLS"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    printf '[FAIL] controlled call cost.llmCalls (%s) is not >= 1\n' "$VERIFY_LLMCALLS" >&2
+    cat "$VERIFY_OUT" >&2 || true
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
+else
+  printf '[FAIL] controlled call of df.lib.summariseFiling failed\n' >&2
+  cat "$VERIFY_OUT" >&2 || true
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+fi
+
+# ---- Step: latest trajectory shows authored function + llmCalls >= 1 -------
 LATEST=$(latest_trajectory)
 if [[ -z "$LATEST" ]]; then
   printf '[FAIL] no trajectory written\n' >&2
@@ -158,8 +200,13 @@ else
   if [[ "${DEBUG:-0}" == "1" ]]; then
     jq '{id, mode, errored, cost, calls: [.calls[].primitive]}' "$LATEST_GOOD" >&2 || true
   fi
-  TRAJ_MODE=$(jq -r '.mode // empty' "$LATEST_GOOD")
-  assert_eq "llm-backed" "$TRAJ_MODE" "trajectory mode == llm-backed"
+  if jq -e '.calls[]? | select(.primitive == "lib.summariseFiling")' "$LATEST_GOOD" >/dev/null; then
+    printf '[PASS] trajectory calls lib.summariseFiling\n'
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    printf '[FAIL] trajectory does not call lib.summariseFiling\n' >&2
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
   TRAJ_LLMCALLS=$(jq -r '(.cost.llmCalls // 0)' "$LATEST_GOOD")
   if [[ "$TRAJ_LLMCALLS" =~ ^[0-9]+$ ]] && (( TRAJ_LLMCALLS >= 1 )); then
     printf '[PASS] cost.llmCalls (%s) >= 1\n' "$TRAJ_LLMCALLS"
