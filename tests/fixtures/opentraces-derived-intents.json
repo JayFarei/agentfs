@@ -14,13 +14,13 @@
     },
     {
       "id": "activity-shape-map",
-      "mountIntent": "Understand what workflow and activity shapes this trace dataset can expose",
+      "mountIntent": "Understand what workflow shapes this trace dataset can expose",
       "derivedIntent": {
         "name": "traceActivityShapeMap",
         "relation": "derived",
-        "description": "Map visible activity/task fields and summarize which trace activities are represented."
+        "description": "Map visible workflow fields and summarize which trace activities are represented."
       },
-      "probeQueries": ["workflow", "task", "activity"]
+      "probeQueries": ["trace", "workflow"]
     },
     {
       "id": "review-docs-summary",
@@ -30,7 +30,7 @@
         "relation": "derived",
         "description": "Summarize review/documentation-related traces when those categories are visible in search results."
       },
-      "probeQueries": ["review", "docs", "documentation"]
+      "probeQueries": ["trace", "documentation"]
     }
   ]
 }
