@@ -21,6 +21,7 @@ import type { SessionCtx, SnippetRuntime } from "../bash/snippetRuntime.js";
 import { summarizeCallScopes } from "../trajectory/callScope.js";
 
 import { SessionStore } from "./sessionStore.js";
+import { recordTenantSnippetHistory } from "./tenantHistory.js";
 import { telemetryEnabled, writeTelemetryEvent } from "./telemetry.js";
 
 export type SnippetsAppDeps = {
@@ -130,46 +131,7 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
       }
     }
 
-    if (telemetryEnabled(parsed.output.telemetry)) {
-      await writeTelemetryEvent({
-        baseDir: deps.baseDir,
-        event: {
-          kind: "snippet-run",
-          session: {
-            sessionId: record.sessionId,
-            tenantId: record.tenantId,
-            mountIds: record.mountIds,
-          },
-          request: {
-            phase: parsed.output.phase ?? null,
-            sourcePath: parsed.output.sourcePath ?? null,
-            source: parsed.output.source,
-          },
-          response: {
-            stdout: runResult.stdout,
-            stderr: runResult.stderr,
-            exitCode: runResult.exitCode,
-            trajectoryId: runResult.trajectoryId,
-            cost: runResult.cost,
-            mode,
-            functionName,
-            callPrimitives,
-            clientCallPrimitives,
-            nestedCallPrimitives,
-            nestedCalls,
-            nestedByRoot,
-            phase,
-            crystallisable,
-            artifactDir,
-            answer: runResult.answer,
-            validation: runResult.validation,
-          },
-          trajectory: trajectoryRecord ?? null,
-        },
-      });
-    }
-
-    return c.json({
+    const responseBody = {
       stdout: runResult.stdout,
       stderr: runResult.stderr,
       exitCode: runResult.exitCode,
@@ -187,7 +149,46 @@ export function createSnippetsApp(deps: SnippetsAppDeps): Hono {
       artifactDir,
       answer: runResult.answer,
       validation: runResult.validation,
+    };
+
+    await recordTenantSnippetHistory({
+      baseDir: deps.baseDir,
+      tenantId: record.tenantId,
+      sessionId: record.sessionId,
+      mountIds: record.mountIds,
+      request: {
+        ...(parsed.output.phase !== undefined ? { phase: parsed.output.phase } : {}),
+        ...(parsed.output.sourcePath !== undefined
+          ? { sourcePath: parsed.output.sourcePath }
+          : {}),
+        source: parsed.output.source,
+      },
+      response: responseBody,
+      trajectory: trajectoryRecord,
     });
+
+    if (telemetryEnabled(parsed.output.telemetry)) {
+      await writeTelemetryEvent({
+        baseDir: deps.baseDir,
+        event: {
+          kind: "snippet-run",
+          session: {
+            sessionId: record.sessionId,
+            tenantId: record.tenantId,
+            mountIds: record.mountIds,
+          },
+          request: {
+            phase: parsed.output.phase ?? null,
+            sourcePath: parsed.output.sourcePath ?? null,
+            source: parsed.output.source,
+          },
+          response: responseBody,
+          trajectory: trajectoryRecord ?? null,
+        },
+      });
+    }
+
+    return c.json(responseBody);
   });
 
   return app;

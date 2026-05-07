@@ -15,6 +15,8 @@ export type CatalogSourceRecord = {
   status: "ready" | "failed";
   addedAt: string;
   updatedAt: string;
+  initializedAt?: string;
+  target?: string;
   description?: string;
   license?: string;
   splits?: Array<{ config: string; split: string; rows?: number }>;

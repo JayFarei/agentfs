@@ -4,6 +4,7 @@ import path from "node:path";
 import { defaultBaseDir } from "../paths.js";
 
 import { jsonRequest, resolveServerUrl } from "./httpClient.js";
+import { readClientConfigSync } from "./clientConfig.js";
 import { ensureCatalogSourceMounted } from "./catalog.js";
 import { writeActiveSession, type SessionRecord } from "./session.js";
 import type { Flags } from "./types.js";
@@ -82,7 +83,10 @@ function serverUrlFromFlags(flags: Flags): string {
 
 function baseDirFromFlags(flags: Flags): string {
   const flag = flagString(flags, "base-dir");
-  return flag ? path.resolve(flag) : defaultBaseDir();
+  if (flag) return path.resolve(flag);
+  const client = readClientConfigSync();
+  if (client?.serverBaseDir) return client.serverBaseDir;
+  return defaultBaseDir();
 }
 
 export async function cmdMount(
@@ -90,7 +94,10 @@ export async function cmdMount(
   flags: Flags,
 ): Promise<void> {
   const tenant =
-    flagString(flags, "tenant") ?? process.env["DATAFETCH_TENANT"] ?? "local";
+    flagString(flags, "tenant") ??
+    process.env["DATAFETCH_TENANT"] ??
+    readClientConfigSync()?.tenantId ??
+    "local";
   const dataset =
     flagString(flags, "dataset") ?? flagString(flags, "mount") ?? positionals[0];
   const intent = flagString(flags, "intent");
@@ -208,6 +215,36 @@ async function writeAgentMemory(
   root: string,
   config: WorkspaceConfig,
 ): Promise<void> {
+  const sourceTemplate = path.join(
+    config.baseDir,
+    "sources",
+    config.dataset,
+    "templates",
+    "AGENTS.md",
+  );
+  try {
+    const template = await fsp.readFile(sourceTemplate, "utf8");
+    const text = [
+      "# datafetch intent workspace",
+      "",
+      `Intent: ${config.intent}`,
+      `Tenant: ${config.tenantId}`,
+      "",
+      template.trimEnd(),
+      "",
+    ].join("\n");
+    const agents = path.join(root, "AGENTS.md");
+    await fsp.writeFile(agents, text, "utf8");
+    try {
+      await fsp.symlink("AGENTS.md", path.join(root, "CLAUDE.md"));
+    } catch {
+      await fsp.writeFile(path.join(root, "CLAUDE.md"), text, "utf8");
+    }
+    return;
+  } catch {
+    // Fall through to the generic template.
+  }
+
   const lines = [
     "# datafetch intent workspace",
     "",
@@ -258,6 +295,13 @@ async function writeScriptTemplates(
   root: string,
   config: WorkspaceConfig,
 ): Promise<void> {
+  const templateDir = path.join(
+    config.baseDir,
+    "sources",
+    config.dataset,
+    "templates",
+    "scripts",
+  );
   await fsp.writeFile(
     path.join(root, "scripts", "helpers.ts"),
     [
@@ -268,16 +312,17 @@ async function writeScriptTemplates(
     ].join("\n"),
     "utf8",
   );
-  await fsp.writeFile(
+  await copyIfExists(
+    path.join(templateDir, "scratch.ts"),
     path.join(root, "scripts", "scratch.ts"),
     [
       `const candidates = await df.db.${defaultCollectionIdent(config)}.search(${JSON.stringify(config.intent)}, { limit: 10 });`,
       "console.log(JSON.stringify({ candidates: candidates.length }, null, 2));",
       "",
     ].join("\n"),
-    "utf8",
   );
-  await fsp.writeFile(
+  await copyIfExists(
+    path.join(templateDir, "answer.ts"),
     path.join(root, "scripts", "answer.ts"),
     [
       "// Replace this with the visible, repeatable trajectory for the intent.",
@@ -289,7 +334,6 @@ async function writeScriptTemplates(
       "});",
       "",
     ].join("\n"),
-    "utf8",
   );
 }
 

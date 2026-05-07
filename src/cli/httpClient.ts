@@ -6,9 +6,11 @@
 // surfaces structured errors (status + body) back to the caller so the
 // CLI can write a clear message to stderr without a stack trace.
 
+import { readClientConfigSync, stripTrailingSlash } from "./clientConfig.js";
+
 const DEFAULT_SERVER_URL = "http://localhost:8080";
 
-export type ServerSource = "flag" | "env" | "default";
+export type ServerSource = "flag" | "env" | "client" | "default";
 
 export type ServerInfo = {
   baseUrl: string;
@@ -23,11 +25,11 @@ export function resolveServerUrl(flagValue?: string): ServerInfo {
   if (env && env.length > 0) {
     return { baseUrl: stripTrailingSlash(env), source: "env" };
   }
+  const client = readClientConfigSync();
+  if (client?.serverUrl) {
+    return { baseUrl: stripTrailingSlash(client.serverUrl), source: "client" };
+  }
   return { baseUrl: DEFAULT_SERVER_URL, source: "default" };
-}
-
-function stripTrailingSlash(s: string): string {
-  return s.endsWith("/") ? s.slice(0, -1) : s;
 }
 
 export class HttpError extends Error {

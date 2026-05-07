@@ -36,6 +36,7 @@ import { installSnippetRuntime } from "./snippet/install.js";
 
 import type { Flags } from "./cli/types.js";
 import { cmdSession } from "./cli/session.js";
+import { cmdAttach } from "./cli/attach.js";
 import {
   cmdApropos,
   cmdExecute,
@@ -120,7 +121,7 @@ function usage(): void {
       "datafetch — bash-shaped workspace over a mounted dataset",
       "",
       "Server / data plane:",
-      "  datafetch server [--port 8080] [--base-dir <path>]",
+      "  datafetch server [--port 8080] [--base-dir <path>] [--datasets <file>]",
       "    Boot the data plane (Hono app + snippet runtime + Flue + observer).",
       "",
       "  datafetch publish <mount-id> [--uri <atlas-uri>] [--db <db-name>]",
@@ -133,6 +134,8 @@ function usage(): void {
       "    List registered datasets.",
       "  datafetch inspect <source-id> [--json]",
       "    Show metadata and starter mount command for one registered dataset.",
+      "  datafetch attach <server-url> [--tenant <id>]",
+      "    Persist the server URL and default tenant for future client commands.",
       "",
       "Intent workspace:",
       "  datafetch mount [source-id] [--tenant <id>] [--dataset <mount-id>] --intent '<text>' [--path <dir>]",
@@ -355,6 +358,8 @@ async function cmdServer(_positionals: string[], flags: Flags): Promise<void> {
 
   const createOpts: Parameters<typeof createServer>[0] = {};
   if (baseDirFlag) createOpts.baseDir = path.resolve(baseDirFlag);
+  const datasetsFile = flagString(flags, "datasets");
+  if (datasetsFile) createOpts.datasetsFile = path.resolve(datasetsFile);
 
   const { app, baseDir } = await createServer(createOpts);
   const handle = serve({ fetch: app.fetch, port });
@@ -407,6 +412,9 @@ async function main(): Promise<void> {
       return;
     case "add":
       await cmdAdd(positionals, flags);
+      return;
+    case "attach":
+      await cmdAttach(positionals, flags);
       return;
     case "list":
       await cmdList(positionals, flags);

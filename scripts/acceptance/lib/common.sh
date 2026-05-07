@@ -160,9 +160,11 @@ _wait_for_health() {
 # DATAFETCH_SERVER_URL for child commands.
 setup_dataplane() {
   local publish_mount=1
+  local datasets_file=""
   for arg in "$@"; do
     case "$arg" in
       --no-publish) publish_mount=0 ;;
+      --datasets=*) datasets_file="${arg#--datasets=}" ;;
     esac
   done
 
@@ -202,12 +204,15 @@ setup_dataplane() {
   (
     cd "$REPO_ROOT"
     export DATAFETCH_HOME="$DATAFETCH_HOME"
+    local server_args=(server --port "$DF_PORT" --base-dir "$DATAFETCH_HOME")
+    if [[ -n "$datasets_file" ]]; then
+      server_args+=(--datasets "$datasets_file")
+    fi
     if command -v datafetch >/dev/null 2>&1; then
-      exec datafetch server --port "$DF_PORT" --base-dir "$DATAFETCH_HOME" \
-        > "$SERVER_LOG" 2>&1
+      exec datafetch "${server_args[@]}" > "$SERVER_LOG" 2>&1
     else
-      exec node "$REPO_ROOT/bin/datafetch.mjs" server --port "$DF_PORT" \
-        --base-dir "$DATAFETCH_HOME" > "$SERVER_LOG" 2>&1
+      exec node "$REPO_ROOT/bin/datafetch.mjs" "${server_args[@]}" \
+        > "$SERVER_LOG" 2>&1
     fi
   ) &
   SERVER_PID=$!

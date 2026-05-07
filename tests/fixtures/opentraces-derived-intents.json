@@ -1,0 +1,36 @@
+{
+  "dataset": "opentraces-devtime",
+  "source": "https://huggingface.co/datasets/OpenTraces/opentraces-devtime",
+  "intents": [
+    {
+      "id": "debug-trace-summary",
+      "mountIntent": "Map the trace dataset, then derive a useful debugging summary intent",
+      "derivedIntent": {
+        "name": "debugTraceSummary",
+        "relation": "derived",
+        "description": "After probing the trace dataset, summarize debugging-related trace rows with row-index evidence."
+      },
+      "probeQueries": ["trace", "debug"]
+    },
+    {
+      "id": "activity-shape-map",
+      "mountIntent": "Understand what workflow and activity shapes this trace dataset can expose",
+      "derivedIntent": {
+        "name": "traceActivityShapeMap",
+        "relation": "derived",
+        "description": "Map visible activity/task fields and summarize which trace activities are represented."
+      },
+      "probeQueries": ["workflow", "task", "activity"]
+    },
+    {
+      "id": "review-docs-summary",
+      "mountIntent": "Explore the dataset categories and derive a documentation or review activity summary if supported",
+      "derivedIntent": {
+        "name": "reviewDocsTraceSummary",
+        "relation": "derived",
+        "description": "Summarize review/documentation-related traces when those categories are visible in search results."
+      },
+      "probeQueries": ["review", "docs", "documentation"]
+    }
+  ]
+}

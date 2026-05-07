@@ -123,7 +123,7 @@ export function createCatalogApp(deps: CatalogAppDeps = {}): Hono {
   return app;
 }
 
-async function buildSourceRecord(
+export async function buildSourceRecord(
   inputUrl: string,
   overrideId: string | undefined,
 ): Promise<CatalogSourceRecord> {

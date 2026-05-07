@@ -12,6 +12,16 @@ type CatalogSource = {
   splits?: Array<{ config: string; split: string; rows?: number }>;
 };
 
+type ManifestDataset = {
+  id: string;
+  title?: string;
+  adapter?: string;
+  status: string;
+  target?: string;
+  rows?: number | null;
+  collections?: Array<{ ident: string; name: string; rows?: number }>;
+};
+
 function flagString(flags: Flags, key: string): string | undefined {
   const v = flags[key];
   return typeof v === "string" ? v : undefined;
@@ -54,23 +64,25 @@ export async function cmdList(
   _positionals: string[],
   flags: Flags,
 ): Promise<void> {
-  const body = await jsonRequest<{ sources: CatalogSource[] }>({
+  const body = await jsonRequest<{ datasets: ManifestDataset[] }>({
     method: "GET",
-    path: "/v1/catalog/sources",
+    path: "/v1/manifest",
     serverUrl: serverUrlFromFlags(flags),
   });
   if (jsonFlag(flags)) {
-    process.stdout.write(`${JSON.stringify(body, null, 2)}\n`);
-    return;
-  }
-  if (body.sources.length === 0) {
-    process.stdout.write("no sources registered\n");
-    return;
-  }
-  for (const source of body.sources) {
-    const rows = totalRows(source);
     process.stdout.write(
-      `${source.id}\t${source.adapter}\t${source.title}${
+      `${JSON.stringify({ ...body, sources: body.datasets }, null, 2)}\n`,
+    );
+    return;
+  }
+  if (body.datasets.length === 0) {
+    process.stdout.write("no datasets initialized\n");
+    return;
+  }
+  for (const source of body.datasets) {
+    const rows = source.rows ?? totalRows(source.collections ?? []);
+    process.stdout.write(
+      `${source.id}\t${source.adapter ?? "unknown"}\t${source.status}${
         rows !== null ? `\t${rows} rows` : ""
       }\n`,
     );
@@ -134,11 +146,12 @@ export async function ensureCatalogSourceMounted(args: {
   return true;
 }
 
-function totalRows(source: CatalogSource): number | null {
-  if (!source.splits) return null;
+function totalRows(source: CatalogSource | Array<{ rows?: number }>): number | null {
+  const splits = Array.isArray(source) ? source : source.splits;
+  if (!splits) return null;
   let total = 0;
   let saw = false;
-  for (const split of source.splits) {
+  for (const split of splits) {
     if (typeof split.rows !== "number") continue;
     total += split.rows;
     saw = true;

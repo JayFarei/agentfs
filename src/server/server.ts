@@ -14,6 +14,7 @@
 //   GET /v1/mounts           list registered mounts.
 //   POST /v1/catalog/sources register a mountable source URL.
 //   GET /v1/catalog/sources  list registered source URLs.
+//   GET /v1/manifest         list initialized, client-mountable datasets.
 //   POST /v1/bash            run one bash command in a persistent session.
 //   POST /v1/connect         create a session; persists to disk.
 //   GET /v1/sessions         list persisted sessions.
@@ -34,9 +35,11 @@ import { installObserver } from "../observer/install.js";
 import { getLibraryResolver } from "../sdk/index.js";
 import { installSnippetRuntime } from "../snippet/install.js";
 
+import { initializeWhitelistedDatasets } from "./datasetInit.js";
 import { createBashApp } from "./v1bash.js";
 import { createCatalogApp } from "./v1catalog.js";
 import { createConnectApp } from "./v1connect.js";
+import { createManifestApp } from "./v1manifest.js";
 import { createMountsApp } from "./v1mounts.js";
 import { createSessionsApp } from "./v1sessions.js";
 import { createSnippetsApp } from "./v1snippets.js";
@@ -47,6 +50,9 @@ import { SessionStore } from "./sessionStore.js";
 export type CreateServerOpts = {
   // Override the on-disk workspace root. Defaults to defaultBaseDir().
   baseDir?: string;
+  // Optional whitelist file. When present, server boot initializes those
+  // datasets and exposes them through /v1/manifest.
+  datasetsFile?: string;
   // Tenant id for the observer (controls where learned /lib/ files
   // land for trajectories driven by /v1/bash and /v1/snippets that don't
   // pin a session-bound tenant).
@@ -87,10 +93,12 @@ export async function createServer(
   });
 
   const store = new SessionStore({ baseDir });
+  await initializeWhitelistedDatasets({ baseDir, datasetsFile: opts.datasetsFile });
 
   const app = new Hono();
   app.get("/health", (c) => c.json({ ok: true, baseDir }));
 
+  app.route("/v1/manifest", createManifestApp({ baseDir }));
   app.route("/v1/catalog", createCatalogApp({ baseDir }));
   app.route("/v1/mounts", createMountsApp({ baseDir }));
   app.route(
