@@ -17,18 +17,20 @@ run-all.sh — run every acceptance script and report a summary.
 Order:
   1. session-switch.sh   (no LLM, no Atlas — fastest smoke)
   2. intent-workspace.sh (no LLM, no Atlas — run/commit workspace smoke)
-  3. agent-loop.sh       (Atlas + client agent; opt-in)
-  4. agent-body-loop.sh  (Atlas + client agent + Flue agent body; opt-in)
+  3. intent-drift.sh     (no LLM, no Atlas — broad intent/sub-intent capture)
+  4. agent-loop.sh       (Atlas + client agent; opt-in)
+  5. intent-drift-loop.sh (Atlas + client agent; opt-in behavioral experiment)
+  6. agent-body-loop.sh  (Atlas + client agent + Flue agent body; opt-in)
 
-By default, session-switch.sh and intent-workspace.sh run; the live client
-agent loops are skipped. Set RUN_AGENT_E2E=1 to include the agent loops. The
-default agent driver is DF_AGENT_DRIVER=codex, which uses the local Codex CLI
-login. Set DF_AGENT_DRIVER=claude only when you explicitly want to use Claude
-Code as the client agent. Claude Code can use either local login or an
-Anthropic env key.
+By default, session-switch.sh, intent-workspace.sh, and intent-drift.sh run;
+the live client agent loops are skipped. Set RUN_AGENT_E2E=1 to include the
+agent loops. The default agent driver is DF_AGENT_DRIVER=codex, which uses the
+local Codex CLI login. Set DF_AGENT_DRIVER=claude only when you explicitly want
+to use Claude Code as the client agent. Claude Code can use either local login
+or an Anthropic env key.
 
-Required env if running 2 + 3: ATLAS_URI.
-You may also set RUNALL_SKIP="agent-loop agent-body-loop" to skip slow scripts.
+Required env for live agent scripts: ATLAS_URI.
+You may also set RUNALL_SKIP="agent-loop intent-drift-loop agent-body-loop" to skip slow scripts.
 EOF
 }
 
@@ -39,19 +41,23 @@ fi
 
 SKIP="${RUNALL_SKIP:-}"
 if [[ "${RUN_AGENT_E2E:-0}" != "1" && -z "$SKIP" ]]; then
-  SKIP="agent-loop agent-body-loop"
+  SKIP="agent-loop intent-drift-loop agent-body-loop"
 fi
 
 RESULT_SESSION_SWITCH=UNKNOWN
 RESULT_INTENT_WORKSPACE=UNKNOWN
+RESULT_INTENT_DRIFT=UNKNOWN
 RESULT_AGENT_LOOP=UNKNOWN
+RESULT_INTENT_DRIFT_LOOP=UNKNOWN
 RESULT_AGENT_BODY_LOOP=UNKNOWN
 
 set_result() {
   case "$1" in
     session-switch) RESULT_SESSION_SWITCH="$2" ;;
     intent-workspace) RESULT_INTENT_WORKSPACE="$2" ;;
+    intent-drift) RESULT_INTENT_DRIFT="$2" ;;
     agent-loop) RESULT_AGENT_LOOP="$2" ;;
+    intent-drift-loop) RESULT_INTENT_DRIFT_LOOP="$2" ;;
     agent-body-loop) RESULT_AGENT_BODY_LOOP="$2" ;;
   esac
 }
@@ -60,7 +66,9 @@ get_result() {
   case "$1" in
     session-switch) printf '%s' "$RESULT_SESSION_SWITCH" ;;
     intent-workspace) printf '%s' "$RESULT_INTENT_WORKSPACE" ;;
+    intent-drift) printf '%s' "$RESULT_INTENT_DRIFT" ;;
     agent-loop) printf '%s' "$RESULT_AGENT_LOOP" ;;
+    intent-drift-loop) printf '%s' "$RESULT_INTENT_DRIFT_LOOP" ;;
     agent-body-loop) printf '%s' "$RESULT_AGENT_BODY_LOOP" ;;
     *) printf 'UNKNOWN' ;;
   esac
@@ -83,12 +91,14 @@ run_one() {
 
 run_one session-switch
 run_one intent-workspace
+run_one intent-drift
 run_one agent-loop
+run_one intent-drift-loop
 run_one agent-body-loop
 
 printf '\n========== summary ==========\n'
 overall=0
-for name in session-switch intent-workspace agent-loop agent-body-loop; do
+for name in session-switch intent-workspace intent-drift agent-loop intent-drift-loop agent-body-loop; do
   status="$(get_result "$name")"
   printf '%-20s %s\n' "$name" "$status"
   if [[ "$status" == FAIL ]]; then overall=1; fi

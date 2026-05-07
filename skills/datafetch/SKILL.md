@@ -67,6 +67,30 @@ Prefer the intent workspace flow for new tasks: `datafetch mount`, `cd` into
 the folder, use `datafetch run` while exploring, then `datafetch commit` once
 `scripts/answer.ts` returns a structured `df.answer(...)`.
 
+If a broad worktree intent leads you to a narrower useful sub-intent, keep the
+sub-intent as visible code in `scripts/answer.ts` and declare it in the final
+answer. Use:
+
+```ts
+return df.answer({
+  intent: {
+    name: "shortStableName",
+    parent: "the mounted worktree intent",
+    relation: "derived", // same | derived | sibling | drifted | unrelated
+    description: "what this committed trajectory actually answers",
+  },
+  status: "answered",
+  evidence,
+  derivation,
+  value,
+});
+```
+
+Use `relation: "same"` when the commit directly satisfies the mounted intent.
+Use `derived` or `sibling` for useful sub-trajectories inside that broader
+task. Use `drifted` or `unrelated` when the worktree purpose changed. Do not
+silently answer a different question without this marker.
+
 ## Hierarchy of reuse — always check higher tiers first
 
 Three tiers of available work, ordered cheapest-to-newest. Walk down them
@@ -213,6 +237,11 @@ answers the user. The committed source must return `df.answer(...)` and should
 contain the whole repeatable workflow: retrieval calls, deterministic
 transforms, and any skill-driven agent steps. This is the artifact future
 agents can find, replay, and learn from.
+
+When the committed answer is a narrower sub-task produced during broad
+exploration, include the `intent` block in `df.answer(...)`. The mounted
+workspace intent remains the parent worktree purpose; the answer intent says
+what the committed trajectory actually solved.
 
 Do not answer from `tmp/runs/N` output. If exploration identified the right
 shape, write or reuse the TypeScript trajectory in `scripts/answer.ts`, run

@@ -1,6 +1,21 @@
 export type AnswerStatus = "answered" | "partial" | "unsupported";
 
+export type AnswerIntentRelation =
+  | "same"
+  | "derived"
+  | "sibling"
+  | "drifted"
+  | "unrelated";
+
+export type AnswerIntent = {
+  name?: string;
+  description?: string;
+  parent?: string;
+  relation?: AnswerIntentRelation;
+};
+
 export type AnswerInput = {
+  intent?: AnswerIntent;
   status: AnswerStatus;
   value?: unknown;
   unit?: string;

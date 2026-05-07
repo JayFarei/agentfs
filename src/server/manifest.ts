@@ -238,7 +238,22 @@ const SUPPORT_TYPES = `interface Result<T> {
 
 type AnswerStatus = "answered" | "partial" | "unsupported";
 
+type AnswerIntentRelation =
+  | "same"
+  | "derived"
+  | "sibling"
+  | "drifted"
+  | "unrelated";
+
+interface AnswerIntent {
+  name?: string;
+  description?: string;
+  parent?: string;
+  relation?: AnswerIntentRelation;
+}
+
 interface AnswerInput {
+  intent?: AnswerIntent;
   status: AnswerStatus;
   value?: unknown;
   unit?: string;

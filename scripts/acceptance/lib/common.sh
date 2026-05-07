@@ -588,6 +588,21 @@ assert_json_field() {
   return 1
 }
 
+assert_json_truthy() {
+  local file="$1"
+  local jq_expr="$2"
+  local label="$3"
+  if [[ -f "$file" ]] && jq -e "$jq_expr" "$file" >/dev/null 2>&1; then
+    printf '[PASS] %s\n' "$label"
+    PASS_COUNT=$((PASS_COUNT + 1))
+    return 0
+  fi
+  printf '[FAIL] %s\n' "$label" >&2
+  if [[ -f "$file" ]]; then jq . "$file" >&2 || true; fi
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  return 1
+}
+
 # Returns the path to the most recently modified trajectory file, or empty
 # if none exist.
 latest_trajectory() {

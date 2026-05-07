@@ -54,6 +54,7 @@ type WorkspaceHead = {
   commit: string;
   trajectoryId?: string;
   intent: string;
+  committedIntent?: unknown;
   tenantId: string;
   dataset: string;
   source: string;
@@ -224,6 +225,12 @@ async function writeAgentMemory(
     "- `result/HEAD.json` points at the current accepted commit that supersedes earlier attempts.",
     "- `result/tests/replay.json` is the replay test generated from the current HEAD.",
     "",
+    "Intent discipline:",
+    "- Treat this folder's `Intent:` line as the worktree purpose.",
+    "- If exploration produces a narrower useful sub-intent, keep it in `scripts/answer.ts` and mark the committed answer with `intent: { name, description, parent, relation }`.",
+    "- Use `relation: \"same\"` when the answer directly satisfies the worktree intent, `\"derived\"` or `\"sibling\"` for useful sub-trajectories inside it, and `\"drifted\"` or `\"unrelated\"` when the worktree purpose changed.",
+    "- Do not silently change the worktree purpose by answering a different question without that `intent` marker.",
+    "",
     "Workflow:",
     "1. Inspect `df.d.ts`, `db/`, `lib/`, `datafetch apropos`, and `datafetch man`.",
     "2. Use `datafetch run scripts/scratch.ts` to sample and test ideas.",
@@ -383,11 +390,13 @@ async function writeWorkspaceResult(args: {
 
   if (validationAccepted(args.response.validation)) {
     const workspace = await readWorkspaceConfig(args.root);
+    const committedIntent = answerIntent(args.response.answer);
     const head: WorkspaceHead = {
       version: 1,
       commit: commitId,
       trajectoryId: args.response.trajectoryId,
       intent: workspace.intent,
+      ...(committedIntent !== undefined ? { committedIntent } : {}),
       tenantId: workspace.tenantId,
       dataset: workspace.dataset,
       source: sourceLabel,
@@ -485,6 +494,7 @@ async function buildReplayTest(args: {
   const workspace = await readWorkspaceConfig(args.root);
   const answer = normalizeObject(args.response.answer);
   const validation = normalizeObject(args.response.validation);
+  const committedIntent = answerIntent(args.response.answer);
   return {
     version: 1,
     kind: "workspace-head-replay",
@@ -493,9 +503,11 @@ async function buildReplayTest(args: {
     tenantId: workspace.tenantId,
     dataset: workspace.dataset,
     intent: workspace.intent,
+    ...(committedIntent !== undefined ? { committedIntent } : {}),
     source: args.source,
     expected: {
       status: typeof answer?.["status"] === "string" ? answer["status"] : null,
+      ...(committedIntent !== undefined ? { intent: committedIntent } : {}),
       ...(Object.prototype.hasOwnProperty.call(answer ?? {}, "value")
         ? { value: answer?.["value"] }
         : {}),
@@ -548,6 +560,12 @@ function normalizeObject(value: unknown): Record<string, unknown> | null {
 function evidencePresent(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
   return value !== null && value !== undefined;
+}
+
+function answerIntent(value: unknown): unknown | undefined {
+  const answer = normalizeObject(value);
+  if (!answer || answer["intent"] === undefined) return undefined;
+  return answer["intent"];
 }
 
 async function readWorkspaceConfig(root: string): Promise<WorkspaceConfig> {

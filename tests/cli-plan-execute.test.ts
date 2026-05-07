@@ -59,6 +59,11 @@ async function withSnippetServer<T>(
           ...(body.phase === "commit"
             ? {
                 answer: {
+                  intent: {
+                    name: `countRows${commitCount}`,
+                    parent: "count rows",
+                    relation: commitCount === 1 ? "same" : "derived",
+                  },
                   status: "answered",
                   value: commitCount,
                   evidence: [{ ref: `x-${commitCount}` }],
@@ -367,6 +372,11 @@ describe("datafetch plan/execute CLI", () => {
         commit: "002",
         trajectoryId: "traj_commit_2",
         intent: "count rows",
+        committedIntent: {
+          name: "countRows2",
+          parent: "count rows",
+          relation: "derived",
+        },
       });
 
       await expect(
@@ -386,7 +396,17 @@ describe("datafetch plan/execute CLI", () => {
         kind: "workspace-head-replay",
         trajectoryId: "traj_commit_2",
         intent: "count rows",
+        committedIntent: {
+          name: "countRows2",
+          parent: "count rows",
+          relation: "derived",
+        },
         expected: {
+          intent: {
+            name: "countRows2",
+            parent: "count rows",
+            relation: "derived",
+          },
           status: "answered",
           value: 2,
           evidencePresent: true,

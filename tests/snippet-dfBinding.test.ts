@@ -143,6 +143,11 @@ describe("buildDf — df.db.<ident>", () => {
     });
 
     const answer = df.answer({
+      intent: {
+        name: "constantAnswer",
+        parent: "count rows",
+        relation: "derived",
+      },
       status: "answered",
       value: 42,
       evidence: [{ ref: "case-1" }],
@@ -150,6 +155,11 @@ describe("buildDf — df.db.<ident>", () => {
     });
 
     expect(answer).toMatchObject({
+      intent: {
+        name: "constantAnswer",
+        parent: "count rows",
+        relation: "derived",
+      },
       status: "answered",
       value: 42,
       evidence: [{ ref: "case-1" }],

@@ -124,6 +124,12 @@ export async function renderWorkspaceMemory(
   lines.push(
     "- Make probabilistic steps explicit as reusable `df.lib.*` interfaces or `fn({ body: agent(...) })` functions with skill markdown sidecars.",
   );
+  lines.push(
+    "- If a broad exploration produces a narrower useful sub-intent, keep that logic in `scripts/answer.ts` and mark the committed `df.answer(...)` with `intent: { name, description, parent, relation }`.",
+  );
+  lines.push(
+    "- Use `relation: \"same\"` for the original mount intent, `\"derived\"` or `\"sibling\"` for useful sub-trajectories, and `\"drifted\"` or `\"unrelated\"` when the worktree purpose changed.",
+  );
   lines.push("");
   lines.push("A validated plan should establish:");
   lines.push("");
@@ -227,6 +233,12 @@ export async function renderWorkspaceMemory(
   lines.push("  const plan = await df.lib.<planner>({ question: input.question, filing: picked.value });");
   lines.push("  const out = await df.lib.<executor>({ filing: picked.value, plan: plan.value });");
   lines.push("  return df.answer({");
+  lines.push("    intent: {");
+  lines.push("      name: \"<short-stable-name>\",");
+  lines.push("      parent: input.question,");
+  lines.push("      relation: \"same\",");
+  lines.push("      description: \"<what this committed trajectory answers>\",");
+  lines.push("    },");
   lines.push("    status: \"answered\",");
   lines.push("    value: out.value,");
   lines.push("    evidence: [{ ref: picked.value.id ?? picked.value.filename }],");
