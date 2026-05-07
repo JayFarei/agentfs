@@ -156,7 +156,7 @@ describe("shouldCrystallise", () => {
     if (!out.ok) expect(out.reason).toContain("errored");
   });
 
-  it("rejects mode='llm-backed' (D-015: agent authors LLM-backed functions)", () => {
+  it("rejects mode='llm-backed' (D-015: agent authors agent-backed functions)", () => {
     const traj = buildTrajectory({ calls: VALID_CALLS, mode: "llm-backed" });
     const out = shouldCrystallise({
       trajectory: traj,

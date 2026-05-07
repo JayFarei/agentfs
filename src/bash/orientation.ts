@@ -86,7 +86,7 @@ Real bash, real heredocs. To create \`/lib/<name>.ts\`:
 
 \`\`\`bash
 cat > /lib/myFunction.ts <<'EOF'
-import { fn, llm } from "@datafetch/sdk";
+import { fn, agent } from "@datafetch/sdk";
 import * as v from "valibot";
 
 export const myFunction = fn({
@@ -94,7 +94,7 @@ export const myFunction = fn({
   examples: [{ input: { /* ... */ }, output: { /* ... */ } }],
   input:  v.object({ /* ... */ }),
   output: v.object({ /* ... */ }),
-  body: /* pure TS, llm({prompt, model}), or agent({skill, model}) */,
+  body: /* pure TS or agent({prompt, model}) / agent({skill, model}) */,
 });
 EOF
 \`\`\`
@@ -106,7 +106,7 @@ shapes and skill markdown sidecars.
 
 ## Skill markdown sidecars
 
-When an LLM-backed body's prompt is long enough to externalise, write
+When an agent-backed prompt is long enough to externalise, write
 it as a markdown sidecar:
 
 \`\`\`bash
@@ -123,7 +123,7 @@ EOF
 
 Then reference the skill from a function body via
 \`agent({ skill: "score_narrative_tone", model: "..." })\`. Skills under
-\`/lib/skills/\` are tenant-private; the in-process LLM dispatcher reads
+\`/lib/skills/\` are tenant-private; the in-process agent dispatcher reads
 them by skill name when the function is called. The on-disk path that
 the dispatcher resolves to is
 \`<DATAFETCH_HOME>/lib/<tenant>/skills/<name>.md\` — the same path your
@@ -154,7 +154,7 @@ into a file (\`echo /db/finqa-2024 > /tmp/mount\`) and \`cat\` it back.
 Every \`df.lib.<fn>\` and \`df.db.<coll>.<method>\` call returns a uniform
 \`Result<T>\` shape: \`{ value, mode, cost, provenance, escalations,
 warnings? }\`. The \`mode\` field tells you whether the runtime hit a
-learned interface (\`interpreted\`), an LLM-backed body
+learned interface (\`interpreted\`), an agent-backed body
 (\`llm-backed\`), or a from-scratch composition (\`novel\`). The \`cost\`
 field is what a user-facing dashboard plots over time. Print the whole
 envelope (\`JSON.stringify(r, null, 2)\`) when debugging.
@@ -175,7 +175,7 @@ One factory authors every callable in \`/lib/\`. Three required schemas
 (\`intent\`, \`examples\`, \`input\`, \`output\`) plus a \`body\`:
 
 \`\`\`ts
-import { fn, llm, agent } from "@datafetch/sdk";
+import { fn, agent } from "@datafetch/sdk";
 import * as v from "valibot";
 
 export const totalRevenue = fn({
@@ -186,7 +186,7 @@ export const totalRevenue = fn({
   ],
   input:  v.object({ company: v.string(), year: v.number() }),
   output: v.object({ amount: v.number(), evidence: v.array(v.unknown()) }),
-  body:   /* one of the three shapes below */,
+  body:   /* pure TypeScript or agent({prompt}) / agent({skill}) */,
 });
 \`\`\`
 
@@ -194,7 +194,7 @@ export const totalRevenue = fn({
 \`man <fn>\` and \`apropos\` see. The agent reads them; the runtime
 validates I/O on every call.
 
-## Three body shapes
+## Body shapes
 
 ### 1. Pure TypeScript
 
@@ -204,12 +204,12 @@ For deterministic primitives (parsing, arithmetic, normalisation):
 body: ({ n, d }) => n / d
 \`\`\`
 
-### 2. LLM-backed, inline
+### 2. Agent-backed, inline prompt
 
 When the prompt is short enough to read alongside the function:
 
 \`\`\`ts
-body: llm({
+body: agent({
   model: "anthropic/claude-haiku-4-5",
   prompt: \`You score a paragraph for narrative tone. ...\`,
 })
@@ -225,14 +225,15 @@ When the prompt is long enough to externalise, write
 body: agent({ skill: "score_narrative_tone", model: "anthropic/claude-haiku-4-5" })
 \`\`\`
 
-Skills are an *optimisation*, not a required artefact. Inline \`llm({...})\`
-is the default; externalise only when the prompt deserves its own file.
+Skills are an *optimisation*, not a required artefact. Inline
+\`agent({prompt: ...})\` is the default; externalise only when the prompt
+deserves its own file.
 
 The agent writes skills inside the \`/lib/skills/\` namespace (i.e.
 alongside their referencing functions in \`/lib/\`); the runtime
 canonicalises the on-disk location to
 \`<DATAFETCH_HOME>/lib/<tenant>/skills/<name>.md\` and the in-process
-LLM dispatcher reads from there. There is no separate top-level
+agent dispatcher reads from there. There is no separate top-level
 \`/skills/\` directory.
 
 ### 4. Composition
@@ -269,7 +270,7 @@ the failure mode in plain TypeScript.
 
 ## When to externalise to a skill markdown
 
-Inline \`llm({prompt: ...})\` is right when:
+Inline \`agent({prompt: ...})\` is right when:
 - The prompt is < 30 lines.
 - One function uses it; nothing else.
 - You want the prompt and schema visible in one \`cat\`.
@@ -279,7 +280,7 @@ Externalise to \`/lib/skills/<name>.md\` when:
 - Multiple functions share it.
 - You want to edit the prompt without editing TypeScript.
 
-Both shapes work; this is just a refactor.
+Both agent forms work; this is just a refactor.
 
 ## Things that should never go in /lib/
 

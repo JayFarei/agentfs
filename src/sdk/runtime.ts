@@ -83,8 +83,8 @@ export type Provenance_ = Provenance; // re-export-friendly alias to avoid cycle
 
 // --- Body dispatcher --------------------------------------------------------
 
-// A BodyDispatcher knows how to execute non-pure bodies (`llm({...})` and
-// `agent({...})`). The pure-TS body shape is dispatched directly by the
+// A BodyDispatcher knows how to execute non-pure `agent({...})` bodies. The
+// pure-TS body shape is dispatched directly by the
 // fn() factory and never reaches the dispatcher.
 //
 // In the MVP, the only implementation lives next to the in-process Flue

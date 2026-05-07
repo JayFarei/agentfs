@@ -3,7 +3,7 @@
 // Run with:  pnpm tsx src/flue/__smoke__.ts
 //
 // Two end-to-end calls:
-//   1. `body: llm({...})` — round-trip through the inline-prompt path.
+//   1. `body: agent({prompt})` — round-trip through the inline-prompt path.
 //   2. `body: agent({skill})` — round-trip through the skill-markdown
 //      path, including disk skill resolution at
 //      `<baseDir>/lib/__seed__/skills/<name>.md`.
@@ -19,7 +19,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { fn } from "../sdk/fn.js";
-import { llm, agent } from "../sdk/body.js";
+import { agent } from "../sdk/body.js";
 
 import { installFlueDispatcher } from "./install.js";
 
@@ -38,8 +38,8 @@ async function main(): Promise<void> {
   const installation = await installFlueDispatcher({});
   const checks: { label: string; ok: boolean }[] = [];
 
-  // ---- Test 1: body: llm({...}) -------------------------------------------
-  console.log("== Test 1: body: llm({...}) ==");
+  // ---- Test 1: body: agent({prompt}) --------------------------------------
+  console.log("== Test 1: body: agent({prompt}) ==");
   const reverse = fn({
     intent: "Reverse a short string.",
     examples: [
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
     ],
     input: v.object({ text: v.string() }),
     output: v.object({ reversed: v.string() }),
-    body: llm({
+    body: agent({
       prompt:
         "Reverse the input string. Read the JSON input below; return an " +
         "object shaped {\"reversed\": \"...\"}.",
@@ -61,16 +61,16 @@ async function main(): Promise<void> {
     { tenant: "smoke-tenant", mount: "smoke-mount" },
   );
 
-  console.log("Result envelope (llm):");
+  console.log("Result envelope (agent prompt):");
   console.log(JSON.stringify(llmResult, null, 2));
   console.log("");
 
   checks.push(
-    { label: "[llm] mode === 'llm-backed'", ok: llmResult.mode === "llm-backed" },
-    { label: "[llm] cost.llmCalls === 1", ok: llmResult.cost.llmCalls === 1 },
-    { label: "[llm] cost.tier === 3", ok: llmResult.cost.tier === 3 },
+    { label: "[agent prompt] mode === 'llm-backed'", ok: llmResult.mode === "llm-backed" },
+    { label: "[agent prompt] cost.llmCalls === 1", ok: llmResult.cost.llmCalls === 1 },
+    { label: "[agent prompt] cost.tier === 3", ok: llmResult.cost.tier === 3 },
     {
-      label: "[llm] value.reversed is a non-empty string",
+      label: "[agent prompt] value.reversed is a non-empty string",
       ok:
         typeof llmResult.value.reversed === "string" &&
         llmResult.value.reversed.length > 0,
@@ -115,7 +115,10 @@ async function main(): Promise<void> {
     "utf8",
   );
 
-  const classify = fn({
+  const classify = fn<
+    { word: string },
+    { category: "warm" | "cool" | "neutral"; confidence: number }
+  >({
     intent: "Classify a colour word as warm / cool / neutral.",
     examples: [
       {

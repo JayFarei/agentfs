@@ -1,6 +1,6 @@
 // The `fn({...})` factory.
 //
-// One factory; three body shapes (pure, llm, agent). The returned callable
+// One factory; two body shapes (pure TypeScript or agent-backed). The returned callable
 // validates input, dispatches the body, validates output, and returns a
 // Result<O>. The callable also carries a `.spec` sidecar for introspection
 // (used by `man`, `apropos`, the observer, and the bootstrap `.d.ts`
@@ -131,7 +131,6 @@ function defaultModeForBody<I, O>(body: Body<I, O>): ResultMode {
   switch (body.kind) {
     case "pure":
       return "interpreted";
-    case "llm":
     case "agent":
       return "llm-backed";
   }
@@ -141,7 +140,6 @@ function defaultTier<I, O>(body: Body<I, O>): Cost["tier"] {
   switch (body.kind) {
     case "pure":
       return 2;
-    case "llm":
     case "agent":
       return 3;
   }

@@ -3,7 +3,7 @@
 // Wave 5's server rewrite calls `installFlueDispatcher({...})` once at boot,
 // after `setLibraryResolver(...)` and before the first request handler runs.
 // The dispatcher is registered into the SDK runtime via `setBodyDispatcher`,
-// so every `fn({...})` callable with an `llm({...})` or `agent({...})` body
+// so every `fn({...})` callable with an `agent({...})` body
 // flows through it.
 //
 // Idempotent: subsequent calls replace the existing dispatcher (with a

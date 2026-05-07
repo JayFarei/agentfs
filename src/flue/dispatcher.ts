@@ -1,6 +1,6 @@
 // FlueBodyDispatcher — implements the SDK's `BodyDispatcher` contract.
 //
-// Per plan R4 + R5 + Phase-4 acceptance: `body: llm({...})` and
+// Per plan R4 + R5 + Phase-4 acceptance: `body: agent({prompt})` and
 // `body: agent({skill})` both dispatch through the per-tenant in-process
 // Flue session here. Pure-TS bodies never reach this file; the fn() factory
 // runs them inline.
@@ -11,7 +11,7 @@
 //
 // Output validation: per the dual-validation policy in the SDK, the fn()
 // factory always validates `spec.output` after dispatch returns. We use
-// Flue's untyped path (`{ text }` envelope) for both LlmBody and AgentBody
+// Flue's untyped path (`{ text }` envelope) for both prompt and skill bodies
 // and JSON-parse the text ourselves — Claude commonly returns the
 // response as a JSON object (sometimes inside a ```json ... ``` fence).
 // On parse failure we return the raw text and let the fn() factory's
@@ -20,7 +20,7 @@
 // This is the "option 2" fix from the Wave 2 review: keep the SDK locked
 // (don't extend `DispatchContext` with an `expectedOutput` field that
 // `fn()` would have to populate) and instead recover structure on the
-// dispatcher side via JSON parsing. Routing both body kinds through the
+// dispatcher side via JSON parsing. Routing both agent forms through the
 // same path also makes ```json``` fence handling consistent.
 
 import path from "node:path";
@@ -30,12 +30,7 @@ import { defaultBaseDir } from "../paths.js";
 
 import type { FlueSession } from "@flue/sdk/client";
 
-import type {
-  Body,
-  AgentBody,
-  LlmBody,
-  PureTSBody,
-} from "../sdk/body.js";
+import type { Body, AgentBody, PureTSBody } from "../sdk/body.js";
 import type {
   BodyDispatcher,
   DispatchContext,
@@ -86,34 +81,9 @@ export class FlueBodyDispatcher implements BodyDispatcher {
     switch (body.kind) {
       case "pure":
         return throwOnPure(body);
-      case "llm":
-        return this.dispatchLlm<I, O>(body, input, ctx);
       case "agent":
         return this.dispatchAgent<I, O>(body, input, ctx);
     }
-  }
-
-  // --- llm body -----------------------------------------------------------
-
-  private async dispatchLlm<I, O>(
-    body: LlmBody<O>,
-    input: I,
-    ctx: DispatchContext,
-  ): Promise<O> {
-    const session = await this.pool.getSession(ctx.tenant);
-    const promptText = renderLlmPrompt(body.prompt, input);
-    // Always go through the untyped + JSON-extract path. Even when
-    // `body.output` is present, the fn() factory re-validates against
-    // `spec.output` after we return, so Flue's typed-result fast-fail
-    // layer would be redundant. Routing both LLM and Agent bodies
-    // through the same path makes JSON-fence handling consistent.
-    return runFlueCall<O>({
-      session,
-      prompt: promptText,
-      model: body.model,
-      output: undefined,
-      ctx,
-    });
   }
 
   // --- agent body ---------------------------------------------------------
@@ -123,13 +93,16 @@ export class FlueBodyDispatcher implements BodyDispatcher {
     input: I,
     ctx: DispatchContext,
   ): Promise<O> {
-    const skill = await this.skills.load(body.skill, ctx.tenant);
     const session = await this.pool.getSession(ctx.tenant);
-    const promptText = renderAgentPrompt(skill, input);
-    // Same untyped path as dispatchLlm. The skill markdown is the system
-    // instruction; the input is appended as JSON; the response text is
-    // JSON-parsed (with ```json fence handling) so the fn() factory's
-    // schema validation sees a structured value.
+    const promptText = await renderAgentBodyPrompt({
+      body,
+      input,
+      tenant: ctx.tenant,
+      skills: this.skills,
+    });
+    // The prompt or skill markdown is the system instruction; the input is
+    // appended as JSON; the response text is JSON-parsed (with ```json fence
+    // handling) so the fn() factory's schema validation sees a structured value.
     return runFlueCall<O>({
       session,
       prompt: promptText,
@@ -149,10 +122,22 @@ function throwOnPure<I, O>(_body: PureTSBody<I, O>): never {
   );
 }
 
-// LLM body: append the structured input as a JSON code block after the
-// inline prompt template. The model sees the prompt first, then the data.
-// Mirrors the convention used by `.flue/agents/finqa-observer.ts` style.
-function renderLlmPrompt(prompt: string, input: unknown): string {
+async function renderAgentBodyPrompt<O>(args: {
+  body: AgentBody<O>;
+  input: unknown;
+  tenant: string;
+  skills: SkillLoader;
+}): Promise<string> {
+  if (typeof args.body.prompt === "string") {
+    return renderPrompt(args.body.prompt, args.input);
+  }
+  const skill = await args.skills.load(args.body.skill, args.tenant);
+  return renderSkillPrompt(skill, args.input);
+}
+
+// Inline prompt body: append the structured input as a JSON code block after
+// the prompt template. The model sees the prompt first, then the data.
+function renderPrompt(prompt: string, input: unknown): string {
   return [
     prompt.trim(),
     "",
@@ -165,8 +150,8 @@ function renderLlmPrompt(prompt: string, input: unknown): string {
 
 // Agent body: combine the skill body with the structured input. The
 // skill markdown is treated as the system instruction; the input is
-// appended as a JSON code block, exactly like the LLM body case.
-function renderAgentPrompt(skill: Skill, input: unknown): string {
+// appended as a JSON code block, exactly like the inline prompt case.
+function renderSkillPrompt(skill: Skill, input: unknown): string {
   return [
     skill.prompt.trim(),
     "",

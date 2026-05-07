@@ -13,6 +13,8 @@ export type {
   Body,
   PureTSBody,
   LlmBody,
+  AgentPromptBody,
+  AgentSkillBody,
   AgentBody,
   RawBody,
 } from "./body.js";

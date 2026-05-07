@@ -3,7 +3,7 @@
 // Boot order matters:
 //   1. installSnippetRuntime — registers the LibraryResolver singleton.
 //   2. installFlueDispatcher — registers the BodyDispatcher singleton.
-//      Runs after the LibraryResolver so any LLM-backed body dispatched
+//      Runs after the LibraryResolver so any agent-backed body dispatched
 //      during boot can resolve seed lib functions.
 //   3. installObserver — hooks the snippet runtime's `onTrajectorySaved`
 //      so successful trajectories crystallise into /lib/<tenant>/.

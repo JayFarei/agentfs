@@ -126,7 +126,7 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
   if (trajectory.mode !== "novel" && trajectory.mode !== "interpreted") {
     return {
       ok: false,
-      reason: `trajectory.mode is "${trajectory.mode}"; observer only learns composition patterns (mode "novel" or "interpreted"). Per D-015 the agent authors LLM-backed functions directly.`,
+      reason: `trajectory.mode is "${trajectory.mode}"; observer only learns composition patterns (mode "novel" or "interpreted"). Per D-015 the agent authors agent-backed functions directly.`,
     };
   }
 

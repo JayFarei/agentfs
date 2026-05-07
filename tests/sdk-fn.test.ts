@@ -3,7 +3,6 @@ import * as v from "valibot";
 
 import {
   fn,
-  llm,
   agent,
   setBodyDispatcher,
   type Body,
@@ -21,7 +20,7 @@ class StubDispatcher implements BodyDispatcher {
     ctx: DispatchContext,
   ): Promise<O> {
     this.calls.push({ kind: body.kind, input });
-    if (body.kind === "llm" || body.kind === "agent") {
+    if (body.kind === "agent") {
       ctx.cost.llmCalls += 1;
       ctx.cost.tier = Math.max(ctx.cost.tier, 3) as DispatchContext["cost"]["tier"];
     }
@@ -97,7 +96,7 @@ describe("fn() with pure body", () => {
   });
 });
 
-describe("fn() with llm body", () => {
+describe("fn() with agent body", () => {
   let stub: StubDispatcher;
   let prior: BodyDispatcher | null;
 
@@ -111,14 +110,14 @@ describe("fn() with llm body", () => {
     if (prior) setBodyDispatcher(prior);
   });
 
-  it("dispatches llm bodies through the registered dispatcher", async () => {
+  it("dispatches agent({prompt}) bodies through the registered dispatcher", async () => {
     stub.responses.push({ reversed: "olleh" });
     const reverse = fn({
       intent: "reverse a string",
       examples: [{ input: { text: "ab" }, output: { reversed: "ba" } }],
       input: v.object({ text: v.string() }),
       output: v.object({ reversed: v.string() }),
-      body: llm({
+      body: agent({
         prompt: "Reverse the input.",
         model: "anthropic/claude-haiku-4-5",
       }),
@@ -126,7 +125,7 @@ describe("fn() with llm body", () => {
     const r = await reverse({ text: "hello" });
     expect(r.value).toEqual({ reversed: "olleh" });
     expect(stub.calls).toHaveLength(1);
-    expect(stub.calls[0]!.kind).toBe("llm");
+    expect(stub.calls[0]!.kind).toBe("agent");
     expect(r.mode).toBe("llm-backed");
     expect(r.cost.llmCalls).toBe(1);
     expect(r.cost.tier).toBe(3);
@@ -162,8 +161,23 @@ describe("fn() with llm body", () => {
       examples: [{ input: { x: 1 }, output: { x: 1 } }],
       input: v.object({ x: v.number() }),
       output: v.object({ x: v.number() }),
-      body: llm({ prompt: "noop", model: "anthropic/claude-haiku-4-5" }),
+      body: agent({ prompt: "noop", model: "anthropic/claude-haiku-4-5" }),
     });
     await expect(broken({ x: 1 })).rejects.toThrow();
+  });
+
+  it("requires exactly one of agent({prompt}) or agent({skill})", () => {
+    expect(() =>
+      agent({
+        prompt: "x",
+        skill: "y",
+        model: "anthropic/claude-haiku-4-5",
+      } as unknown as Parameters<typeof agent>[0]),
+    ).toThrow(/exactly one/);
+    expect(() =>
+      agent({
+        model: "anthropic/claude-haiku-4-5",
+      } as unknown as Parameters<typeof agent>[0]),
+    ).toThrow(/exactly one/);
   });
 });

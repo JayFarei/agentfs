@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# scripts/acceptance/llm-body-loop.sh
+# scripts/acceptance/agent-body-loop.sh
 #
-# Drives a task that requires writing an `llm()`-bodied function. Asserts:
+# Drives a task that requires writing an `agent({prompt})` function. Asserts:
 #   - the function file exists at the expected path
 #   - the trajectory shows mode == "llm-backed" and cost.llmCalls >= 1
 #
@@ -21,7 +21,7 @@ export DATAFETCH_SKILL_PATH="${DATAFETCH_SKILL_PATH:-$REPO_ROOT/skills/datafetch
 
 show_help() {
   cat <<EOF
-llm-body-loop.sh — verify the agent loop produces an llm()-backed function.
+agent-body-loop.sh — verify the agent loop produces an agent-backed function.
 
 Required env:
   ATLAS_URI                     MongoDB Atlas connection string
@@ -29,7 +29,7 @@ Required env:
 Optional env:
   DF_AGENT_DRIVER               codex (default) or claude
   DF_TEST_MODEL                 driver model override
-  DF_LLM_TEST_MODEL             model written into the llm() body
+  DF_AGENT_BODY_TEST_MODEL      model written into the agent() body
   DF_CLAUDE_BARE                1 forces claude --bare; default auto only
                                 uses bare when an Anthropic API key is set
   ANTHROPIC_KEY or
@@ -110,20 +110,20 @@ WRAP
   tmux new-session -d -s "$sess" "bash $wrap"
 }
 
-# ---- Step: prompt that REQUIRES an llm() body ------------------------------
-LLM_BODY_MODEL="${DF_LLM_TEST_MODEL:-${DATAFETCH_LLM_MODEL:-${DF_LLM_MODEL:-openai-codex/gpt-5.3-codex-spark}}}"
-PROMPT='Author a function `summariseFiling` at $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts that takes one finqa case (input: { caseId: string }) and returns { caseId: string, narrative: string }. The body MUST use `body: llm({prompt: "...", model: "'$LLM_BODY_MODEL'"})` to generate the narrative as a one-paragraph plain-English summary. Write the file via heredoc (`cat > $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts <<EOF ... EOF`). Then call it on one finqa case via `datafetch tsx -e "console.log(JSON.stringify(await df.lib.summariseFiling({caseId: \"<id>\"})))"` (pick any caseId from `await df.db.finqaCases.findExact({}, 1)`). Print the resulting JSON object on a single line at the end of your response.'
-OUT="$DATAFETCH_HOME/llm.out"
-SENTINEL="$DATAFETCH_HOME/llm.done"
+# ---- Step: prompt that REQUIRES an agent({prompt}) body --------------------
+AGENT_BODY_MODEL="${DF_AGENT_BODY_TEST_MODEL:-${DF_LLM_TEST_MODEL:-${DATAFETCH_LLM_MODEL:-${DF_LLM_MODEL:-openai-codex/gpt-5.3-codex-spark}}}}"
+PROMPT='Author a function `summariseFiling` at $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts that takes one finqa case (input: { caseId: string }) and returns { caseId: string, narrative: string }. The body MUST use `body: agent({prompt: "...", model: "'$AGENT_BODY_MODEL'"})` to generate the narrative as a one-paragraph plain-English summary. Write the file via heredoc (`cat > $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts <<EOF ... EOF`). Then call it on one finqa case via `datafetch tsx -e "console.log(JSON.stringify(await df.lib.summariseFiling({caseId: \"<id>\"})))"` (pick any caseId from `await df.db.finqaCases.findExact({}, 1)`). Print the resulting JSON object on a single line at the end of your response.'
+OUT="$DATAFETCH_HOME/agent-body.out"
+SENTINEL="$DATAFETCH_HOME/agent-body.done"
 
-step "spawning tmux pane dft-llm (timeout=${AGENT_LOOP_TIMEOUT}s)"
-run_agent_in_tmux dft-llm "$PROMPT" "$OUT" "$SENTINEL"
+step "spawning tmux pane dft-agent-body (timeout=${AGENT_LOOP_TIMEOUT}s)"
+run_agent_in_tmux dft-agent-body "$PROMPT" "$OUT" "$SENTINEL"
 
-if ! wait_for_tmux dft-llm "$AGENT_LOOP_TIMEOUT" "$SENTINEL"; then
-  dump_tmux_pane dft-llm "$OUT"
+if ! wait_for_tmux dft-agent-body "$AGENT_LOOP_TIMEOUT" "$SENTINEL"; then
+  dump_tmux_pane dft-agent-body "$OUT"
   FAIL_COUNT=$((FAIL_COUNT + 1))
 fi
-tmux kill-session -t dft-llm 2>/dev/null || true
+tmux kill-session -t dft-agent-body 2>/dev/null || true
 
 if [[ -f "$OUT" ]]; then
   step "transcript head:"
@@ -170,4 +170,4 @@ else
   fi
 fi
 
-print_summary "llm-body-loop"
+print_summary "agent-body-loop"
