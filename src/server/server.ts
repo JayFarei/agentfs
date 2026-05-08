@@ -36,6 +36,7 @@ import { getLibraryResolver } from "../sdk/index.js";
 import { installSnippetRuntime } from "../snippet/install.js";
 
 import { initializeWhitelistedDatasets } from "./datasetInit.js";
+import type { DatasetTemplateAuthor } from "./datasetTemplateAgent.js";
 import { createBashApp } from "./v1bash.js";
 import { createCatalogApp } from "./v1catalog.js";
 import { createConnectApp } from "./v1connect.js";
@@ -53,6 +54,8 @@ export type CreateServerOpts = {
   // Optional whitelist file. When present, server boot initializes those
   // datasets and exposes them through /v1/manifest.
   datasetsFile?: string;
+  // Optional test/host hook for LLM-driven dataset environment template authoring.
+  templateAuthor?: DatasetTemplateAuthor;
   // Tenant id for the observer (controls where learned /lib/ files
   // land for trajectories driven by /v1/bash and /v1/snippets that don't
   // pin a session-bound tenant).
@@ -93,7 +96,11 @@ export async function createServer(
   });
 
   const store = new SessionStore({ baseDir });
-  await initializeWhitelistedDatasets({ baseDir, datasetsFile: opts.datasetsFile });
+  await initializeWhitelistedDatasets({
+    baseDir,
+    datasetsFile: opts.datasetsFile,
+    templateAuthor: opts.templateAuthor,
+  });
 
   const app = new Hono();
   app.get("/health", (c) => c.json({ ok: true, baseDir }));
