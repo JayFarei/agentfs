@@ -4,8 +4,8 @@
 //   - Pure composition (preferred for MVP): generate the TS source directly
 //     from the template. The function body composes the same primitives in
 //     the same order with the same dataflow. Deterministic; no LLM.
-//   - Codifier-skill (fallback): dispatch the `finqa_codify_table_function`
-//     seed skill via Flue. Used when the pure path can't produce a valid
+//   - Codifier-skill (optional fallback): dispatch a configured seed or
+//     tenant skill via Flue. Used when the pure path can't produce a valid
 //     `fn({...})` source — for example, if the trajectory shape involves
 //     reshaping the template extractor doesn't know how to handle.
 //
@@ -59,8 +59,8 @@ export type AuthorFunctionArgs = {
   // with the same stable shape/name when a later accepted commit supersedes it.
   allowOverwrite?: boolean;
   // Skill name to dispatch when the pure-composition path can't produce
-  // valid source. Defaults to "finqa_codify_table_function".
-  codifierSkill?: string;
+  // valid source. Null/undefined disables the fallback.
+  codifierSkill?: string | null;
 };
 
 // --- Public API ------------------------------------------------------------
@@ -95,7 +95,14 @@ export async function authorFunction(
     // Fallback: dispatch the codifier skill via the registered Flue
     // dispatcher. The dispatcher takes the trajectory + first lib call
     // as input and returns `{functionName, description, source}`.
-    const skill = args.codifierSkill ?? "finqa_codify_table_function";
+    const skill = args.codifierSkill ?? null;
+    if (skill === null) {
+      return {
+        kind: "skipped",
+        reason:
+          "pure-composition path could not emit source and no codifier skill is configured",
+      };
+    }
     const codified = await dispatchCodifier({ skill, trajectory });
     if (codified === null) {
       return {

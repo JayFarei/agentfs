@@ -55,7 +55,7 @@ export type ObserverOpts = {
   // Useful for tests and for installations where one observer instance
   // serves one tenant.
   tenantId?: string;
-  codifierSkill?: string;
+  codifierSkill?: string | null;
   // Override the resolver. Defaults to the SDK module-level singleton
   // wired by `installSnippetRuntime`.
   libraryResolver?: LibraryResolver;
@@ -76,7 +76,7 @@ const OBSERVER_PROMISE_CAP = 256;
 export class Observer {
   private readonly baseDir: string;
   private readonly tenantId: string | null;
-  private readonly codifierSkill: string;
+  private readonly codifierSkill: string | null;
   private readonly resolverOverride: LibraryResolver | null;
   private readonly workspaceHeadTimeoutMs: number;
 
@@ -90,7 +90,8 @@ export class Observer {
   constructor(opts: ObserverOpts = {}) {
     this.baseDir = opts.baseDir ?? defaultBaseDir();
     this.tenantId = opts.tenantId ?? null;
-    this.codifierSkill = opts.codifierSkill ?? "finqa_codify_table_function";
+    this.codifierSkill =
+      opts.codifierSkill ?? process.env["DATAFETCH_CODIFIER_SKILL"] ?? null;
     this.resolverOverride = opts.libraryResolver ?? null;
     this.workspaceHeadTimeoutMs = opts.workspaceHeadTimeoutMs ?? 2_000;
   }

@@ -4,7 +4,7 @@
 
 import * as v from "valibot";
 
-import { fn } from "../../src/sdk/index.js";
+import { fn } from "../../../../src/sdk/index.js";
 
 const FilingSchema = v.looseObject({
   id: v.optional(v.string()),

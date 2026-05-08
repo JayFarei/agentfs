@@ -86,16 +86,28 @@ describe("locateRepoRoot", () => {
 });
 
 describe("locateRepoSubdir", () => {
-  it("locates seeds/lib relative to the repo root", async () => {
-    const seedLib = await locateRepoSubdir(path.join("seeds", "lib"));
+  it("locates generic seed libs relative to the repo root", async () => {
+    const seedLib = await locateRepoSubdir(
+      path.join("seeds", "generic", "lib"),
+    );
     expect(seedLib).not.toBeNull();
-    expect(seedLib).toMatch(/seeds[/\\]lib$/);
+    expect(seedLib).toMatch(/seeds[/\\]generic[/\\]lib$/);
   });
 
-  it("locates seeds/skills relative to the repo root", async () => {
-    const seedSkills = await locateRepoSubdir(path.join("seeds", "skills"));
+  it("locates generic seed skills relative to the repo root", async () => {
+    const seedSkills = await locateRepoSubdir(
+      path.join("seeds", "generic", "skills"),
+    );
     expect(seedSkills).not.toBeNull();
-    expect(seedSkills).toMatch(/seeds[/\\]skills$/);
+    expect(seedSkills).toMatch(/seeds[/\\]generic[/\\]skills$/);
+  });
+
+  it("locates domain seed packs relative to the repo root", async () => {
+    const seedSkills = await locateRepoSubdir(
+      path.join("seeds", "domains", "finqa", "skills"),
+    );
+    expect(seedSkills).not.toBeNull();
+    expect(seedSkills).toMatch(/seeds[/\\]domains[/\\]finqa[/\\]skills$/);
   });
 
   it("returns null for a non-existent subdir", async () => {

@@ -117,12 +117,16 @@ export async function runDemo(opts: RunDemoOpts = {}): Promise<RunDemoResult> {
   println(`[demo] mode=${atlasUri ? "atlas" : "in-memory"}`);
 
   // 1. Install runtimes in dependency order.
-  const { snippetRuntime } = await installSnippetRuntime({ baseDir });
-  await installFlueDispatcher({ baseDir });
+  const { snippetRuntime } = await installSnippetRuntime({
+    baseDir,
+    seedDomains: ["finqa"],
+  });
+  await installFlueDispatcher({ baseDir, seedDomains: ["finqa"] });
   const observer: InstallObserverResult = installObserver({
     baseDir,
     tenantId: tenant,
     snippetRuntime,
+    codifierSkill: "finqa_codify_table_function",
   });
 
   // 2. Publish the mount (or register the in-memory stub).

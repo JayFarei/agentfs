@@ -295,6 +295,7 @@ async function writeScriptTemplates(
   root: string,
   config: WorkspaceConfig,
 ): Promise<void> {
+  const defaultIdent = await firstCollectionIdent(config);
   const templateDir = path.join(
     config.baseDir,
     "sources",
@@ -316,7 +317,7 @@ async function writeScriptTemplates(
     path.join(templateDir, "scratch.ts"),
     path.join(root, "scripts", "scratch.ts"),
     [
-      `const candidates = await df.db.${defaultCollectionIdent(config)}.search(${JSON.stringify(config.intent)}, { limit: 10 });`,
+      `const candidates = await df.db.${defaultIdent}.search(${JSON.stringify(config.intent)}, { limit: 10 });`,
       "console.log(JSON.stringify({ candidates: candidates.length }, null, 2));",
       "",
     ].join("\n"),
@@ -747,9 +748,49 @@ function slugWorkspaceName(dataset: string, intent: string): string {
   return `${dataset}-${intentPart || "intent"}`;
 }
 
-function defaultCollectionIdent(config: WorkspaceConfig): string {
-  if (config.dataset.toLowerCase().includes("finqa")) return "finqaCases";
-  return "cases";
+async function firstCollectionIdent(config: WorkspaceConfig): Promise<string> {
+  const sourceManifest = await readJsonIfExists(
+    path.join(config.baseDir, "sources", config.dataset, "manifest.json"),
+  );
+  const sourceIdent = collectionIdentFromRecord(sourceManifest);
+  if (sourceIdent !== null) return sourceIdent;
+
+  const mountInventory = await readJsonIfExists(
+    path.join(config.baseDir, "mounts", config.dataset, "_inventory.json"),
+  );
+  const mountIdent = collectionIdentFromRecord(mountInventory);
+  if (mountIdent !== null) return mountIdent;
+
+  return "collection";
+}
+
+function collectionIdentFromRecord(value: unknown): string | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const collections = (value as { collections?: unknown }).collections;
+  if (!Array.isArray(collections)) return null;
+  for (const collection of collections) {
+    if (
+      collection !== null &&
+      typeof collection === "object" &&
+      !Array.isArray(collection)
+    ) {
+      const ident = (collection as { ident?: unknown }).ident;
+      if (typeof ident === "string" && /^[A-Za-z_$][\w$]*$/.test(ident)) {
+        return ident;
+      }
+    }
+  }
+  return null;
+}
+
+async function readJsonIfExists(file: string): Promise<unknown> {
+  try {
+    return JSON.parse(await fsp.readFile(file, "utf8")) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function fallbackManifest(config: WorkspaceConfig): string {

@@ -247,6 +247,7 @@ async function main(): Promise<void> {
   // 1. Install runtime + flue + observer.
   const { snippetRuntime, libraryResolver } = await installSnippetRuntime({
     baseDir,
+    seedDomains: ["finqa"],
   });
   await installFlueDispatcher({ baseDir, skipSeedMirror: true });
   const { observer } = installObserver({

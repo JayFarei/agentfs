@@ -194,6 +194,7 @@ function usage(): void {
       "  DATAFETCH_TELEMETRY  set to 1/true/yes to log every snippet server-side",
       "  DATAFETCH_TELEMETRY_LABEL label for benchmark/eval telemetry rows",
       "  DATAFETCH_SEARCH_MODE label for baseline/learned/search-mode comparisons",
+      "  DATAFETCH_SEED_DOMAINS optional comma-separated domain seed packs (e.g. finqa)",
       "  ATLAS_URI            MongoDB Atlas connection string",
       "  PORT                 HTTP server port (server.ts only)",
     ].join("\n"),
@@ -219,8 +220,10 @@ async function cmdPublish(positionals: string[], flags: Flags): Promise<void> {
   // also running a long-lived server (server.ts), they'll want to publish
   // through the HTTP API instead. For the local CLI path we install the
   // snippet runtime so seeds mirror to disk.
-  const { baseDir } = await installSnippetRuntime({});
-  await installFlueDispatcher({ baseDir });
+  const { baseDir } = await installSnippetRuntime({
+    seedDomains: ["finqa"],
+  });
+  await installFlueDispatcher({ baseDir, seedDomains: ["finqa"] });
 
   const handle = await publishMount({
     id,
@@ -267,8 +270,13 @@ async function cmdAgent(_positionals: string[], flags: Flags): Promise<void> {
   // user is expected to have run `publish` first (or to point --mount at a
   // pre-bootstrapped mount on disk under `<baseDir>/mounts/<id>/`).
   const explicitMount = flagString(flags, "mount");
-  const { snippetRuntime, baseDir } = await installSnippetRuntime({});
-  await installFlueDispatcher({ baseDir });
+  const seedDomains = seedDomainsForMountIds(
+    explicitMount !== undefined ? [explicitMount] : [],
+  );
+  const { snippetRuntime, baseDir } = await installSnippetRuntime({
+    seedDomains,
+  });
+  await installFlueDispatcher({ baseDir, seedDomains });
   installObserver({ baseDir, tenantId: tenant, snippetRuntime });
 
   const reg = getMountRuntimeRegistry();
@@ -330,6 +338,14 @@ async function cmdAgent(_positionals: string[], flags: Flags): Promise<void> {
     console.log("\n[agent] bye");
     process.exit(0);
   });
+}
+
+function seedDomainsForMountIds(mountIds: string[]): string[] {
+  const domains = new Set<string>();
+  for (const mountId of mountIds) {
+    if (mountId.toLowerCase().includes("finqa")) domains.add("finqa");
+  }
+  return [...domains];
 }
 
 async function cmdDemo(_positionals: string[], flags: Flags): Promise<void> {

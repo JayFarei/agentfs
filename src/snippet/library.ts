@@ -4,9 +4,9 @@
 //   1. <baseDir>/lib/<tenantId>/<name>.ts   (tenant overlay; mutable, on
 //      disk where the bash session's `flushLib()` lands heredoc edits.)
 //   2. <baseDir>/lib/__seed__/<name>.ts     (seed fallback; populated at
-//      install time by `installSnippetRuntime`. Today the seed shim
-//      re-exports the canonical `seeds/lib/<name>.ts` file from the repo
-//      so its relative imports back into `src/sdk` resolve naturally.)
+//      install time by `installSnippetRuntime`. The seed shim re-exports a
+//      canonical file from `seeds/generic/lib` or an explicitly enabled
+//      `seeds/domains/<domain>/lib` pack.)
 //
 // The resolver returns the typed `Fn<unknown, unknown>` callable. `list()`
 // walks both layers and returns `{name, spec}` for each.
@@ -20,8 +20,8 @@
 //   - `await import(<absolute-file-url>)` — works because the runtime
 //     process is started under tsx (which provides ESM TS support), and
 //     because the seed shim file at `<baseDir>/lib/__seed__/<name>.ts`
-//     re-exports from the repo's `seeds/lib/<name>.ts` (whose relative
-//     `../../src/sdk/index.js` import resolves cleanly).
+//     re-exports from a repo seed bundle whose relative import points back
+//     into `src/sdk`.
 //   - Compiled-module cache keyed by `<file-path>::<mtime-ms>` so a
 //     re-imported file with the same mtime returns the cached module
 //     without paying the import cost again. mtime mismatches invalidate.

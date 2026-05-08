@@ -192,6 +192,7 @@ setup_dataplane() {
       printf '[FAIL] setup_dataplane: ATLAS_URI is required (or pass --no-publish)\n' >&2
       return 1
     fi
+    export DATAFETCH_SEED_DOMAINS="${DATAFETCH_SEED_DOMAINS:-finqa}"
   fi
 
   SERVER_LOG="$DATAFETCH_HOME/server.log"

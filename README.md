@@ -2,205 +2,269 @@
 
 Repository: <https://github.com/JayFarei/datafetch>
 
-datafetch is a dataset harness for coding agents. It exposes a mounted
-dataset as a bash-shaped workspace with typed TypeScript handles, writable
-intent scripts, structured run artifacts, and tenant-local learned
-interfaces. The goal is simple: the agent can explore freely, but the system
-only learns from data-molding logic that was written into the workspace and
-executed by `datafetch`.
+datafetch is a dataset harness for coding agents. It exposes a mounted dataset
+as a bash-shaped workspace with typed TypeScript handles, writable intent
+scripts, structured run artifacts, and tenant-local learned interfaces.
 
-The agent's only tool is bash. The dataset surfaces as `/db/<mount>/<coll>.ts`
-modules. Tenant functions live at `/lib/<name>.ts` written through a single
-`fn({...})` factory. LLM-backed bodies dispatch through Flue used as an
-in-process library.
+The rule is deliberately narrow:
+
+```text
+The system only learns from data-molding logic that was written into the
+workspace and executed by datafetch.
+```
+
+Agents can inspect freely. Reusable learning comes from committed visible code
+that returns `df.answer(...)` with evidence, coverage, derivation, and lineage.
 
 ## Quickstart
 
 ```sh
-# 1. install + link the global binary
 pnpm install
-npm link            # or: pnpm link --global (see "pnpm link quirk" below)
+npm link            # or: pnpm link --global
 
-# 2. set env (.env is auto-loaded; ATLAS_URI is required for live mode)
-cp .env.example .env || true   # create one if you haven't
-# edit .env: ATLAS_URI=mongodb+srv://... ; ANTHROPIC_API_KEY=sk-ant-...
-
-# 3. publish a mount (live Atlas; or skip and run `datafetch demo` offline)
-datafetch publish finqa-2024 --uri "$ATLAS_URI" --db datafetch_hackathon
-
-# 4. boot the data plane (foreground or backgrounded)
-datafetch server &     # http://localhost:8080
-
-# 5. install the Claude Code skill (~/.claude/skills/datafetch/)
-datafetch install-skill
+datafetch server --port 8080
 ```
 
-Verify the link:
+In another shell:
 
 ```sh
-which datafetch         # path to the linked binary
-datafetch --help        # lists every subcommand
+datafetch attach http://localhost:8080 --tenant demo
+
+datafetch add https://huggingface.co/datasets/OpenTraces/opentraces-devtime --json
+datafetch list --json
+datafetch inspect opentraces-devtime --json
+
+datafetch mount opentraces-devtime \
+  --tenant demo \
+  --intent "Find traces about debugging and produce an evidence-backed summary"
 ```
 
-## Driving the agent loop
-
-Create a session, then either drive it interactively through Claude Code
-or run the scripted demo:
+The mount command creates an intent workspace. `cd` into it and work like a
+small code project:
 
 ```sh
-datafetch session new --tenant me
+cat AGENTS.md
+cat df.d.ts
+ls db lib scripts
 
-# Interactive: launches Claude Code with bash allowlisted to the four
-# verbs the agent needs. Skill is auto-loaded from ~/.claude/skills/.
-claude --bare --allowedTools "Bash(datafetch *) Bash(cat *) Bash(ls *) Bash(jq *)"
+datafetch run scripts/scratch.ts
+datafetch commit scripts/answer.ts
+cat result/answer.md
+cat result/validation.json
 ```
 
-The scripted scenario (Q1 over chemicals revenue → observer crystallises
-a function → Q2 over coal revenue calls the crystallised function) prints
-a side-by-side cost panel:
+## Workspace Contract
+
+Each mounted intent workspace is a worktree-shaped environment:
+
+```text
+AGENTS.md
+CLAUDE.md -> AGENTS.md
+df.d.ts
+db/
+lib/
+scripts/
+  scratch.ts
+  answer.ts
+  helpers.ts
+tmp/runs/
+result/
+```
+
+The directories have stable meanings:
+
+- `db/` is immutable dataset context and typed collection primitives.
+- `lib/` is the tenant-local learned-interface surface.
+- `scripts/` is writable user space for visible intent programs.
+- `tmp/runs/` contains notebook-style exploratory run artifacts.
+- `result/` contains the committed answer, lineage, validation, replay test,
+  and worktree commit history.
+
+`datafetch run` is exploratory. `datafetch commit` is the final answer path.
+Only committed visible code that passes validation is eligible for learning.
+
+## Dataset Initialization
+
+The server owns dataset initialization. For the current prototype, supported
+datasets are registered from Hugging Face dataset URLs or a server whitelist.
+Initialization publishes the mount, samples the dataset, writes descriptors and
+typed handles, then creates source templates for future workspaces:
+
+```text
+$DATAFETCH_HOME/sources/<source-id>/
+  source.json
+  manifest.json
+  adapter-profile.json
+  init-context.json
+  init-agent.json
+  templates/
+    AGENTS.md
+    CLAUDE.md
+    scripts/scratch.ts
+    scripts/answer.ts
+```
+
+The init template can be deterministic or authored through the Flue-backed
+`datafetch_init_mount_template` skill. The client agent does not need to know
+which path produced the template; it just receives a normal workspace.
+
+## CLI Surface
+
+```text
+Server:
+  datafetch server [--port 8080] [--base-dir <path>] [--datasets <file>]
+
+Client/catalog:
+  datafetch attach <server-url> --tenant <id>
+  datafetch add <dataset-url> [--id <local-id>] [--json]
+  datafetch list [--json]
+  datafetch inspect <source-id> [--json]
+
+Intent workspace:
+  datafetch mount <source-id> --tenant <id> --intent '<intent>' [--path <dir>]
+  datafetch run [scripts/scratch.ts]
+  datafetch commit [scripts/answer.ts]
+
+Discovery:
+  datafetch apropos <query> [--json]
+  datafetch man <df.lib.name>
+
+Legacy/demo:
+  datafetch session ...
+  datafetch plan ...
+  datafetch execute ...
+  datafetch tsx ...
+  datafetch publish <mount-id> --uri <atlas-uri> --db <db-name>
+  datafetch demo [--mount finqa-2024] [--no-cache]
+```
+
+The default product path is `server -> attach -> add/list/inspect -> mount ->
+run -> commit`.
+
+## Seed Packs
+
+Generic seed functions and skills live under:
+
+```text
+seeds/generic/
+```
+
+Domain-specific demo/eval packs live under:
+
+```text
+seeds/domains/<domain>/
+```
+
+By default the runtime mirrors only generic seeds into
+`$DATAFETCH_HOME/lib/__seed__/`. To expose a domain pack, pass
+`seedDomains` in code or set:
 
 ```sh
-datafetch demo                 # live Atlas if ATLAS_URI is set; offline stub otherwise
-datafetch demo --no-cache      # delete the crystallised file before Q2 to confirm cold path
+DATAFETCH_SEED_DOMAINS=finqa
 ```
 
-Q1 reports `mode: "novel" / tier: 4`; Q2 reports `mode: "interpreted" / tier: 2`.
-Both rows print `✓ expected=X actual=X` against the FinQA gold value.
+The FinQA table helpers remain available for the historical demo and live
+acceptance scripts, but they are no longer part of every generic dataset mount.
 
-## Subcommand reference
+## Test Harnesses
 
-```
-Server / data plane:
-  datafetch server [--port 8080] [--base-dir <path>]
-  datafetch publish <mount-id> [--uri <atlas-uri>] [--db <db-name>]
+Fast local verification:
 
-Sessions (talk to the server over HTTP):
-  datafetch session new --tenant <id> [--mount <id>...] [--json]
-  datafetch session list [--json]
-  datafetch session resume <sessionId>
-  datafetch session end <sessionId>
-  datafetch session switch --tenant <id> [--mount <id>...]
-  datafetch session current
-
-Agent verbs (resolve --session / DATAFETCH_SESSION / pointer):
-  datafetch tsx -e '<source>' | datafetch tsx <file>
-  datafetch man <fn>
-  datafetch apropos <kw> [--json]
-
-Skill bundle:
-  datafetch install-skill [--path <dir>] [--force]
-
-Misc:
-  datafetch connect [--tenant <id>]
-  datafetch agent   [--tenant <id>] [--mount <id>]      # in-process bash REPL
-  datafetch demo    [--mount finqa-2024] [--no-cache]
+```sh
+pnpm typecheck
+pnpm test
 ```
 
-Common flags: `--server <url>` (default `http://localhost:8080`),
-`--session <id>` (override active pointer), `--base-dir <path>` (override
-`DATAFETCH_HOME`).
+Acceptance harnesses:
 
-## Where state lives
-
-`$DATAFETCH_HOME` defaults to `<cwd>/.datafetch`. `ATLASFS_HOME` is still
-honoured as a legacy compatibility alias. Subdirectories:
-
-```
-$DATAFETCH_HOME/
-  mounts/<mount-id>/      substrate-derived per-collection schema modules,
-                          samples, READMEs (one folder per registered mount).
-  lib/<tenant>/<name>.ts  tenant-private typed functions (fn({...}) factory).
-  lib/__seed__/<name>.ts  seed primitives shared across tenants.
-  sessions/<id>.json      server-managed session records.
-  trajectories/<id>.json  per-`tsx` execution recordings used for crystallisation.
-  active-session          plain-text pointer used as the fallback session id.
-  AGENTS.md               auto-generated workspace orientation.
+```sh
+bash scripts/acceptance/run-all.sh
 ```
 
-## Architecture in 30 seconds
+The default acceptance run covers no-LLM/no-Atlas flows plus the public
+Hugging Face catalog path. Live client-agent and Atlas/FinQA loops are opt-in:
 
+```sh
+RUN_AGENT_E2E=1 ATLAS_URI='mongodb+srv://...' bash scripts/acceptance/run-all.sh
 ```
-+------------------------- Claude Code (host LLM) ------------------------+
-| Tools: bash (allowlisted to "datafetch *", "cat *", "ls *", "jq *")    |
-| Skill: ~/.claude/skills/datafetch/SKILL.md                              |
-+------------------------------------------------------------------------+
-                                   |
-                                   v  shell exec
-+------------------------- datafetch CLI (client) ------------------------+
-| publish, server, session, agent, man, apropos, tsx, demo, install-skill|
-| Resolves --session / DATAFETCH_SESSION / $DATAFETCH_HOME/active-session|
-+------------------------------------------------------------------------+
-                                   |  HTTP localhost:8080
-                                   v
-+------------------------- datafetch server (data plane) -----------------+
-|  /v1/mounts        publishMount; SSE warm-up; GET list; DELETE teardown|
-|  /v1/connect       create session; returns {sessionId, tenant, mounts} |
-|  /v1/sessions      GET list / GET :id / DELETE :id                     |
-|  /v1/bash          run one bash command in a persistent BashSession    |
-|  /v1/snippets      run a TS snippet against a session; returns Result  |
-+------------------------------------------------------------------------+
-                                   |
-                                   v
-                        MongoDB Atlas (FinQA)
+
+The harness matrix is documented in
+[`scripts/acceptance/README.md`](./scripts/acceptance/README.md).
+
+## Telemetry For Evals
+
+Set these during benchmark runs:
+
+```sh
+DATAFETCH_TELEMETRY=1
+DATAFETCH_TELEMETRY_LABEL=<scenario-or-benchmark-id>
+DATAFETCH_SEARCH_MODE=<baseline|learned|adapter-name>
 ```
+
+Telemetry is written under:
+
+```text
+$DATAFETCH_HOME/telemetry/events.jsonl
+```
+
+Each event captures the snippet phase, trajectories, call primitives, cost
+signals, answer status, validation, and enough labels to compare datafetch
+against alternative agentic search baselines.
 
 ## Environment
 
-- `DATAFETCH_HOME` — base directory for `mounts/`, `lib/`, `sessions/`,
-  `trajectories/`. Falls back to `ATLASFS_HOME`, then `<cwd>/.datafetch`.
-- `DATAFETCH_SESSION` — fallback session id when `--session` is absent
-  and `active-session` is empty.
-- `DATAFETCH_SERVER_URL` — fallback data-plane base URL (default
-  `http://localhost:8080`).
-- `DATAFETCH_SKIP_ENV_FILE` — set to `1` to skip automatic `.env` loading.
-  The legacy `ATLASFS_SKIP_ENV_FILE=1` alias is also supported.
-- `ATLAS_URI` — MongoDB Atlas connection string for the live FinQA path.
-- `ANTHROPIC_API_KEY` — required for any `llm({...})` or `agent({...})`
-  body dispatch on the data plane.
+- `DATAFETCH_HOME` - server/workspace state root. Defaults to `<cwd>/.datafetch`.
+- `DATAFETCH_SERVER_URL` - client default server URL.
+- `DATAFETCH_SESSION` - legacy snippet/session fallback.
+- `DATAFETCH_SEED_DOMAINS` - comma-separated optional seed packs.
+- `DATAFETCH_INIT_MODEL` - model for LLM-authored dataset init templates.
+- `DATAFETCH_LLM_MODEL` / `DF_LLM_MODEL` - fallback model for Flue agent bodies.
+- `HF_DATASETS_SERVER_URL` - override Hugging Face Dataset Viewer endpoint.
+- `ATLAS_URI` / `MONGODB_URI` - optional Atlas demo/eval connection string.
+- `ATLAS_DB_NAME` / `MONGODB_DB_NAME` - optional Atlas database override.
+- `DATAFETCH_SKIP_ENV_FILE=1` - skip automatic `.env` loading.
 
-## Testing
+Legacy `ATLASFS_HOME` and `ATLASFS_SKIP_ENV_FILE` are still honored for old
+local setups.
 
-```sh
-pnpm test                           # vitest + the bash/snippet smokes
-pnpm typecheck                      # tsc --noEmit
-pnpm demo                           # end-to-end Q1/Q2 cost panel
+## Source Layout
 
-# Bash acceptance harness (run against live Atlas + Anthropic key):
-bash scripts/acceptance/agent-loop.sh
-bash scripts/acceptance/llm-body-loop.sh
-bash scripts/acceptance/session-switch.sh
+```text
+bin/                  CLI binary shim
+skills/datafetch/     installable client-agent skill
+seeds/generic/        provider-neutral seed functions and Flue skills
+seeds/domains/        optional domain/demo seed packs
+scripts/acceptance/   end-to-end shell harnesses
+tests/                vitest/unit/integration tests
+
+src/adapter/          dataset substrate adapters
+src/bootstrap/        sample, infer, synthesize, manifest emit
+src/bash/             just-bash session integration
+src/cli/              CLI command implementations
+src/demo/             FinQA two-question demo
+src/discovery/        library search / apropos
+src/flue/             Flue dispatcher and skill loading
+src/observer/         trajectory gate and learned-interface authoring
+src/sdk/              public TypeScript SDK primitives
+src/server/           Hono data plane and catalog routes
+src/snippet/          TypeScript snippet runtime
+src/trajectory/       call-scope and lineage recording
 ```
 
-The acceptance scripts drive Claude Code in a tmux pane and assert on
-on-disk artefacts (trajectories, crystallised `/lib/` files, gold-value
-correctness). Phase 5 of `kb/plans/005-agent-only-cli.md` covers the
-harness in detail.
-
-## pnpm link quirk
-
-If `pnpm link --global` errors with `ERR_PNPM_UNEXPECTED_STORE`, your
-global pnpm store has drifted from this project's store. Easiest fix:
-use `npm link` instead — the `bin` entry in `package.json` is identical
-either way. To stick with pnpm, run `pnpm install` to realign stores or
-`pnpm config set store-dir <dir> --global` to point at the same store.
-
-## Pointers
-
-- Full product design: [`kb/prd/`](./kb/prd/) — `design.md`, `decisions.md`,
-  `personas.md`.
-- Plan history: [`kb/plans/`](./kb/plans/) — 004 (bash MVP), 005 (agent-only
-  CLI + skill, the current cut).
-- Source layout: `src/sdk/` (public SDK), `src/adapter/` (Atlas mount),
-  `src/bootstrap/` (sample/infer/synthesise), `src/snippet/` (runtime),
-  `src/observer/` (crystallisation worker), `src/bash/` (BashSession),
-  `src/server/` (HTTP routes), `src/cli/` (subcommands), `src/cli.ts`
-  (entry).
+Local generated state stays ignored: `.datafetch/`, `.atlasfs/`,
+`.snippet-cache/`, `artifacts/`, and `dist/`.
 
 ## Status
 
-Hackathon-grade. Plan 005 Phase 6 (this packaging cut) wraps the
-client-server split, the four agent verbs, the Claude Code skill, and the
-restored `mode: "novel" / tier: 4` cost-panel signal. Deferred per the
-plans' Scope Boundaries: HTTPS / auth, compiled tier, content-addressable
-pins, drift detection, cross-tenant promotion, additional substrate
-adapters, vector retrieval upgrade.
+Prototype. The current useful slice is:
+
+1. local server;
+2. Hugging Face source registration;
+3. dataset initialization templates;
+4. intent workspace mount;
+5. run/commit artifacts;
+6. telemetry;
+7. optional FinQA learned-interface demo.
+
+Next step: run structured evals comparing normal agentic search against the
+dataset harness path over repeated intent families.

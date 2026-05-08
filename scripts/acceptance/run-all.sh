@@ -14,6 +14,9 @@ show_help() {
   cat <<EOF
 run-all.sh — run every acceptance script and report a summary.
 
+See scripts/acceptance/README.md for the harness matrix, environment
+variables, artifact locations, and eval-readiness notes.
+
 Order:
   1. session-switch.sh   (no LLM, no Atlas — fastest smoke)
   2. intent-workspace.sh (no LLM, no Atlas — run/commit workspace smoke)

@@ -289,7 +289,10 @@ async function main(): Promise<void> {
   const baseDir = path.join("/tmp", `df-snippet-smoke-${process.pid}-${Date.now()}`);
   await fsp.mkdir(baseDir, { recursive: true });
 
-  const { snippetRuntime } = await installSnippetRuntime({ baseDir });
+  const { snippetRuntime } = await installSnippetRuntime({
+    baseDir,
+    seedDomains: ["finqa"],
+  });
   await installFlueDispatcher({ baseDir, skipSeedMirror: true });
 
   const reg = getMountRuntimeRegistry();
