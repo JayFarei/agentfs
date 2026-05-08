@@ -796,7 +796,36 @@
     border-left: 2px solid var(--ink-mute);
     padding: 12px 14px;
     background: rgba(0,0,0,0.28);
-    max-width: 480px;
+    max-width: 540px;
+  }
+  .vfs-cmd{
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: var(--ink);
+    word-break: break-word;
+    border-bottom: 1px dashed var(--rule);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
+  .vfs-lineage{
+    font-size: 10.5px;
+    line-height: 1.6;
+    color: var(--ink-faint);
+    letter-spacing: 0.03em;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--rule);
+  }
+  .vfs-glyph{ color: var(--ink); margin-right: 6px; }
+  .vfs-sep{ color: var(--ink-mute); margin: 0 8px; }
+  .vfs-tag-mini{
+    flex: 0 0 auto;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-style: italic;
+    white-space: nowrap;
   }
   .vfs-line{
     display: flex;
@@ -926,24 +955,89 @@
   }
 
   .loop-section{
-    min-height: 100vh;
-    min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    padding: 80px 0 40px;
+    padding: 56px 0 32px;
     border-bottom: 0;
   }
   .loop-section .wrap{
-    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    min-height: 0;
+    gap: 14px;
+    max-width: none;
+    padding: 0 32px;
   }
-  .loop-section .section-head{ margin-bottom: 0; }
+  .loop-section .section-head{
+    grid-template-columns: 180px 1fr;
+    gap: 24px;
+    margin-bottom: 0;
+    align-items: baseline;
+  }
+  .loop-section .section-head h2{
+    font-size: 22px;
+    line-height: 1.1;
+    margin: 0;
+  }
+  .loop-section .section-head p{ display: none; }
   .loop-section .loop-grid{
-    flex: 1;
-    min-height: 0;
+    grid-template-columns: 220px 1fr;
+    flex: 0 0 460px;
+    height: 460px;
+    min-height: 460px;
+    max-height: 460px;
+  }
+  .loop-section .loop-panel{ min-height: 0; }
+  .loop-section .loop-snippet{ min-height: 0; max-height: 100%; overflow-y: auto; }
+  .loop-section .loop-tab{
+    padding: 11px 16px 12px;
+  }
+  .loop-section .loop-tab-name{ font-size: 12.5px; }
+  .loop-section .loop-tab-by{ font-size: 9.5px; margin-top: 3px; }
+  .loop-section .loop-panel{
+    padding: 22px 28px 22px;
+    gap: 12px;
+  }
+  .loop-section .loop-panel-title{
+    font-size: 22px;
+    line-height: 1.05;
+  }
+  .loop-section .loop-panel-lede{
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  .loop-section .loop-snippet{
+    padding: 10px 14px;
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+  .loop-section .loop-principle{
+    padding-top: 10px;
+    font-size: 10.5px;
+  }
+
+  /* GITHUB LINK IN CHROME */
+  .chrome-link{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-faint);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px solid var(--ink-faint);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    transition: color 0.14s, border-color 0.14s, background 0.14s;
+  }
+  .chrome-link:hover{
+    color: var(--bg);
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+  .chrome-link svg{ display: block; }
+  .chrome-link-arr{ font-size: 12px; }
+  @media (max-width: 760px){
+    .chrome-tag{ display: none; }
   }
   .loop-section .loop-panel{
     overflow-y: auto;
@@ -1015,31 +1109,40 @@
     DATAFETCH/AI
   </span>
   <span class="grow"></span>
-  <span>OWN YOUR INTERFACE</span>
+  <span class="chrome-tag">OWN YOUR INTERFACE</span>
+  <a class="chrome-link" href="https://github.com/JayFarei/agentfs" target="_blank" rel="noopener" aria-label="GitHub — agentfs">
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </svg>
+    <span>GITHUB</span>
+    <span class="chrome-link-arr">↗</span>
+  </a>
 </div>
 
 <!-- HERO -->
 <section class="hero">
   <div class="hero-grid">
     <div class="hero-left">
-      <div class="badge">/ CODE MODE FOR RETRIEVAL</div>
+      <div class="badge">/ DATASET HARNESS</div>
       <h1>Mount a dataset's<br>interface <span class="slash">/</span><br>as a typed<br>module.</h1>
       <p class="lede">
-        LLMs are <em>better at writing code</em> than at orchestrating tool calls. Datafetch mounts a dataset as a typed virtual filesystem &mdash; <code>df.db.*</code>, <code>df.lib.*</code>, <code>df.answer</code> &mdash; so the agent writes TypeScript over a real interface. Every accepted commit becomes a typed call in your tenant's <code>lib/</code>.
+        A dataset harness for agents that <em>write code, not tool calls</em>. Mount a dataset as a typed virtual filesystem &mdash; <code>df.db.*</code>, <code>df.lib.*</code>, <code>df.answer</code>. The interface <em>emerges from how you actually search it</em>: each accepted commit becomes a typed call in your tenant's <code>lib/</code>, ready for sibling intents to discover and reuse.
       </p>
-      <div class="vfs-tree" aria-label="Mounted dataset filesystem">
-        <div class="vfs-line vfs-root">/mnt/&lt;dataset&gt;/</div>
+      <div class="vfs-tree" aria-label="Mounted dataset worktree">
+        <div class="vfs-cmd"><span class="hl-p">$</span> datafetch mount <span class="hl-id">finqa-2024</span> <span class="hl-fl">--intent</span> <span class="hl-st">"range chemicals revenue 14-16"</span></div>
+        <div class="vfs-lineage"><span class="vfs-glyph">◆</span> worktree <span class="hl-id">q42f8a</span><span class="vfs-sep">·</span>parent <span class="hl-id">finqa-2024@v3</span><span class="vfs-sep">·</span><span class="hl-ok">mounted</span></div>
+        <div class="vfs-line vfs-root">/mnt/finqa-2024/</div>
         <div class="vfs-line dim"><span class="vfs-path">├ AGENTS.md</span><span class="vfs-tag">core</span></div>
         <div class="vfs-line dim"><span class="vfs-path">├ df.d.ts</span><span class="vfs-tag">core</span></div>
         <div class="vfs-line dim"><span class="vfs-path">├ db/</span><span class="vfs-tag">immutable</span></div>
         <div class="vfs-line dim"><span class="vfs-path">│  ├ filings.ts</span></div>
         <div class="vfs-line dim"><span class="vfs-path">│  └ chunks.ts</span></div>
         <div class="vfs-line bright"><span class="vfs-path">├ lib/</span><span class="vfs-tag yours">tenant</span></div>
-        <div class="vfs-line bright"><span class="vfs-path">│  ├ rangeTableMetric.ts</span></div>
-        <div class="vfs-line bright"><span class="vfs-path">│  └ skills/&lt;intent&gt;.md</span></div>
-        <div class="vfs-line bright"><span class="vfs-path">├ scripts/answer.ts</span><span class="vfs-tag yours">tenant</span></div>
-        <div class="vfs-line dim"><span class="vfs-path">├ tmp/runs/*</span><span class="vfs-tag">lineage</span></div>
-        <div class="vfs-line dim"><span class="vfs-path">└ result/</span><span class="vfs-tag">sealed answer</span></div>
+        <div class="vfs-line bright"><span class="vfs-path">│  ├ rangeTableMetric.ts</span><span class="vfs-tag-mini">inherited</span></div>
+        <div class="vfs-line bright"><span class="vfs-path">│  └ skills/range.md</span><span class="vfs-tag-mini">inherited</span></div>
+        <div class="vfs-line bright"><span class="vfs-path">├ scripts/answer.ts</span><span class="vfs-tag yours">this intent</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">├ tmp/runs/001/</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">└ result/answer.md</span><span class="vfs-tag">sealed</span></div>
       </div>
     </div>
 
@@ -1081,10 +1184,10 @@
 <section class="section loop-section">
   <div class="wrap">
     <div class="section-head">
-      <div class="section-num">/ THE LOOP &nbsp;>>>&nbsp; publish · mount · shape · optimise</div>
+      <div class="section-num">/ THE LOOP &nbsp;>>>&nbsp; init · mount · write · commit · optimise</div>
       <div>
-        <h2>A dataset is an environment.<br>Mounted, shaped, returned.</h2>
-        <p>Datafetch turns a dataset into a tenanted environment. The provider publishes once. Each agentic search shapes the workspace to fit the user's intent shape. Every accepted trajectory teaches the provider how the data is actually used, so serving, indexes, and the data shape itself can be tightened against real demand.</p>
+        <h2>An interface that emerges through agentic search.</h2>
+        <p>One tenanted environment per dataset. Each accepted commit teaches the provider how the data is actually used &mdash; the typed library grows on the user's side, the surface tightens on the provider's.</p>
       </div>
     </div>
 
@@ -1101,7 +1204,7 @@
           <span class="loop-tab-num">/02</span>
           <span class="loop-tab-body">
             <span class="loop-tab-name">MOUNT</span>
-            <span class="loop-tab-by">client</span>
+            <span class="loop-tab-by">agent</span>
           </span>
         </button>
         <button type="button" class="loop-tab" data-stage="2">
@@ -1642,9 +1745,9 @@ const STAGES = [
     principle: 'Published environments are the unit of distribution.'
   },
   {
-    label: '/ client · attach',
+    label: '/ agent · attach',
     title: 'Mount with intent.',
-    lede: 'Each task mounts an authenticated, isolated worktree shaped by the intent. db/ is immutable; lib/ and scripts/ are tenant-shaped.',
+    lede: 'The agent mounts an authenticated, isolated worktree shaped by the intent. db/ is immutable; lib/ and scripts/ are tenant-shaped.',
     snippet: '$ datafetch attach :8090 --tenant demo\n$ datafetch mount opentraces-devtime \\\n    --intent "summarise debug failure modes"\n\n  AGENTS.md   df.d.ts\n  db/         immutable dataset primitives\n  lib/        tenant-owned learned helpers\n  scripts/    tmp/   result/',
     principle: 'Tenanted, isolated, reproducible per intent.'
   },
