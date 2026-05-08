@@ -1,156 +1,146 @@
 ---
-title: "MongoDB-AE-Hackathon, Mission"
+title: "datafetch, Mission"
 type: evergreen
 tags: [magic-docs]
-updated: 2026-05-01
+updated: 2026-05-07
 hackathon_theme: "Adaptive Retrieval"
-working_codename: "AtlasFS"
 ---
 
 # Mission
 
-The foundational "why" document. Defines the product's reason for being, the problem space it addresses, core values, and decision-making framework. Consult this when asking "should we build this?"
+The "why we exist" doc. Read this when asking "should we build this?" — for vocabulary, see `mental-model.md`; for shipped surface area, see `product-design.md`.
 
 ---
 
-## What It Is
+## The core product claim
 
-A code agent that performs adaptive retrieval inside a virtual filesystem which exposes any MongoDB Atlas cluster as a typed TypeScript codebase. AtlasFS does not impose a schema; it crystallises **query shape** from agent usage, per-tenant. Every successful trajectory is captured by an audit log, presented to the user for review, and, if endorsed, crystallised into a deterministic, typed procedure that imports from the typed filesystem paths. Each new procedure earns an optimisation budget the system spends on compiling it down to a single Atlas aggregation pipeline, removing the LLM from the hot path. Convergence is measured longitudinally on a pre-registered, intent-clustered task set against vanilla agentic RAG and static-typed baselines, on **two orthogonal axes**: cost convergence within a tenant over time, and library divergence across tenants sharing the same data plane.
+> **Datafetch does not virtualize the whole dataset. It virtualizes the dataset interface, then improves that interface from accepted, evidence-backed work.**
 
-Built for the MongoDB Agentic Evolution Hackathon (London, 2026-05-02) under the **Adaptive Retrieval** theme.
-
----
-
-## Core Insight
-
-**AtlasFS crystallises query shape, not document shape.**
-
-MongoDB collections are typically polymorphic across documents but stable across query intents once an application matures. A product catalog has wildly different attributes for shirts versus laptops versus books, but the queries against it repeat: by SKU, by category, by price range, by availability. A clinical-study corpus has heterogeneous document structures, but the queries are ritualised: extract eligibility criteria, build adverse-events tables, find dosing regimens. A supply-chain corpus has wildly different shapes for npm package metadata, GHSA advisories, and dependency-graph snapshots, but the queries are bounded: "is this safe to install", "what depends on this", "has this maintainer shipped malware before". Polymorphism lives in the *documents*; regularity lives in the *intents*.
-
-This is the axis on which document-store + agent retrieval wins. Trajectory learning crystallises the *query shape*, not the *document shape*, and that is the structure that emerges from usage. Schema is never *imposed* on the data; it is *induced* at three increasingly stable tiers:
-
-1. **Sampled inferred type at `readFile` time**: the most volatile tier. `mongodb-schema` over a sampled set of documents produces a TypeScript interface, possibly polymorphic (a `oneOf` discriminated union when the collection has discriminator fields), with presence-frequency metadata in the JSDoc. Volatile because new documents can shift the inferred type.
-
-2. **Endorsed query trajectory at crystallisation time**: settles per-tenant. The procedure file in `procedures/<name>.ts` captures *which* polymorphic shape mattered for *which* business question, validated by the verifier. Stable until the schema fingerprint changes.
-
-3. **Compiled aggregation pipeline at budget pay-out time**: fully stable. The procedure body becomes a single Atlas aggregation pipeline; the LLM leaves the hot path.
-
-At no tier is structure imposed; at every tier it is induced. This is the gentlest possible posture for a polymorphic, evolving operational store, and it is the answer to the standing critique that MongoDB suits unstructured data while typed surfaces suit structured data. The right axis is not "structured versus unstructured" but "schema-stable across documents" versus "schema-stable across queries" (see `br/02`). MongoDB lives in the second regime; AtlasFS makes it tractable.
-
-### Scaffold versus emergence
-
-The "schema is induced" claim has a subtlety worth naming explicitly. There is a chicken-and-egg paradox in agentic structure-finding: to agentically derive structure, the agent needs typed primitives; but typed primitives seem to require structure already established. The resolution is that the three tiers above are not three points on one gradient. **Tier 1 is mechanical; tiers 2 and 3 are emergent.** They are different kinds of induction with different audiences.
-
-Tier 1 (the bootstrap) is **scaffolding**. It is a deterministic function of the data plus a sampling budget. It exposes a generic, over-typed surface: `oneOf` discriminated unions over all observed polymorphic shapes, presence-frequency metadata in JSDoc, and a fixed set of retrieval primitives (`findExact`, `findSimilar`, `search`, `hybrid`) per collection. The bootstrap surface is intentionally under-useful; every collection looks similar through it. Its job is to give the agent a *vocabulary* in which to explore, not to give the agent the answer.
-
-Tiers 2 and 3 (crystallisation and compilation) are the **emergence**. The agent's trajectory through the bootstrap surface, gated by user endorsement, narrows the over-typed scaffolding into a small, dense, opinionated procedure library that pins specific polymorphic variants and specific primitive compositions per intent. The procedure library is what "schema crystallised from agent usage" actually means.
-
-The bootstrap is shared across tenants on the same cluster (same data, same sampling). The emergent layer diverges per tenant (different intents, different procedures). This is what makes Dimension 1 (interface emergence across tenants) observable rather than asserted: the bootstrap is the control, the crystallised layer is the variable.
-
-The framing that Iceberg and Delta Lake brought schema-on-read to the data-engineering layer is the precedent. AtlasFS brings schema-on-read to the agent layer.
+Everything else in this document is a justification of, or a constraint on, that one sentence.
 
 ---
 
-## Two Dimensions of Adaptation
+## The problem we are solving
 
-The hackathon theme is *Adaptive Retrieval*. AtlasFS adapts in **two orthogonal dimensions**, both visible in the demo and measurable in the eval.
+Every agent that touches a real dataset relearns the same shape on every novel run. The retrieval pattern, the synthesis recipe, the join between substrate calls and table math — all of it gets recomposed from primitives every time, even when the same question shape was answered correctly yesterday.
 
-### Dimension 1, across tenants (interface emergence)
+Two failure modes follow:
 
-Every tenant or cluster of users on the same Atlas cluster crystallises a **different procedure library**. Same data plane, different emergent interfaces. A security analyst's library converges to compliance-flavoured procedures; an ML researcher's library converges to discovery-flavoured procedures; a compliance officer's library converges to audit-flavoured procedures. The data is shared; the interface is private and emergent. Each tenant's typed surface is grown from *that tenant's* trajectory of intents, not from a global pre-design. This is the per-tenant search application story in concrete operational form.
+1. **The interface the agent reaches for either does not exist or is too generic.** A typed namespace reflected at deploy time (Code Mode, MCP catalogs) gives the agent vocabulary, but the vocabulary does not narrow with use. The agent gets `findSimilar` and `executeTableMath`; it does not get `rangeTableMetric`, even after composing one a hundred times.
+2. **Prior successful work does not compound.** Auto-induced skill libraries (Voyager, ASI) crystallise indiscriminately; *Library Learning Doesn't* (Berlot-Attwell, NeurIPS MATH-AI 2024) showed the consequence — they are rarely actually reused. There is no signal for "this composition was the right one for this kind of question."
 
-Demo artefact: a two-pane file-tree view showing two simulated tenants' `procedures/` directories diverging across rounds. The same `db/packages.ts` underlies both; the procedure files do not overlap.
-
-Metric: **library divergence L_n** (Jaccard distance between procedure signature sets across tenants at round n). Rises monotonically across rounds as tenants diverge.
-
-### Dimension 2, within a tenant over time (cost convergence)
-
-For a single tenant, a novel intent runs **expensive** (agent ReAct loop over typed primitives, multi-call, LLM in the hot path). A successful trajectory is endorsed. Crystallisation produces a deterministic typed procedure. Optimisation budget compiles the procedure to a single Atlas aggregation pipeline. The same intent on subsequent calls runs **cheap** at deterministic-software speed with no LLM invocation.
-
-Demo artefact: a single intent re-runs three times. Round 0 trajectory is a multi-step red graph. Round 3 trajectory is one deterministic call. The Atlas pipeline the procedure compiled to is shown in a side panel.
-
-Metrics: T_n (trajectory length), D_n (determinism rate), R_n (reuse rate), token cost, wall-clock. All converge over rounds within-cluster.
-
-### Why two dimensions matter
-
-A single dimension of adaptation (cost convergence within a tenant) is the obvious story; many adaptive-retrieval systems have it in some form. The second dimension (interface emergence across tenants from the same data) is the under-told story, and it is exactly what makes the document-store substrate load-bearing. Per-tenant emergent interfaces are infeasible on a relational substrate without per-tenant schemas (heavy, irreversible) or per-tenant ORM layers (manual). On Atlas, with BSON staying polymorphic and the typed view regenerated per-tenant from trajectories, it falls out for free. The two-axis framing is therefore not just a more impressive pitch; it is a structural argument for why this specific substrate is the right one.
+The pain felt by the human running the agent: it looks intelligent and is amnesiac. The pain felt by the agent: every novel intent is tier 4 forever, the same retrieval cost paid in perpetuity.
 
 ---
 
-## The Problem
+## Our thesis
 
-Three families of prior art each solve a slice; nobody has built the conjunction.
+**Virtualize the dataset interface, not the dataset.** The substrate stays where it lives (today, MongoDB Atlas). What we virtualize is the typed surface the agent reaches for. The surface starts generic — `db.<coll>.findExact|search|findSimilar|hybrid` plus a small seed library — and grows tenant-by-tenant as the agent ships accepted answers.
 
-1. **Adaptive RAG (Self-RAG, FLARE, Adaptive-RAG, 2024-2026)** adapts query, chunking, and reranking *within a single run*. The next session starts from scratch. There is no cross-session compounding, the same intent re-pays the same retrieval cost forever.
+**Improve the interface from committed, executable TypeScript.** The unit of learning is not a prompt or a transcript. It is the source of an `npx tsx` snippet that ran, called typed primitives, returned a `df.answer({...})` envelope, passed validation, and was committed by the agent as the final auditable answer for an intent. The observer reads that source's recorded trajectory and writes a new typed callable in the tenant's `/lib/<tenant>/<name>.ts` overlay.
 
-2. **Code-mode interfaces (Cloudflare Code Mode 2025-26, Anthropic Tool Search 2025)** give the agent a typed namespace instead of a tool catalog and unlock orders-of- magnitude token compression. The interface is **static**: an MCP catalog reflected into a TypeScript namespace at deploy time. It does not evolve from agent usage.
+This makes the learned surface auditable by construction. A learned interface is a TypeScript file you can `cat`. Its frontmatter declares its intent. Its body re-walks the steps that worked. The agent finds it via `apropos`, reads it via `man`, and calls it via `df.lib.<name>(...)`.
 
-3. **Skill-induction agents (Voyager, ASI / arXiv:2504.06821)** crystallise reusable skills automatically from agent runs. *Library Learning Doesn't* (Berlot-Attwell, NeurIPS MATH-AI 2024) showed the consequence: auto-induced libraries are rarely actually reused. No human-in-the-loop endorsement, no reuse guarantee.
-
-4. **Document-store + agent retrieval today treats schema as something to *impose***. Typed namespaces are reflected at deploy time (Cloudflare Code Mode); validators are enforced at write time (JSON Schema, Mongoose); ORM layers are declared at the application layer (Prisma, Typegoose). None treats schema as something that *crystallises per-tenant from the trajectory of agent queries over polymorphic data*. For a document store with repeating intents, the right schema artefact is the procedure library, induced from usage, scoped per-tenant. That insight is the load-bearing originality claim, validated by the adjacent-projects survey in `br/02` at roughly 80% confidence.
-
-The unclaimed conjunction: **typed retrieval primitives + user-endorsed cross-session interface evolution + deterministic procedure replay + measurable longitudinal compression on intent-clustered tasks + per-tenant crystallisation over a polymorphic document store**. That is the gap this project probes.
-
-The pain felt by the user this addresses: every agent that touches the same Atlas cluster relearns the cluster's shape, the same retrieval pattern, and the same synthesis recipe on every novel run. The user has no way to convert a successful trajectory into a future shortcut, and no way to measure whether the system is getting better. It looks intelligent and is amnesiac.
+The conjunction we are claiming as novel: **typed primitives that are visible to the agent + cross-session interface evolution gated by accepted, evidence-backed answers + per-tenant overlay so different agents on the same data plane grow different surfaces.**
 
 ---
 
-## How It Works
+## Who is the user
 
-The conceptual arc, not implementation:
+Two coupled users, both on the same machine for the demo.
 
-1. **Mount.** The user mounts a MongoDB Atlas cluster as `/datafetch/`, served over NFS. Inside the mount they find typed TypeScript modules per collection (`db/packages.ts`, `db/advisories.ts`), curated views (`views/...`), and an initially-empty `procedures/` folder for their personal library.
+**The agent.** Today, Claude Code driving `datafetch <verb>` through bash. The shipped harness is `claude --bare --allowedTools "Bash(datafetch *) Bash(cat *) Bash(ls *) Bash(jq *)"`. The agent has bash and four allowed verb families; everything else is denied. This is deliberate — see `kb/principles.md` on "give the agent bash, not a tool catalog."
 
-2. **Query in code.** The user writes a query as a code-mode TypeScript snippet against the typed surface that is visible to them: standard primitives plus any procedures they have already endorsed.
+**The human running the agent.** Owns the tenant id. Sees the workspace folder, the answer markdown, the lineage. Decides whether the answer is good. Today there is no review UI; acceptance is the agent's `df.answer(...)` envelope passing automated validation. The human review loop is roadmap, not shipped (see "What we are not yet").
 
-3. **Match or run.** If the query matches an existing procedure, deterministic execution, no LLM in the hot path. If novel, a fresh agent runs a ReAct loop over hybrid Atlas retrieval (structured queries, BM25, vector, multimodal, web). Every step is logged.
-
-4. **Review.** The trajectory is presented to the user with three prompts: correct? satisfies intent? needs more?
-
-5. **Crystallise.** If endorsed, the trajectory becomes a named, typed procedure committed to `procedures/`. The procedure pins itself to the schema fingerprint of every collection it touches. The precedent earns an optimisation budget.
-
-6. **Optimise.** A background worker spends the budget on compiling the procedure into a single Atlas aggregation pipeline (or pre-computed cache, dedicated index, or refined signature). The next call replays at deterministic-software speed.
-
-7. **Measure.** Two axes are tracked across rounds on the pre-registered eval set. The within-tenant axis (Dimension 2) captures cost convergence: trajectory length T_n, determinism rate D_n, reuse rate R_n, information rate I_n, token cost, wall-clock. The across-tenant axis (Dimension 1) captures interface emergence: library divergence L_n (Jaccard distance between tenants' procedure signature sets at round n). The 2D divergence chart shows both simultaneously, faceted by baseline (vanilla / static-typed / ours) and aggregated three ways (within-cluster, across-cluster, out-of-cluster control).
-
-The output a tenant actually receives over time is a personal, deterministic library of typed procedures that grows with every endorsed run, and that looks *different* from any other tenant's library on the same cluster. The output a judge sees is two simultaneously visible adaptations: cost falling within tenants and interfaces fanning out across tenants, both measured against baselines that exhibit neither.
+Tenants share the substrate (`/db/<mount>/`), and each tenant has a private `/lib/<tenantId>/` overlay. The same dataset crystallises into different learned interfaces for different tenants. That divergence is structurally available; we have not yet wired the multi-tenant divergence story into the demo.
 
 ---
 
-## Design Principles
+## What success looks like
 
-1. **Discovery, access, and composition share one surface.** The typed filesystem unifies "what data is here", "how do I read it", and "how do I combine it" into one code surface the agent already knows how to navigate. No separate doc system, no separate tool catalog.
+### The cold-to-warm flip
 
-2. **Schema is induced at three tiers, never imposed.** Sampled inferred type at `readFile` (volatile, refreshes on schema fingerprint change); endorsed query trajectory at crystallisation (settles per-tenant); compiled aggregation pipeline at budget pay-out (fully stable, LLM out of hot path). At every tier, structure is induced from data and usage; at no tier is it pre-declared.
+Success is a single observable event: an intent that ran `mode:"novel" tier:4` becomes `mode:"interpreted" tier:2` the second time a similar intent is asked, with a measurable cost drop and the same gold answer.
 
-3. **User-endorsed crystallisation, not auto-induction.** Procedures only enter the library when the user says yes. Reuse rate is high *by construction*, which is the direct answer to *Library Learning Doesn't*.
+Concretely, the demo (`pnpm demo`):
 
-4. **Per-tenant interface emergence is a first-class property.** Procedure libraries are scoped per-tenant; the same data plane crystallises into different interfaces for different tenants. Library divergence (L_n) is a first-class metric, alongside cost convergence (T_n, D_n, R_n).
+- **Q1** — "what is the range of chemicals revenue between 2014 and 2018" — composes `findSimilar → pickFiling → inferTableMathPlan → executeTableMath`. Four top-level calls. `mode=novel`, `tier=4`. Returns 700.
+- The observer reads the committed trajectory and writes `lib/demo-tenant/rangeTableMetric.ts`.
+- **Q2** — "what is the range of coal revenue between 2014 and 2018" — finds `rangeTableMetric` via `apropos`, calls it. One top-level call. `mode=interpreted`, `tier=2`. Returns 1000.
 
-5. **Pre-registration before optimisation.** The dataset, the labels, and the protocol are committed to the public repo on day one, before any optimisation work begins. Without this, every positive curve is rationalisable as p-hacking.
+The cost panel renders that flip in two columns, with `✓ expected=X actual=X` markers on each. The call-graph collapse panel renders 4 → 1. If either gold answer is wrong, the demo throws.
 
-6. **Three-baseline comparison or it didn't happen.** Vanilla agentic RAG, static typed environment, and ours, on the identical task set with multiple seeds and visible variance bands. Anything less is a marketing chart.
+### The broader claim
 
-7. **Adopt primitives the ecosystem already provides.** AgentFS for the VFS engine, Pi for the agent harness, Voyage for embeddings, Atlas for the data plane. The only novel infrastructure code we author is MongoFS, a single TypeScript class implementing AgentFS's `FileSystem` interface against MongoDB.
+More generally: the second time a question shape is asked, the agent's program shrinks. The diagnostic is the trajectory's call list. If `rangeTableMetric` is in it, the system worked; if the agent recomposed `findSimilar/pickFiling/inferTableMathPlan/executeTableMath` again, the system did not.
 
-8. **Every primitive is observable.** Procedures are TypeScript files you can `cat`. Trajectories are rows in `tool_calls`. Branches are file copies. No hidden state.
-
-9. **Honest README.** Every artefact is tagged "built this hackathon" or "external service used". The demo highlights only the first column. Compliance with the "new work only" rule is structural, not asserted.
+The shape hash is the deduplication key. Two trajectories with the same canonical step sequence share a hash; the second one does not produce a second copy.
 
 ---
 
-## Decision Framework
+## The mechanism, in seven steps
+
+The brief gives file:line citations; the steps below are the conceptual arc.
+
+```
+intent
+  → mounted intent workspace
+  → visible TypeScript snippet
+  → committed df.answer(...)
+  → validated lineage
+  → learned lib function
+  → future mount discovers and reuses it
+```
+
+1. **Intent in.** The user (or the agent on their behalf) creates an intent workspace bound to one tenant, one dataset, and one question. The workspace is a folder on disk with `scripts/`, `db/` (a view of the mount), `lib/` (a view of the tenant overlay), `df.d.ts` (the typed surface), and an oriented `AGENTS.md`.
+2. **Compose in TypeScript.** The agent edits `scripts/scratch.ts` or `scripts/answer.ts`, calls `df.db.*` and `df.lib.*`, and returns a `df.answer({...})` envelope. The runtime is `npx tsx`-shaped; the agent reasons in code, not in tool calls.
+3. **Run, then commit.** `datafetch run` is a tier-4 sandbox: results bounded, artefacts go under `tmp/runs/`, never crystallisable. `datafetch commit` is the irreversible step: the snippet must return a valid `df.answer(...)`, and the commit becomes the workspace HEAD.
+4. **Trajectory recorded.** Every `df.db.*` and `df.lib.*` call is logged with input, output, depth, parent, and root. The trajectory is the audit log of the snippet, persisted at `<baseDir>/trajectories/<id>.json`.
+5. **Gate.** The observer reads the saved trajectory, checks the gate (≥2 distinct primitive calls, no errors, novel/interpreted mode, validated answer for commit phase, shape hash not already present, first call is `db.*` and downstream `lib.*` consumes its output, this trajectory is the current workspace HEAD).
+6. **Crystallise.** A pure-composition author re-emits the trajectory's call sequence as parameterised TypeScript with a YAML frontmatter and an `@shape-hash:` tag, written to `<baseDir>/lib/<tenantId>/<name>.ts`. Names are semantic (`rangeTableMetric`, `compareTableMetric`), not opaque hashes. The codifier-skill fallback exists for shapes the pure path cannot render. The manifest (`df.d.ts`) and workspace memory (`AGENTS.md`) are regenerated.
+7. **Reuse.** The next intent workspace symlinks `<baseDir>/lib/<tenantId>/` as `lib/`. `apropos <kw>` ranks the new function. `man <name>` renders its synopsis. `df.lib.<name>(...)` calls it directly, server-side internals collapsed under one client-visible call.
+
+The diagnostic story the demo tells:
+
+```
+Client-visible call:    lib.rangeTableMetric
+Nested server-side:     db.finqaCases.findSimilar
+                        lib.pickFiling
+                        lib.inferTableMathPlan
+                        lib.executeTableMath
+```
+
+First run: the agent composes the workflow. Second run: the agent calls the learned intent interface. The server still records the nested evidence path; the client sees a simpler typed API.
+
+---
+
+## What we are explicitly not
+
+These are properties prior versions of this doc claimed but the implementation does not have. We are stripping them so the kb reflects what ships.
+
+- **Not a database.** We do not write to the substrate. Every `findExact|search|findSimilar|hybrid` is a read against MongoDB Atlas. The data plane is stateless about the dataset; it is stateful about trajectories and learned interfaces.
+- **Not a FUSE filesystem.** There is no NFS mount, no kernel filesystem, no real "mount the dataset as `/datafetch/`". The "intent workspace" is a directory on disk plus an in-process `MountableFs` from `just-bash` for the bash REPL path. The "mount" verb refers to the conceptual binding of a tenant to a dataset and an intent, not to a kernel mount.
+- **Not a virtualized dataset.** We virtualize the *interface*, not the documents. Document polymorphism stays where it lives. The typed surface (`db.<coll>: CollectionHandle<T>`) is a view, not a wrapper.
+- **Not a multi-tenant promotion engine — yet.** Per-tenant overlays work and are isolated. The "promote a learned interface from one tenant to a shared family function" path exists as a hook (`MountHandle.on("family-promoted")`) but never fires. The "library divergence across tenants" metric exists as a concept and is not computed anywhere.
+- **Not a compiled-tier replay engine — yet.** `CostTier=1` and `mode:"compiled"` are reserved on the type. No code emits them. The Atlas-aggregation-pipeline compiler in earlier docs is roadmap.
+- **Not a human-review loop — yet.** Validation is automated (`validateAnswerEnvelope`). There is no UI, no endorsement API, no review verdict. The agent's `df.answer(...)` envelope passing automated checks is what counts as "accepted."
+- **Not a pre-registered eval harness — yet.** The demo runs two hard-coded synthetic FinQA filings (or the live collection if `ATLAS_URI` is set). The cost panel is anecdotal. Variance bands, multi-seed runs, and the FinQA full corpus are not in the build.
+- **Not vector-native — yet.** `findSimilar` and `hybrid` delegate to `search` (Atlas `$search` with regex fallback). The capabilities flag `vector:false` is the truth.
+
+The roadmap items above are real and tracked, but they belong in `kb/prd/` and `kb/plans/`, not in the mission doc.
+
+---
+
+## Decision framework
 
 When principles collide, the order of precedence is:
 
-1. **Falsification design over demo polish.** If a choice strengthens the headline chart at the cost of demo flair, take the chart. A working measurement framework is the more publishable artefact, regardless of which way the curves bend.
+1. **The cold-to-warm flip is the falsifier.** If a choice strengthens demo polish at the cost of a measurable Q1→Q2 cost drop, take the cost drop. Without that flip, nothing else matters.
+2. **Visible TypeScript over hidden state.** Learned interfaces must be `cat`-able files. Trajectories must be JSON on disk. Anything that hides itself from `ls` is not allowed in the data plane.
+3. **Adopt over invent.** `just-bash` for the in-process bash, `@flue/sdk` for the agent harness, `mongodb` for the substrate, `valibot` for schemas, `hono` for the HTTP plane. Our novel infrastructure is the snippet runtime, the observer, the gate, and the manifest, not the components below them.
+4. **Per-tenant overlays are non-negotiable.** Two tenants on the same data plane must produce two non-interfering libraries. The shipped multi-tenant test (`tests/observer-multi-tenant.test.ts`) is load-bearing.
+5. **Automated validation, not assertion of correctness.** `df.answer(...)` validation is structural (status allowed, value present, evidence present, derivation visible, lineage present, no default-zero fallback). It does not claim the answer is right. The gold-answer assertion lives in the demo runner, separate from the validation gate.
+6. **Hackathon scope is honest.** Deferred features are listed in the README and the brief, not buried in marketing. "Not shipped" sections in the kb are the structural compliance with that honesty.
 
-2. **Adopt over invent.** If an ecosystem primitive exists that does what we need, we use it and credit it. The project's signature is the *conjunction*, not any one component.
-
-3. **Honesty over scope.** When scope creeps, ask "is this MongoFS, the eval, the crystallisation loop, or the budget worker?" Those four are in scope. Everything else is roadmap.
-
-4. **Reproducibility over speed.** If a shortcut compromises seed-to-seed variance bands or the pre-registered protocol, we eat the time cost.
-
-5. **Hackathon eligibility is non-negotiable.** Atlas as a core component, AWS in the stack, public repo, original work clearly delineated, no banned-list features ("Basic RAG Applications" is on the banned list, our differentiator from a basic RAG is the load-bearing originality claim).
-
-Escalation path for hard calls during the build: write the question down in the plan file, get a second pair of eyes via the Architect or Plan Reviewer expert, default to the simpler choice if no clear signal emerges within 15 minutes.
+Escalation path: if a hard call comes up during the build, write the question into the relevant plan file and consult an Architect or Plan Reviewer expert. Default to the simpler choice if no clear signal emerges within 15 minutes.

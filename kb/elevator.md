@@ -1,77 +1,125 @@
-## What AtlasFS is
+# Datafetch — the elevator pitch
 
-A code-mode adaptive retrieval system that crystallises query shape from agent usage, per-tenant, over a polymorphic document store.
+> **Datafetch does not virtualize the whole dataset.
+> It virtualizes the dataset *interface*, then improves that interface from
+> accepted, evidence-backed work.**
 
-## How it works?
+## The one-line claim
 
-Atlas → mounted at /datafetch/ over NFS. Each collection becomes a typed TS module synthesised lazily on read.
+`datafetch` mounts a dataset as an **intent workspace**. The agent works in
+files. The server learns only from committed, executable TypeScript.
 
-The agent writes TS snippets against typed paths.
+## The flip
 
-Audit log captures every typed call.
+The same question, two days apart, runs in two different shapes:
 
-User/Agent endorses successful trajectories (or it is derived via after the fact attribution)
+- **Cold (first time).** No learned interface exists for this intent shape.
+  The agent composes the workflow itself: `db.<coll>.findSimilar`, then
+  whichever `lib.*` primitives fit — pick a filing, infer a plan, execute it.
+  Trajectory is `mode:"novel"`, `tier:4`. Expensive on purpose.
+- **Warm (next similar intent).** An observer has crystallised the accepted
+  trajectory into `lib/<tenant>/rangeTableMetric.ts`. The agent finds it via
+  `datafetch apropos`, calls it directly. Trajectory is `mode:"interpreted"`,
+  `tier:2`. The four-step chain collapses to one client-visible call. The
+  server still records the nested evidence path; the agent sees a typed API.
 
-Endorsements crystallise into procedures/<tenant_id>/<name>.ts.
+That flip is not a cache. The warm-path file is plain TypeScript an engineer
+can read, edit, and replay — generated from the recorded shape of the
+trajectory, not from a prompt.
 
-A budget worker compiles each procedure into a single Atlas aggregation pipeline so the LLM exits the hot path.
+## Why anyone should care
 
-The core insight:
+The observer learns **only** from work the runtime has already accepted: a
+committed `df.answer({...})` with structured value, evidence, derivation, and
+a passing validation. No prompt-stuffing, no review queue, no endorsement UI.
+If the answer was auditable, the learned interface is auditable; if it
+wasn't, nothing crystallises. Per-tenant overlays mean two tenants on the
+same cluster end up with two different libraries, shaped by the intents each
+tenant actually exercises.
 
-- schema is never imposed,
-- it is induced at three tiers
-  - sampled inferred type
-  - endorsed query trajectory
-  - compiled aggregation pipeline
+## A taste of the workspace
 
-MongoDB collections are polymorphic across documents but stable across query intents once an app matures.
-AtlasFS crystallises the query shape, not the document shape, once per tenant.
+```sh
+datafetch mount \
+  --tenant acme \
+  --dataset finqa \
+  --intent "What is the range of chemicals revenue between 2014 and 2016?"
 
-## Two dimensions of adaptation (the load-bearing pitch)
+cd ./finqa-range-chemicals
+```
 
-1. Across tenants (library divergence, L_n). Same Atlas cluster, different procedures/ overlays per tenant. Security analyst → compliance procedures. ML researcher → discovery procedures. Compliance officer → audit procedures. Visible as a two-pane diverging file-tree.
-2. Within a tenant over time (cost convergence). Novel intent → expensive ReAct loop. Endorsement → deterministic procedure. Budget worker → single aggregation pipeline. Same intent runs cheap. Metrics: T_n, D_n, R_n, I_n.
+The workspace looks like:
 
-## Per-dataset typed interfaces
+```
+AGENTS.md           # auto-generated orientation
+df.d.ts             # typed surface: db.*, lib.*, df.answer
 
-Every dataset exposes three typed interfaces under `data/<schema_name>/`, all leveraging the hybrid search primitive (`$rankFusion` over `$vectorSearch` + `$search`, optional rerank). The agent imports from a typed path and composes those three entry points; it never picks a raw retrieval mode and never sees the underlying pipeline.
+db/                 # symlink to the mounted dataset (read-only)
+lib/                # symlink to lib/<tenant>/ — learned interfaces + seeds
 
-## Novel intent, the ReAct loop
+scripts/
+  scratch.ts        # exploration (datafetch run)
+  answer.ts         # final visible intent program (datafetch commit)
 
-User intent with no matching hook enters a ReAct loop whose job is to narrow the search space.
+tmp/runs/           # per-run notebook output
+result/             # current accepted answer + commit history + HEAD.json
+```
 
-1. An LLM call resolves the user-aligned fields (which entity, which window, which metric, which discriminator).
-2. TypeScript derivation runs first pass, an assembly of: typed-schema primitives for retrieval, an LLM call to observe the retrieved shape, and code-mode derivation that transforms the observation into the answer.
-3. The trajectory (primitives + LLM observation + derivation code) is recorded for endorsement.
+### Cold path
 
-First pass is expensive by design. It is also valid TypeScript, so endorsement is `git add`.
+```ts
+// scripts/answer.ts
+const candidates = await df.db.finqaCases.findSimilar(
+  "range chemicals revenue 2014 2016", 10,
+);
+const { value: filing } = await df.lib.pickFiling({
+  question, candidates, priorTickers: [],
+});
+const { value: plan } = await df.lib.inferTableMathPlan({ question, filing });
+const { value: result } = await df.lib.executeTableMath({ filing, plan });
 
-## Generalisation pass (cost falls one link at a time)
+return df.answer({
+  status: "answered",
+  value: result.roundedAnswer,
+  evidence: result.evidence,
+  coverage: { years: ["2014", "2016"], metric: "chemicals revenue" },
+  derivation: { operation: "range", via: ["findSimilar", "pickFiling", "inferTableMathPlan", "executeTableMath"] },
+});
+```
 
-Once a trajectory exists, the budget worker walks it and replaces expensive links with cheaper equivalents whenever user-alignment makes the substitution safe.
+```sh
+datafetch commit scripts/answer.ts
+```
 
-- Embedding search that consistently resolves to a known filter on user-aligned input → swap for a deterministic codified query.
-- LLM observation that only reshapes data into a known form → swap for regex or additive transforms in the next link of the chain.
-- LLM-driven control flow that has stabilised → swap for branching on the user-aligned field.
+Commit means **"this is the final auditable answer for this intent."** Not a
+git commit. It writes `result/{answer.json, answer.md, validation.json,
+lineage.json, HEAD.json, tests/replay.json}` and an append-only entry under
+`result/commits/`. If validation passes, the observer reads the trajectory
+from the current `HEAD` and writes `lib/acme/rangeTableMetric.ts`.
 
-End state, after enough volume on a familiar intent, the trajectory collapses to a single endpoint call.
+### Warm path
 
-## Worked example, FinQA family functions
+New mount, similar intent. `datafetch apropos "range coal revenue"` surfaces
+`rangeTableMetric` as a tool. `scripts/answer.ts` shrinks to one call
+(`df.lib.rangeTableMetric({query, limit})`) wrapped in `df.answer({...})`.
+`datafetch commit` again. `mode:"interpreted"`, `tier:2`, one top-level
+call.
 
-Three intents, each crystallising a separate trajectory at first:
+## The mechanism in one chain
 
-- year-on-year revenue growth
-- year-on-year operating income
-- R&D expense change
+```
+intent
+  → mounted workspace
+  → visible TypeScript in scripts/answer.ts
+  → committed df.answer(...)
+  → validated lineage
+  → learned lib function (lib/<tenant>/<name>.ts)
+  → next mount discovers and reuses it
+```
 
-Over volume, the shared shape (year-on-year change of a named line item) generalises into a family function parameterised by metric. The next novel YoY question pays the family-function price, not the full ReAct price. The chart of cost per intent shows three independent staircases collapsing into one shared floor.
+## What you actually run
 
-## What this is really doing (the product framing)
-
-Turning unstructured search into an application.
-
-A user searches. Each search is typed and composed. Procedures crystallise. The procedure library _is_ the application: each entry is a named affordance with a typed parameter surface, and a UI surface falls out of it (parameter form in, result card out). The application is not designed up front, it emerges from the intents the tenant actually exercises, shaped by the data they actually have.
-
-Users can always morph it. Endorsement adds an affordance, branching forks the application, re-endorsement on a branch reshapes a procedure without losing its history. Two tenants on the same cluster end up with two different applications because their intents diverge.
-
-The product is intent-shaped applications. Search is the input modality, the typed procedure library is the application surface, the document store is the substrate that lets both stay polymorphic until intent fixes them.
+`datafetch demo` is the load-bearing artefact: two FinQA questions
+back-to-back, the cost panel on the second showing `mode=interpreted tier=2`,
+the call-graph collapsing from four top-level calls to one. Everything in
+this doc is what that demo exercises.

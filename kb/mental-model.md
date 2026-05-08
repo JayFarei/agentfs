@@ -1,292 +1,369 @@
 ---
-title: "MongoDB-AE-Hackathon, Mental Model"
+title: "Datafetch, Mental Model"
 type: evergreen
 tags: [magic-docs]
-updated: 2026-05-01
+updated: 2026-05-07
 snapshot_commit: ""
 ---
 
 # Mental Model
 
-Shared vocabulary between human and AI. Defines every primitive, entity, state, and relationship in the product. Each term should trace back to a specific construct in the codebase or the eval methodology.
+Shared vocabulary. If two collaborators (or two future sessions) disagree about
+what a word means, this is the source of truth. The first half tells you how
+to think about the system. The second half is the authoritative glossary;
+every term-of-art the codebase uses appears there with a one-paragraph
+definition and, where applicable, a code home.
 
-This document is the source of truth when two collaborators (or two future sessions) disagree about what a word means. If a term is missing here, define it before using it.
-
-> Snapshot commit field is empty until the first codebase scan. Run `/mental-model`
-> once `MongoFS` and the eval harness exist to populate this from the repo.
-
----
-
-## Primitives
-
-The smallest, irreducible concepts in the system.
-
-### File
-
-A node in the virtual filesystem mounted at `/datafetch/`. Every file is one of:
-
-- **Synthesised module file** (`db/<coll>.ts`, `views/<name>.ts`): generated lazily on `readFile` by MongoFS. Read-only.
-- **Procedure file** (`procedures/<name>.ts`): user-endorsed deterministic TypeScript, lives in the AgentFS overlay. Writable.
-- **Scratch file** (`scratch/...`): in-flight workspace, lives in the AgentFS overlay. Writable.
-- **Synthetic JSON** (`db/<coll>/_samples.json`, `db/<coll>/_schema.json`): generated on demand by MongoFS for sampling and schema introspection.
-- **Trajectory view** (`_trajectories/...`): read-only JSON view over rows in the AgentFS `tool_calls` table.
-
-### Typed call
-
-A single invocation of a method on a synthesised module: `db.packages.findExact(...)`, `db.advisories.findRelatedToPackage(...)`. Every typed call generates a row in `tool_calls`.
-
-### Trajectory
-
-An ordered sequence of typed calls produced by one agent run. Stored as rows in `tool_calls` joined by a session id. The trajectory is itself valid TypeScript when the import resolution is fixed up (`procedures/`-friendly form), which is why crystallisation is `git add` plus `git commit` with no translation step.
-
-### Schema
-
-The structural shape of a MongoDB collection inferred from sampling its documents, produced by `mongodb-schema`. Includes per-field types, optionality, nesting, and inferred index hints.
-
-### Schema fingerprint
-
-`sha256(canonical_json(schema))`. Exported as a constant in every synthesised module: `export const SCHEMA_VERSION = "sha256:..."`. Procedures pin themselves to the fingerprints of the modules they import.
-
-### Endorsement
-
-A user decision after a trajectory completes: the binary outcome of the review prompts (correct / satisfies intent / needs more). A positive endorsement is the gate for crystallisation.
-
-### Procedure
-
-A typed TypeScript function in `procedures/<name>.ts`, written by the crystallisation pipeline from an endorsed trajectory. Pinned to the schema fingerprints of its imports. Has an optimisation budget. May be optimised into a single Atlas aggregation pipeline.
-
-### Optimisation budget
-
-A virtual currency allocated to a procedure on promotion. Spent by the optimisation worker on one of: compile-to-pipeline, pre-compute and cache, build a dedicated index, refine the typed signature.
-
-### Verifier
-
-A check that runs before a procedure is promoted: replay the procedure against shadow inputs, compare the result to the trajectory's recorded result. Promotion is gated on verifier-pass.
-
-### Match
-
-A signature comparison between a user's snippet and the procedure library. A match routes execution to the deterministic path, no LLM in the loop.
+For the elevator pitch and the canonical end-to-end story, see
+`kb/elevator.md`. For how to read those concepts in actual file paths and CLI
+verbs, see `kb/product-design.md`. This doc sits between them: it gives you
+the words.
 
 ---
 
-## Entities
+## Half 1: The mental model
 
-The first-class nouns the system operates on.
+### The arc, in one breath
 
-### Cluster
+A tenant's agent is given a bash shell and the `datafetch` CLI. It runs
+`datafetch mount` to get an **intent workspace** — a CWD with a typed
+`df.d.ts`, a read-only `db/`, a writable `lib/`, and a `scripts/` folder it
+edits in. It writes TypeScript snippets that compose `df.db.*` retrievals
+with `df.lib.*` reasoning steps and ends with a `df.answer({...})` envelope.
+It runs them with `datafetch run` (exploratory) and finally `datafetch commit`
+(auditable). Every snippet execution is recorded as a **trajectory**. After a
+commit whose answer validates, an in-process **observer** reads the
+trajectory and crystallises its call shape into a new typed function at
+`lib/<tenant>/<name>.ts`. The next intent against the same shape calls that
+function directly — same answer, fewer LLM calls, lower tier, smaller blast
+radius.
 
-A MongoDB Atlas M10 cluster (us-east-1) provided for the hackathon. Mounted at `/datafetch/db/`. Read-only at the FS layer.
+That is the whole product. Everything else is plumbing for that loop.
 
-### Tenant
+### Why bash, not a tool catalog
 
-A logical scope for AtlasFS adaptation, independent of any user identity. A tenant has its own `procedures/` overlay, its own `scratch/` workspace, its own `tool_calls` namespace (filtered by `tenant_id`), and its own cache of synthesised `db/<coll>.ts` modules with per-tenant schema fingerprints. The read-only `db/` and `views/` base is shared across tenants; everything that crystallises is scoped to one tenant.
+The agent does not get a JSON tool schema. It gets bash and a four-verb
+allowlist (`Bash(datafetch *) Bash(cat *) Bash(ls *) Bash(jq *)`). Driving
+the system through bash means the agent works in the same medium as a
+developer: `cat df.d.ts`, `datafetch apropos`, edit a file, `datafetch run`,
+read `tmp/runs/003/result.json`. The "code mode" surface (a typed
+`df.d.ts` namespace) replaces the tool catalog.
 
-For the hackathon demo, two tenants are simulated by configuring the agent with different system prompts and different intent priors over the eval set (e.g., "security analyst" weighted toward clusters A and C; "ML researcher" weighted toward B and D). Production-grade auth-isolated multi-tenancy is post-hackathon roadmap.
+### Two paths for the same intent
 
-### Tenant overlay
+There is a **cold path** and a **warm path**, and the difference is which
+shape of TypeScript the agent writes.
 
-The per-tenant slice of the AgentFS CoW overlay. Implemented as a tenant-keyed subdirectory under the writable layer. Reads pass through to the read-only base for `db/` and `views/`; writes (and the tenant's view of `procedures/`) land in the tenant's overlay only.
+- **Cold path (first time).** No learned interface exists for this shape.
+  The agent reads `df.d.ts`, runs `datafetch apropos`, and composes the
+  workflow by hand: a `df.db.*` retrieval, then several `df.lib.*` primitives
+  stitched together, then `df.answer(...)`. The trajectory's `mode` is
+  `"novel"` and its `tier` is `4`. Cost panel renders this as the expensive
+  column.
+- **Warm path (next similar intent).** `apropos` surfaces a learned
+  interface (e.g. `rangeTableMetric`). The agent calls it as one line and
+  writes a tiny `answer.ts`. The trajectory's `mode` is `"interpreted"` and
+  its `tier` collapses to `2`. The server still records the nested calls the
+  learned interface made internally, so the audit story is preserved; the
+  agent just sees a simpler typed API.
 
-### Collection
+The pitch reduces to one claim: **datafetch does not virtualise the whole
+dataset; it virtualises the dataset interface, then improves that interface
+from accepted, evidence-backed work.**
 
-A single MongoDB collection inside the cluster. Exposed as `/datafetch/db/<coll>.ts`, a typed module synthesised on `readFile`.
+### The intent workspace is the unit of work
 
-### View
+Every intent gets its own workspace folder. That folder is bound to one
+session, one tenant, one dataset, and one intent string. It has its own
+`scripts/` (where the agent edits), its own `tmp/runs/` (exploratory
+output, append-only), its own `result/` (the auditable view), and its own
+`result/HEAD.json` (the **intent workspace head**). When the agent commits,
+the workspace's HEAD advances. The observer learns from a commit only if
+that commit IS the current head — superseded earlier commits are dropped as
+stale. This is what lets an agent iterate, refine, and recommit without
+poisoning the library with intermediate attempts.
 
-A curated query exposed at `/datafetch/views/<name>.ts`. Composes typed calls across one or more collections into a higher-level retrieval primitive. Authored, not synthesised.
+The workspace is intentionally a normal directory. The agent reads files
+with `cat`. Writes files with its editor. Symlinks make `db/` and `lib/`
+appear inside the workspace without copying. Bash and the editor are the
+agent's IDE.
 
-### Session
+### `lib/<tenant>/<name>.ts` is private to a tenant
 
-One agent run. Identified by a session id. Has a parent (the user / harness), a start time, an end time, a final-result payload, and a sequence of typed calls. Backed by AgentFS's CoW overlay so each session is branchable.
+The data plane has two namespaces.
 
-### Trajectory
+- `db/<mount>/...` is **shared** and **read-only**. One mount serves every
+  tenant. The adapter never writes back. The substrate is MongoDB Atlas; in
+  the workspace it shows up as `df.db.<ident>.findExact|search|findSimilar|hybrid`.
+- `lib/<tenantId>/<name>.ts` is **private** to one tenant. Crystallised
+  functions land here. Two tenants who solve identical questions over the
+  same data still get separate `lib/` overlays — the typed surface diverges
+  per tenant by construction. (`lib/__seed__/` is a reserved overlay for
+  seed primitives shared across all tenants; agents do not see it as a
+  tenant.)
 
-(See Primitives.) The ordered call sequence belonging to a session.
+The cross-tenant promotion story (one tenant's learned interface flowing to
+others) is design only. It is not shipped.
 
-### Procedure
+### The diagnostic story: client-visible vs server-side
 
-(See Primitives.) The endorsed, typed function in `procedures/`.
+When the agent calls `df.lib.rangeTableMetric(...)`, that is the
+client-visible call (depth 0). Inside the body, the function makes its own
+nested `df.db.finqaCases.findSimilar`, `df.lib.inferTableMathPlan`,
+`df.lib.executeTableMath` calls (depth 1+). The runtime records both layers.
+The trajectory preserves the full lineage. The agent's snippet stays small;
+the auditable evidence path stays complete. This separation is what makes
+"learned" feel like a typed API rather than a black-box prompt.
 
-### Endorsement
+### `df.answer({...})` is the commit primitive
 
-(See Primitives.) The binary user decision attached to a trajectory.
+Commit, in datafetch, is **not git**. `datafetch commit` writes the current
+auditable view of an intent: `result/answer.json`, `result/answer.md`,
+`result/lineage.json`, `result/validation.json`, a replay test, and an
+updated `result/HEAD.json`. Inside the snippet, the act of committing is
+the final `return df.answer({status, value, evidence, derivation, ...})`
+expression. The runtime validates it (status allowed, value present,
+evidence present, derivation visible, lineage non-empty, no zero-fallback)
+and only flags it `accepted` if all checks pass. Crystallisation only
+fires on accepted commits.
 
-### Round
+### Cold then warm: the loop, drawn
 
-One pass of the eval harness over the pre-registered task set on one baseline. Every round produces a row per task per baseline in the metric ledger.
+```
+intent
+  -> mounted workspace
+  -> visible TypeScript in scripts/answer.ts
+  -> committed df.answer(...) with passing validation
+  -> validated lineage in result/
+  -> observer crystallises lib/<tenant>/<name>.ts
+  -> next mount discovers it via apropos and reuses it
+```
 
-### Task
+The observer is fire-and-forget from the snippet runtime's perspective. It
+runs in the same process, but the snippet returns to the agent before the
+observer finishes. By the time the next `mount` happens, `df.d.ts` and
+`AGENTS.md` have already been regenerated with the new function visible.
 
-One question in the pre-registered eval set. Carries three labels: answer label (verdict, ranked list), evidence label (required sources), canonical pathway label (near-optimal path length, used to normalise T_n).
+### What this is not
 
-### Cluster (intent cluster)
-
-A group of related tasks. Five clusters in the demo eval set: 2 BIRD clusters (e.g., `bird-video-games-publishers`, `bird-formula-1-results`), 2 FinQA clusters (e.g., `finqa-revenue-growth`, `finqa-operating-margin`), 1 supply-chain cluster (`supply-chain-risk-assessment`). Plus 10 out-of-cluster controls. Distinct from "Atlas cluster"; context disambiguates. See `br/06-bird-finqa-corpus.md` for the corpus rationale that drives the cluster breakdown.
-
-### Baseline
-
-One of three system configurations on which the eval is run:
-- **Vanilla**: agentic RAG without cross-session memory (LangGraph + Atlas).
-- **Static-typed**: typed filesystem primitives, no procedure library.
-- **Ours**: typed filesystem + user-endorsed procedure library + budget worker.
-
-### Schema fingerprint
-
-(See Primitives.) The hash that pins a procedure to a collection's structural shape at the time of crystallisation.
+The system does not virtualise the dataset as a real filesystem (no NFS, no
+FUSE). It does not compile to Atlas pipelines yet (compiled tier is
+reserved). It does not do drift detection, cross-tenant promotion, library
+divergence metrics, or a human endorsement step. The MVP collapses
+"N >= 3 convergent trajectories" to N=1: every qualifying commit
+crystallises immediately, deduped only by shape hash. See
+`/tmp/kb-rewrite-brief.md` section 13 for the full deferred list.
 
 ---
 
-## States
+## Half 2: Glossary
 
-The lifecycle stages each entity moves through.
+Terms grouped by concept area; alphabetised within each group. Every
+glossary entry is one short paragraph. Where a term has a code home, the
+file is named.
 
-### Trajectory states
+### People and process
 
-| State | Meaning |
-|-------|---------|
-| `novel` | A snippet did not match any procedure; an agent run is starting. |
-| `in_progress` | The agent is mid-loop, typed calls are accumulating. |
-| `completed` | The agent returned a final result; awaiting user review. |
-| `endorsed` | User answered yes on the review prompt; trajectory is queued for crystallisation. |
-| `rejected` | User answered no; trajectory is preserved (for debugging / drift) but not promoted. |
-| `crystallised` | A procedure file was written; further work is on the procedure entity. |
+- **agent** — the bash-loop driver of the workflow. Today this is Claude
+  Code (or any tool with bash + a four-verb allowlist) authoring TypeScript
+  in `scripts/` and shelling out to `datafetch <verb>`. The agent never
+  holds LLM credentials — those live on the data plane.
+- **gate** — the predicate `shouldCrystallise()` in `src/observer/gate.ts`.
+  Decides whether a saved trajectory becomes a learned interface. Checks
+  phase, validation, mode, error state, ≥2 distinct calls, a `db.*` →
+  `lib.*` data-flow shape, and shape-hash novelty.
+- **observer** — the in-process worker in `src/observer/worker.ts` that
+  consumes saved trajectories and authors `lib/<tenant>/<name>.ts` files.
+  Wired from `src/snippet/runtime.ts` via the `onTrajectorySaved` hook.
+- **tenant** — a namespace owner. Tenants share `/db/<mount>/` but get a
+  private `/lib/<tenantId>/` overlay. Reserved tenant ids match
+  `^__\w+__$` (e.g. `__seed__`). Multi-tenancy in the MVP is namespace
+  isolation; auth-isolated multi-tenancy is roadmap.
 
-### Procedure states
+### Workspace
 
-| State | Meaning |
-|-------|---------|
-| `drafted` | File exists in `procedures/`, verifier has not run. |
-| `verified` | Verifier replayed the procedure against shadow inputs and matched. |
-| `promoted` | Verifier-pass plus published in the user-visible library; available for matching. |
-| `optimised` | Body has been replaced by a compiled pipeline; LLM no longer in the hot path. |
-| `drifted` | Schema fingerprint pin is stale; flagged in the library pane. |
-| `broken` | Drift was tested against the eval and the procedure failed; held out of matching until re-derived. |
+- **dataset** — synonym for "mount" in the user-facing CLI flag
+  (`--dataset finqa-2024`). What the agent thinks of as a published Atlas
+  database showing up under `db/`.
+- **intent** — the first sentence of a function's purpose, set in
+  `fn({intent})`. Also the user-supplied `--intent` flag describing the
+  task an agent has been given to solve. Used by `apropos`/`man` and by
+  the `df.d.ts` JSDoc.
+- **intent workspace** — a CWD-rooted folder created by
+  `datafetch mount --tenant --dataset --intent`. Has `.datafetch/workspace.json`,
+  `scripts/{scratch.ts,answer.ts,helpers.ts}`, `tmp/runs/`, `result/`,
+  symlinked `db/` and `lib/`, plus its own `df.d.ts`, `AGENTS.md`, and
+  `CLAUDE.md`. Bound to one session, one tenant, one dataset, one intent.
+  Materialised by `src/cli/workspace.ts`.
+- **intent workspace head** — the trajectory id currently pointed to by
+  `<workspace>/result/HEAD.json`. Only the head's commit can crystallise.
+  Older commits whose head has advanced are rejected as `stale`. See
+  `src/observer/workspaceHead.ts`.
+- **mount** — a registered dataset, identified by `mountId`. Built from a
+  `MountSource` (today only `atlasMount({uri, db})`). Lives under
+  `<baseDir>/mounts/<mountId>/` and is shared across all tenants. Surfaces
+  in the workspace as `df.db.<ident>`.
+- **narrative** — the markdown rendering of a session's plan/execute
+  artefacts produced by `datafetch session narrative`. Rendered by
+  `src/cli/sessionNarrative.ts`. A read-only debug/audit aid; not part of
+  the runtime path.
+- **session** — a (tenant, mountIds) binding with a unique `sessionId`.
+  Persisted at `<baseDir>/sessions/<id>.json`. The CLI's `active-session`
+  pointer file is a fallback resolution layer behind `--session` and
+  `DATAFETCH_SESSION`.
+- **workspace head** — synonym for "intent workspace head". The
+  authoritative pointer file is `<workspace>/result/HEAD.json`.
 
-### Schema states
+### Layout
 
-| State | Meaning |
-|-------|---------|
-| `stable` | Fingerprint matches what is pinned across all dependent procedures. |
-| `drifting` | A change-stream event has fired but fingerprint recompute is pending. |
-| `changed` | Fingerprint has changed; dependent procedures are flagged. |
+- **AGENTS.md / CLAUDE.md** — auto-generated workspace memory files. The
+  baseDir copy lives at `<baseDir>/AGENTS.md` and is regenerated by
+  `src/bootstrap/workspaceMemory.ts` after every connect, mount publish,
+  and observer write. Each intent workspace also gets its own copy at
+  mount time. `CLAUDE.md` is an alias of `AGENTS.md` (symlink or copy).
+- **db/** — mount-rooted, read-only. Inside the workspace it is a symlink
+  to `<baseDir>/mounts/<dataset>/`. Holds typed module files
+  (`<coll>.ts`), descriptors (`_descriptor.json`), samples
+  (`_samples.json`), and a per-collection `README.md`.
+- **df.d.ts** — auto-generated TypeScript declaration manifest at
+  `<baseDir>/df.d.ts`, copied into each workspace at mount time. The
+  Code-Mode-style typed surface for the agent. Groups library entries
+  into "Learned Interfaces" (frontmatter present) and "Primitives" (no
+  frontmatter). Regenerated by `src/server/manifest.ts`.
+- **lib/** — tenant-private, writable. Inside the workspace it is a
+  symlink to `<baseDir>/lib/<tenantId>/`. Holds learned interfaces and
+  hand-authored functions, plus `skills/<name>.md` sidecars for `agent`
+  bodies.
+- **result/** — the workspace's auditable view of the current accepted
+  commit. Holds `answer.json`, `answer.md`, `validation.json`,
+  `lineage.json`, `tests/replay.json`, `HEAD.json`, plus an append-only
+  `result/commits/NNN/` history.
+- **scripts/** — the agent's editable surface inside the workspace.
+  Materialised at mount time as `scratch.ts` (exploration), `answer.ts`
+  (final committable program), and `helpers.ts`.
+- **tmp/runs/** — exploratory output of `datafetch run`, append-only,
+  numbered (`NNN`). Each entry has `source.ts`, `result.json`,
+  `result.md`, `lineage.json`. Never crystallisable.
 
-### Budget states
+### Code surface
 
-| State | Meaning |
-|-------|---------|
-| `allocated` | Procedure was promoted; budget is reserved. |
-| `in_flight` | Optimisation worker is running. |
-| `spent` | Pay-out succeeded; procedure body has been swapped. |
-| `exhausted` | All planned pay-outs have been attempted; no further work scheduled. |
-| `rolled_back` | A pay-out failed verification post-swap; body restored to pre-pay-out state. |
+- **callshape** — the `TemplateStep.callShape` field captured by the
+  observer's template extractor. Records how the recorded `input` maps
+  back to positional arguments: one of `positional-query-limit`,
+  `positional-query-opts`, `positional-filter-limit`, `single-arg`. See
+  `src/observer/template.ts`.
+- **derived bindings** — input fields on a step's call whose value matches
+  an earlier call's output (or a sub-tree of it). Rendered in the
+  generated body as `out0`, `out0[0]`, `out0.field`. Internal to the
+  body; not exposed in the public input schema. See `src/observer/template.ts`.
+- **df.answer** — the commit primitive. `df.answer({status, value?,
+  evidence?, derivation?, coverage?, ...})` returns a sealed
+  `AnswerEnvelope` (branded with `Symbol.for("datafetch.answer")`).
+  Required for a `commit` phase trajectory to be considered crystallisable.
+  Validated by `validateAnswerEnvelope` in `src/snippet/answer.ts`.
+- **fn** — the factory that authors functions:
+  `fn({intent, examples, input, output, body})`. Defined in
+  `src/sdk/fn.ts`. Validates I/O via valibot, dispatches the body, returns
+  a `Result<O>`. Every learned interface and every seed primitive is an
+  `fn(...)` envelope.
+- **function** — a typed callable in `<baseDir>/lib/<tenant>/<name>.ts`,
+  authored via `fn({...})`. Has `intent`, `examples`, `input`, `output`,
+  and one body shape (`pure | llm | agent`). Distinct from "snippet": a
+  function declares schemas and intent; a snippet is a one-shot ad-hoc
+  composition.
+- **HEAD** — the workspace head pointer, `<workspace>/result/HEAD.json`.
+  See "intent workspace head".
+- **learned interface** — a `<baseDir>/lib/<tenant>/<name>.ts` file
+  authored by the observer from a qualifying trajectory. Carries a
+  `/* --- ... --- */` YAML frontmatter block (Claude Code skill format)
+  and an `@shape-hash:` provenance tag. The presence of the frontmatter
+  is what marks a file as a "tool" rather than a "primitive" in
+  `df.d.ts`.
+- **lineage** — the recorded call list for a trajectory, exposed in the
+  committed `result/lineage.json` and inside the trajectory record's
+  `calls[]`. Preserves both the client-visible top-level calls and the
+  nested calls made inside any learned interface.
+- **replay** — the deterministic re-execution test written to
+  `result/tests/replay.json` on commit. Pins the snippet's input/output
+  shape so a future change can be regression-tested against the accepted
+  answer.
+- **semantic name** — the post-commit-`6c0d78d` naming style for learned
+  interfaces (e.g. `rangeTableMetric`, `compareTableMetric`,
+  `ratioTableMetric`, `tableMetric`, `filingQuestion`). Replaces the old
+  `crystallise_<hash>_<topic>` style; legacy names are still recognised
+  for backwards compat. Picker in `src/observer/template.ts` (`pickTopic`).
+- **snippet** — a one-shot `npx tsx`-style TypeScript execution against a
+  session. Composes `df.*` calls. Recorded as a trajectory. Has no
+  declared schemas; the trajectory is its audit log. Distinct from
+  "function". Run by `src/snippet/runtime.ts`.
+- **validation** — automated answer-envelope check on commit. Gates:
+  `structuredAnswer`, `statusAllowed`, `valuePresent`, `evidencePresent`,
+  `derivationVisible`, `unsupportedHasReason`, `lineagePresent`,
+  `noDefaultZeroFallback`, `hiddenManipulationDetected`. Implementation
+  in `src/snippet/answer.ts`. `accepted = blockers.length === 0`.
 
-### Session states
+### Lifecycle
 
-| State | Meaning |
-|-------|---------|
-| `active` | Agent loop is running. |
-| `awaiting_review` | Trajectory complete, user has not yet endorsed or rejected. |
-| `closed` | Endorsement decision recorded; trajectory either crystallised or archived. |
+- **commit** — the datafetch-sense commit, not git. The act of running
+  `datafetch commit scripts/answer.ts`, which writes the auditable view
+  to `result/`, runs validation, advances `result/HEAD.json` if accepted,
+  and fires the observer. Implementation in `src/cli/workspace.ts` and
+  `src/snippet/runtime.ts` under `phase:"commit"`.
+- **crystallisation** — the observer's act of writing
+  `<baseDir>/lib/<tenant>/<name>.ts` from a qualifying trajectory.
+  Implemented in `src/observer/worker.ts` and `src/observer/author.ts`.
+  In the MVP, crystallisation is N=1: any single trajectory passing the
+  gate produces a function. Shape-hash dedup is the only convergence gate.
+- **interpreted (mode)** — `mode:"interpreted"`, typically `tier:2`. A
+  successful run that called at least one learned interface. The warm
+  path's mode.
+- **llm-backed (mode)** — `mode:"llm-backed"`, `tier:3`. The per-call
+  mode for an `llm`/`agent` body. Set inside the `fn()` factory's
+  default for non-pure bodies. Aggregates upward into the snippet's
+  cost block.
+- **mode** — the `Result.mode` field. One of `"novel" | "interpreted" |
+  "llm-backed" | "cache" | "compiled"`. Disjoint from `errored`. See
+  `src/sdk/result.ts`.
+- **novel (mode)** — `mode:"novel"`, `tier:4`. A successful first-time
+  ad-hoc composition with no learned interface called. Treated as a
+  success state, not an error state. The cold path's mode.
+- **tier** — a 0-4 scalar in the `Cost` block. Max-observed across nested
+  calls. **Tier 4** = full ReAct composition (novel). **Tier 2** =
+  substrate roundtrip or pure interpreted body. **Tier 3** = LLM dispatch
+  through Flue (`llm({...})` or `agent({...})`). **Tier 1** and **tier 0**
+  are reserved (compiled and cache-hit respectively); no production code
+  emits them today.
+- **cache (mode) / compiled (mode)** — `mode:"cache" | "compiled"`.
+  Reserved for future tiers (1 and 0). Not emitted today. Aspirational.
+
+### External
+
+- **Anthropic SDK** — `@anthropic-ai/sdk`, pulled in as a dep but not
+  imported directly from `src/`. Flue uses it internally when the
+  resolved provider is `anthropic`. Credentials are read on the data
+  plane only.
+- **Atlas mount** — a `MountAdapter` over MongoDB Atlas
+  (`src/adapter/atlas/AtlasMountAdapter.ts`). Capabilities reported as
+  `{vector:false, lex:true, stream:true, compile:true}`, but only `lex`
+  is actually exercised — `compile` (the aggregation-pipeline path) is
+  reserved.
+- **Claude Code skill** — the `skills/datafetch/SKILL.md` bundle, copied
+  to `~/.claude/skills/datafetch/SKILL.md` by `datafetch install-skill`.
+  Tells Claude Code to invoke datafetch on any datafetch / FinQA /
+  mounted-database / `/db/` / `/lib/` query, and explains the three-tier
+  reuse hierarchy (past trajectories → learned interfaces → seed
+  primitives).
+- **Flue** — used as a library, not a service. `FlueSessionPool` in
+  `src/flue/session.ts` constructs a per-tenant `FlueAgent` via
+  `@flue/sdk/internal`. Both `llm({...})` and `agent({skill})` bodies
+  route through the `FlueBodyDispatcher` in `src/flue/dispatcher.ts`.
+  The data plane is the only place LLM credentials are read.
 
 ---
 
-## Relationships
+## When this doc disagrees with code
 
-How entities connect, depend on, or transform into each other.
-
-### Endorsement -> Procedure
-
-One endorsed trajectory produces exactly one procedure (1:1). Rejection produces zero. The function `endorsement -> procedure` is the crystallisation pipeline.
-
-### Procedure -> Trajectory
-
-Each procedure preserves a back-reference to the trajectory it was crystallised from (1:1). The trajectory is the procedure's audit trail.
-
-### Procedure -> Schema fingerprint
-
-A procedure pins one or more schema fingerprints (n:1 per fingerprint, 1:n per procedure). The pins are the drift-detection key.
-
-### Schema change -> Procedure flag
-
-One schema change fan-outs to all procedures whose pin matches the *old* fingerprint (1:n). The walk uses ts-morph against `procedures/`.
-
-### Optimisation budget -> Procedure
-
-Each procedure has at most one active budget allocation (1:1). The budget is spent on at most one pay-out at a time.
-
-### Match -> deterministic execution
-
-A match between a user snippet and a procedure routes execution away from the agent (1:1). No new trajectory is recorded as `novel`; instead, a determined call is logged with `mode: "deterministic"`.
-
-### Task -> intent cluster
-
-Each task belongs to exactly one intent cluster (n:1). Out-of-cluster controls form a synthetic cluster used as a flat-curve baseline.
-
-### Round -> task -> baseline
-
-Each round generates one metric row per (task, baseline) pair (1:n:n). The metric ledger is the source for the cluster heatmap, the procedure library pane, and the divergence chart.
-
-### Trajectory -> tool_calls
-
-Each trajectory is a contiguous range of rows in `tool_calls`, joined by session id, ordered by `started_at` (1:n).
-
-### Tenant -> Procedure (1:n)
-
-Each procedure belongs to exactly one tenant. Two procedures with identical TypeScript bodies under different tenants are still distinct procedures with separate fingerprint pins, separate budget allocations, and separate trajectory back-references. The `db/` base is shared; the `procedures/` crystal lattice is tenant-private.
-
-### Tenant -> Trajectory (1:n)
-
-Each trajectory belongs to exactly one tenant via `tool_calls.tenant_id`. A session inherits its tenant from the agent harness configuration. Cross-tenant trajectory access is structurally forbidden at the audit-log layer.
-
----
-
-## Metrics
-
-The four convergence axes plus the cost and correctness controls.
-
-### T_n, trajectory length
-
-Number of typed calls in a trajectory, normalised by the canonical-pathway label for the task. Lower is better. Within-cluster T_n should fall sharply from round 0 to round 5; out-of-cluster T_n should stay flat.
-
-### D_n, determinism rate
-
-Fraction of trajectory steps that ran in deterministic mode (matched to a procedure) versus partial mode (procedure suggested a path but agent extended it) versus escalated (full LLM reasoning required). Higher is better. Should rise across rounds within-cluster.
-
-### R_n, reuse rate
-
-Fraction of round-n procedures actually called in round n+1. The first-class metric that inoculates against *Library Learning Doesn't*. By construction should be high (every procedure was endorsed before promotion).
-
-### I_n, information rate per action
-
-On a needle-in-haystack probe inside the eval set: the fraction of necessary evidence sources retrieved per typed call. Higher is better.
-
-### L_n, library divergence
-
-Jaccard distance between two tenants' procedure signature sets at round n. Higher means more tenant-specific structure has emerged from the same data plane. Computed across at least two simulated tenants in the demo eval, each with its own `procedures/` overlay and intent priors. The metric inoculates against the trivial reading "all tenants converge to the same library" and makes Dimension 1 (interface emergence across tenants) measurable rather than asserted.
-
-L_n only applies to "ours"; the vanilla and static-typed baselines do not have per-tenant procedure libraries, so L_n is undefined or zero for them. This is itself a feature of the comparison: the divergence chart shows a property the baselines structurally lack.
-
-### Token cost
-
-Cumulative input plus output tokens consumed by the agent per task. Lower is better. Falls to ~zero when D_n approaches 1 (deterministic mode skips the LLM).
-
-### Wall-clock time
-
-End-to-end seconds per task. Lower is better. Falls dramatically when the optimisation worker compiles a procedure to a single aggregation pipeline.
-
-### Correctness
-
-Pass / fail vs the answer label.
-
-### Evidence completeness
-
-Fraction of required evidence sources (per the evidence label) present in the final synthesis.
-
-### Aggregations
-
-Every metric above is reported three ways:
-- **Within-cluster**: tasks in the same intent cluster as a previously-seen task. Steep drop expected.
-- **Across-cluster**: tasks in a different cluster but sharing sub-procedures. Gentle drop expected (indirect transfer).
-- **Out-of-cluster**: 10 control tasks unrelated to the security domain. Flat expected.
-
-The three-curve chart on one axis is the measurable proof of value.
+The brief at `/tmp/kb-rewrite-brief.md` is the source of truth on what
+ships. If a term here drifts from a file:line in the brief, fix this doc.
+Specifically: anything labelled "aspirational", "reserved", or "roadmap"
+above is design-only — see brief section 13 for the deferred list.

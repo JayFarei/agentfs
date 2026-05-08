@@ -1,736 +1,1154 @@
 ---
-title: "MongoDB-AE-Hackathon, Product Design"
+title: "datafetch — Product Design"
 type: evergreen
 tags: [magic-docs]
-updated: 2026-05-01
-hackathon_theme: "Adaptive Retrieval"
-working_codename: "AtlasFS"
+updated: 2026-05-07
+working_codename: "datafetch"
 ---
 
 # Product Design
 
-The most detailed root document. Describes the product as it exists today (or, in this hackathon's case, the product we are building over the May 2-7 window): architecture, components, data flow, security model, API surface, and key implementation decisions. The specific "how" rather than the aspirational "what."
-
----
-
-## What It Is
-
-A code-mode adaptive retrieval system that **crystallises query shape from agent usage, per-tenant, over a polymorphic document store**:
-
-- Any MongoDB Atlas cluster is exposed at `/datafetch/` as a virtual module surface inside the agent sandbox (Cloudflare Worker + `@cloudflare/sandbox`).
-- Each collection appears as a typed TypeScript module synthesised lazily on `read`, with polymorphic shapes lifted into `oneOf`-style discriminated unions and presence-frequency metadata in JSDoc.
-- For novel intents, hand-authored hooks at `/datafetch/hooks/<domain>/<intent>.ts` scaffold the agent's first move with a domain-aware suggested chain shape (relevant collections, parameter interface, derivation sketch), bridging the gap between an over-broad bootstrap and a not-yet-crystallised procedure.
-- A code-mode agent (Pi) writes TypeScript snippets that import from these typed paths.
-- An audit log captures every typed call (`tool_calls`, provided by AgentFS).
-- The user reviews trajectories on completion and endorses successful ones.
-- Endorsed trajectories crystallise into TypeScript files in `procedures/`, **scoped per-tenant** so the same Atlas cluster grows different procedure libraries for different tenants.
-- A budget worker compiles each promoted procedure to a single Atlas aggregation pipeline so the LLM is no longer in the hot path on the next call.
-- A pre-registered intent-clustered eval measures **two orthogonal axes of adaptation**: cost convergence within a tenant (T_n, D_n, R_n, I_n) and library divergence across tenants (L_n), against vanilla agentic RAG and static-typed baselines.
-
-The substantive insight: schema is **never imposed** on the data; it is **induced** at three increasingly stable tiers (sampled inferred type at `readFile`, endorsed query trajectory at crystallisation, compiled aggregation pipeline at budget pay-out). MongoDB collections are typically polymorphic across documents but stable across query intents once an application matures. AtlasFS's job is to crystallise the *query shape*, not the *document shape*, and to do it once per tenant. In one phrase: **embeddings discover affordances; code exercises them; procedures name them.** See `kb/mission.md` for the why and `kb/br/02` for the structured-vs-unstructured-fit research.
-
-What is being built during the 48-hour hackathon is the **MongoFS backend**, the **procedure crystallisation pipeline**, the **schema fingerprint and drift workflow**, the **eval harness with three baselines**, the **cluster heatmap and procedure library UIs**, and the **optimisation-budget worker**. Everything else is a configured external service.
-
----
-
-## Core Design Principles
-
-Technical, distinct from the product principles in `mission.md`.
-
-1. **Schema is induced at three tiers, never imposed; the first tier is mechanical, the next two are emergent.** Structure surfaces in three forms with different mechanisms: (a) **bootstrap** at `MongoFS.readFile` time, a deterministic function of sampled documents producing a generic typed surface with `oneOf` discriminated unions, presence-frequency JSDoc, and a fixed set of retrieval primitives, refreshed on schema fingerprint change; (b) **endorsed query trajectory** at crystallisation, settled per-tenant in `procedures/<tenant_id>/<name>.ts`, narrows the bootstrap to specific polymorphic variants and specific primitive compositions; (c) **compiled aggregation pipeline** at budget pay-out, fully stable, LLM out of hot path. The bootstrap (a) is shared across tenants and answers "what *can* the agent do"; the emergent layer (b) is per-tenant and answers "what *works* for this tenant"; the compiled layer (c) answers "what is the *cheapest* way." No tier imposes structure on the data; every tier induces it from data plus usage. See "Bootstrap to Emergence" below for the chicken-and-egg resolution.
-
-2. **Schema fingerprint as a TypeScript constant.** Every generated module exports a `SCHEMA_VERSION` constant set to a sha256 of the inferred schema. Procedures pin themselves to the fingerprint at crystallisation time. Drift is mechanical to detect: change-stream event, recompute fingerprint, walk `procedures/` with ts-morph, flag every procedure whose pin is stale.
-
-3. **Trajectory is the procedure.** Because the typed filesystem unifies discovery, access, and composition, the trajectory log is already valid TypeScript. The crystallisation step has no "translate trajectory to procedure" phase. It is `git add` plus `git commit`.
-
-4. **Bindings, not network, inside the agent sandbox.** The agent gets typed filesystem paths, never API keys. Prompt-injection key exfiltration is structurally impossible.
-
-5. **Read-only base, writable delta.** MongoFS exposes the cluster as read-only virtual modules. `procedures/` and `scratch/` live in the tenant Durable Object's SQLite store. Branching is `state.storage` snapshot + replay into a sibling DO.
-
-6. **Procedure correctness is verifier-checked, not LLM-checked.** Before a trajectory is allowed to become a procedure, the system replays the procedure's final synthesised typed call against a held-out shadow input and compares the result to the trajectory's recorded result. Crystallisation fails closed.
-
-7. **One eval, many seeds, pre-registered.** The dataset, the labels, and the protocol are committed before any baseline runs. Variance bands on every chart.
-
-8. **Per-tenant interface emergence is a first-class property.** Procedure libraries, the AgentFS overlay, and the trajectory namespace are scoped per *tenant*, not per cluster. The same Atlas cluster can crystallise into different libraries for different tenants. Library divergence (L_n) is a first-class metric on the eval ledger, alongside the within-tenant convergence axes.
-
----
-
-## Two Dimensions of Adaptation
-
-The hackathon theme is *Adaptive Retrieval*. AtlasFS adapts in two orthogonal dimensions, both visible in the demo and measurable in the eval. This section is the load-bearing pitch surface; the rest of the architecture exists to support it.
-
-### Dimension 1, across tenants (interface emergence, "library divergence")
-
-Same Atlas cluster, same data plane, **different `procedures/` overlays per tenant**. Each tenant's agent trajectories produce a different procedure library because each tenant's *intent set* differs. A security analyst's library converges to compliance-flavoured procedures (`is_safe_to_install(pkg)`, `audit_dependency_chain(repo)`); an ML researcher's library converges to discovery-flavoured procedures (`find_actively_maintained_alternatives(pkg)`, `cluster_by_maintainer_velocity()`); a compliance officer's library converges to audit-flavoured procedures (`who_introduced_dependency(pkg, since)`, `evidence_for_soc2_control(id)`). Same `db/packages.ts`, same Voyage embeddings, fundamentally different typed surfaces.
-
-Implementation: per-tenant CoW overlays in AgentFS isolate the procedure libraries and scratch state; per-tenant trajectory namespaces (a `tenant_id` column on `tool_calls`) isolate the audit trail; per-tenant procedure metadata isolates fingerprint pins and budget allocations. The `db/` and `views/` read-only base is shared.
-
-Demo artefact: a two-pane file-tree view showing two simulated tenants' `procedures/` directories diverging across rounds. The same `db/packages.ts` underlies both; the procedure files do not overlap.
-
-Metric: **L_n** (library divergence) = Jaccard distance between procedure signature sets across tenants at round n. Rises monotonically across rounds. For the demo, computed across two simulated tenants with different intent priors over the eval set.
-
-### Dimension 2, within a tenant over time (cost convergence, "compile path")
-
-For a single tenant, a novel intent enters **expensive**: agent ReAct loop over typed primitives, multi-call, LLM in the hot path, tokens spent. A successful trajectory is endorsed. Crystallisation produces a deterministic typed procedure. Optimisation budget compiles the procedure to a single Atlas aggregation pipeline. The same intent on subsequent calls runs **cheap** at deterministic-software speed with no LLM invocation.
-
-Implementation: existing crystallisation pipeline + budget worker (Plans 005 and 009).
-
-Demo artefact: a single intent re-runs three times. Round 0 trajectory is multi-step, mostly red. Round 3 trajectory is one deterministic call, all green. The Atlas pipeline the procedure compiled to is shown in a side panel.
-
-Metrics: **T_n** (trajectory length, lower is better), **D_n** (determinism rate, higher is better), **R_n** (reuse rate, high by construction under user endorsement), **I_n** (information rate per action), token cost, wall-clock. All converge over rounds within-cluster.
-
-### The 2D divergence chart
-
-The headline chart of the eval has two axes:
-
-- X axis: round number (Dimension 2 unfolds in time per tenant)
-- Y axis: cost (T_n or wall-clock; lower is better)
-- Multiple lines per tenant: per-tenant trajectories on the same task set (Dimension 1 visible as line-separation across tenants)
-- Faceted by baseline: vanilla / static-typed / ours
-
-A single chart shows both dimensions simultaneously. Cost falls within each tenant (Dimension 2). Per-tenant lines fan out (Dimension 1, only visible in "ours"; the baselines do not adapt per-tenant). The vanilla and static-typed baselines exhibit neither dimension; they are the flat-curve reference.
-
-### Why two dimensions matter
-
-A single dimension of adaptation (cost convergence within a tenant) is the obvious story; many adaptive-retrieval systems have it in some form. The second dimension (interface emergence across tenants from the same data) is the under-told story, and it is exactly what makes the document-store substrate load-bearing. Per-tenant emergent interfaces are infeasible on a relational substrate without per-tenant schemas (heavy, irreversible) or per-tenant ORM layers (manual). On Atlas, with BSON staying polymorphic and the typed view regenerated per-tenant from trajectories, it falls out for free. The two-axis framing is therefore not just a more impressive pitch; it is a structural argument for why this specific substrate is the right one.
-
----
-
-## Bootstrap to Emergence
-
-A subtle question the design must answer: **how do you bootstrap a typed interface for agentic structure-finding when the *purpose* of the agent's exploration is to find structure?** The naive reading is paradoxical. The design answer is that the bootstrap and the emergent layer do *different things*, and the chicken-and-egg dissolves once they are distinguished. This section makes the distinction explicit and walks through the four mechanical steps that turn an unmounted Atlas cluster into an explorable typed surface.
-
-### The three layers, side by side
-
-| Layer | Question answered | Mechanism | Output | Audience |
-|-------|-------------------|-----------|--------|----------|
-| **Bootstrap** | What *can* the agent do on this collection? | Mechanical sampling + inference; deterministic | Generic typed module: `oneOf` unions, presence-frequency JSDoc, fixed retrieval primitives | Agent on novel intents |
-| **Emergent** | What *works* for this tenant's intents? | Trajectory crystallisation, user-endorsed | Tenant-specific procedure: pinned polymorphic variant, specific primitive composition, specific weights/filters | Agent on repeating intents |
-| **Compiled** | What is the *cheapest* way to execute this? | Budget worker, compile-to-pipeline, verifier-checked | Single Atlas aggregation pipeline replacing the procedure body | Atlas runtime, no agent |
-
-The bootstrap layer is *shared* across tenants on the same cluster because the data is shared and the sampling is deterministic. The emergent and compiled layers are *per-tenant* because each tenant's intents drive different trajectories. This split is what makes Dimension 1 (interface emergence across tenants) observable: bootstrap is the control, the rest is the variable.
-
-### The four-layer bootstrap mechanism
-
-AtlasFS produces a usable typed surface from a previously-unmounted Atlas cluster in four steps. None of these steps are "emergent" in the trajectory-learning sense; all are deterministic functions of the data plus a sampling budget. The agent is not yet in the loop.
-
-#### Step 1, adaptive sampling and schema inference
-
-On the first `readFile("/db/<coll>.ts")`, MongoFS samples N documents (N adapts based on observed field-presence variance: default 100, scaling to 1000 for high-variance collections), runs `mongodb-schema` over them, and emits a TypeScript interface. Per-field JSDoc carries presence-frequency metadata ("present in 30% of sampled docs"), so the agent reading the generated module can reason about partiality explicitly. The samples themselves are cached at `_samples.json` for direct inspection.
-
-The sample-bias risk is real: `mongodb-schema`'s default 100-document sample can miss rare fields in collections of millions, per [the Compass Sampling docs](https://www.mongodb.com/docs/compass/current/sampling/). Adaptive sampling addresses this by widening N when the first pass detects high field-presence variance. The presence-frequency annotations make any remaining bias visible to the agent rather than hiding it.
-
-#### Step 2, polymorphism lifted into the type system
-
-When `mongodb-schema` reports type variance on a field, MongoFS lifts the variance into a `oneOf`-style discriminated union if a discriminator field is detectable (heuristics: a field whose value space is small and whose presence is universal, e.g., `kind`, `type`, `_t`). When no discriminator is detectable, MongoFS emits a wide union with a JSDoc comment flagging the polymorphism. The agent sees the polymorphism explicitly; it never has to guess.
-
-This is the technique [`product-design.md`](./product-design.md) already relies on for the supply-chain corpus: `entities.ts` exposes a `Entity = NpmPackage | Advisory | DependentSnapshot` discriminated union keyed on a `kind` field, and the agent pattern-matches on `kind` to access shape-specific fields. The MongoDB [Polymorphic Schema Pattern docs](https://www.mongodb.com/docs/manual/data-modeling/design-patterns/polymorphic-data/polymorphic-schema-pattern/) plus [Specify Validation for Polymorphic Collections](https://www.mongodb.com/docs/manual/core/schema-validation/specify-validation-polymorphic-collections/) sanction this pattern at the database layer; AtlasFS lifts it into TypeScript.
-
-#### Step 3, schema fingerprint pinned as a constant
-
-The synthesised module exports `SCHEMA_VERSION = "sha256:..."`. Procedures crystallised at tier 2 pin this fingerprint as an import-time constant. A Change Stream listener watches the underlying collection (per `kb/br/02`, Change Streams provide field-level `updatedFields` and `removedFields` plus pre-and-post images, GA since MongoDB 6.0); on a structural change, MongoFS recomputes the fingerprint and invalidates the cached typed module. Procedures whose pin no longer matches are flagged for re-derivation by the drift workflow (Plan 008), surfaced in the library pane as yellow or red badges.
-
-#### Step 4, fixed retrieval primitives exposed alongside the type
-
-Every synthesised module exports the same four-method interface: `findExact`, `findSimilar` (vector via Voyage), `search` (BM25 via `$search`), `hybrid` (`$rankFusion` weighted across vector and lexical). These primitives are not *discovered*; they are *fixed* across all collections. What the agent discovers is *which primitive works for which intent* and *with which weights*; that discovery is what crystallises into procedures.
-
-Fixing the primitives at four is a deliberate constraint. A wider primitive surface (graph traversal via `$graphLookup`, faceting via `$facet`, union-with via `$unionWith`) would push more decision-making onto the bootstrap and away from the trajectory layer. Keeping the bootstrap narrow forces the trajectory layer to do the composing, which is exactly the behaviour we want to measure. Non-retrieval primitives (disambiguation, label-mapping, figure-extraction) live in hand-authored sibling modules (see "Primitive modules" below); they extend the typed surface without enlarging the bootstrap-synthesis surface.
-
-### Bootstrap is scaffolding, not the answer
-
-The bootstrap surface is intentionally **over-typed and under-useful**. It exposes too many methods (every collection has all four primitives, regardless of whether all four make sense), too many polymorphic shapes (the discriminated union covers all observed variants, including the ones the agent will never need for the current tenant), and too many access patterns (the agent can call any method on any field). This is by design. The bootstrap's job is to give the agent enough scaffolding to start exploring; it is not to *be* the useful interface.
-
-The procedure library is where structure emerges. Each crystallised procedure narrows the bootstrap surface in three ways:
-
-1. **Polymorphism narrowed.** The procedure pins one specific variant of the `oneOf` union (e.g., `kind === "advisory"`), not the full union.
-
-2. **Primitive composition selected.** The procedure invokes a specific composition, e.g., `hybrid` with `weights: { vec: 0.7, lex: 0.3 }` followed by `rerank-2.5`, not the generic four-primitive surface.
-
-3. **Filters and projections fixed.** The procedure pins a specific filter (e.g., `severity: { $gte: "high" }`) and a specific projection (e.g., `{ id: 1, summary: 1, mitigation: 1 }`).
-
-The agent's trajectory is the discovery process; the procedure file is the discovery outcome.
-
-### Hooks, hand-crafted scaffolds for novel intents
-
-The bootstrap is generic and the emergent procedure does not yet exist; the gap between them is filled by **hooks**. A hook is a hand-authored TypeScript file at `/datafetch/hooks/<domain>/<intent>.ts` that captures a domain-aware suggested chain shape: which collections matter, which fields are evidence sources, which retrieval primitives are likely to compose well, and a step-by-step derivation sketch in JSDoc.
-
-Hooks are demo-time artefacts, not a derivation tier. We hand-author ~10 to 15 for the Round 1 corpus (FinQA financial computations, supply-chain safety queries) and load them as files alongside the typed collections. The agent's first action on a novel intent is to look for a relevant hook before falling back to raw collection exploration.
-
-Example, for the FinQA lease-obligation share intent:
-
-```typescript
-// /datafetch/hooks/finqa/lease_obligation_share.ts
-
-/**
- * Compute what share of total contractual or lease obligations is due
- * in a selected target period.
- *
- * Suggested chain:
- *   1. find filing by company + filingYear in `finqa_cases`
- *   2. locate the obligation table on the filing
- *   3. select the target-period row + total row
- *   4. sum relevant columns on each row
- *   5. divide numerator by denominator
- *
- * Evidence: cite cells used in numerator and denominator.
- */
-export interface LeaseObligationShareIntent {
-  company: string;
-  filingYear: number;
-  targetPeriod: string;
-  obligationTypes: string[];
-}
+The detailed engineering view. The reader has already absorbed `kb/elevator.md`,
+`kb/mission.md`, and `kb/mental-model.md`; this doc says how every piece is
+wired in shipped code, what the contracts are, what files land where, and
+what is reserved for later. Vocabulary (intent workspace, learned interface,
+shape hash, novel/interpreted, tier, gate, crystallisation) is used as
+defined in the mental model — read that first if any term feels unmoored.
+
+The through-line:
+
+```
+intent
+  → mounted workspace
+  → visible TypeScript
+  → committed df.answer(...)
+  → validated lineage
+  → learned lib function
+  → future mount discovers and reuses it
 ```
 
-Hooks differ from procedures in three ways: they are hand-authored, not trajectory-derived; they are shared across tenants, not tenant-specific; they describe a chain shape, not a chain implementation. They are deliberately incomplete; the agent fills in the actual code-mode derivation.
+Every section below describes one beat in that arc, or a piece of plumbing
+that exists to make a beat work. The doc closes with a brief, pointer-only
+summary of what is reserved (compiled tier, vector retrieval, drift,
+endorsement) so the reader doesn't conflate "designed" with "shipped". The
+roadmap doc owns the schedule on those.
 
-After endorsement, the agent's trajectory crystallises into a tenant-specific procedure that supersedes the hook for that tenant on that intent. The hook remains available for other tenants who have not yet crystallised the same intent. This makes hooks a starter kit for novel intents, not a replacement for the emergent layer.
+---
 
-Post-hackathon, hook inference from collection schemas plus sampled queries is a research problem worth pursuing. For Round 1, hand-authored is the right answer.
+## 1. The intent workspace
 
-### Primitive modules, hand-authored typed primitives with implementations
+The intent workspace is the load-bearing primitive. It is a CWD-rooted
+directory created by `datafetch mount` that pins one tenant, one dataset,
+and one human-language intent. The agent works inside it. The data plane
+runs outside it. Everything the agent sees is a real file on disk (or a
+symlink into the global library); everything the agent writes is also a
+real file. The "workspace" is the unit at which intents become
+executable, executable becomes auditable, and auditable becomes reusable.
 
-Hooks describe a chain *shape* with no implementation. Many useful chain *steps* — disambiguating which filing a question targets, mapping a natural-language line-item label to a canonical row key, locating a numeric cell behind an underspecified phrase — are not retrievals over a collection. Their implementations may be stochastic (a Flue sub-agent invocation, a small classifier) or deterministic (a lookup table, a regex), and they evolve as we observe traffic. We expose these as **hand-authored primitive modules** under `/datafetch/db/<utility>.ts`, sibling to the synthesised collection modules; from the agent's view they are typed primitives like any other (signature, JSDoc, return-value schema), and the host-side matcher (Decision #18) finds them by the same embedding-against-JSDoc mechanism it uses for collection primitives. Example sibling to `db/finqa_cases.ts`:
+### 1.1 The canonical example, end-to-end
 
-```typescript
-// /datafetch/db/finqa_resolve.ts
-export const finqa_resolve: {
-  /** Pick the most likely target filing given question + candidates + priors. */
-  pickFiling(args: { question: string; candidates: Filing[]; priorTickers?: string[] }): Promise<Filing | null>;
-  /** Map a natural-language line-item reference to the canonical row label. */
-  mapRowLabel(args: { target: string; availableLabels: string[] }): Promise<string | null>;
+The flow: mount an intent, walk the cold path, commit an auditable
+answer, let the observer crystallise a learned interface, mount a
+second similar intent, watch the warm path collapse the work.
+
+**Step 1 — mount the intent.**
+
+```sh
+datafetch mount --tenant acme --dataset finqa \
+  --intent "What is the range of chemicals revenue between 2014 and 2016?"
+cd ./finqa-range-chemicals
+```
+
+`datafetch mount` (`src/cli/workspace.ts:80`) posts to `/v1/connect`
+to create a session and materialises the workspace folder. The folder
+name is slugged from dataset+intent. The directory layout is in §13.2;
+key contents at-a-glance: `AGENTS.md` + `CLAUDE.md` (workspace memory),
+`df.d.ts` (typed `df.*` surface), `.datafetch/workspace.json` (the
+workspace pin: sessionId, tenantId, mountIds, dataset, intent, baseDir,
+serverUrl, createdAt), `db/` (symlink to `<baseDir>/mounts/<dataset>/`),
+`lib/` (symlink to `<baseDir>/lib/<tenant>/`), `scripts/scratch.ts`,
+`scripts/answer.ts`, `tmp/runs/`, `result/`. The workspace is bound to
+one session for its lifetime.
+
+**Step 2 — orient.** The agent reads workspace memory and probes the library:
+
+```sh
+cat AGENTS.md
+cat df.d.ts
+datafetch apropos "range chemicals revenue 2014 2016"
+```
+
+`AGENTS.md` is auto-generated by `src/bootstrap/workspaceMemory.ts`
+and carries a `<!-- datafetch:generated workspace-memory -->` marker
+for idempotent rewrite. It enumerates mounted datasets, the tenant's
+available functions, and the verb surface.
+
+`df.d.ts` is the typed-namespace pattern (Cloudflare "Code Mode": typed
+namespace > tool catalog), regenerated on every `/v1/connect` and on
+every observer authoring (`src/server/manifest.ts`). It groups library
+entries into **Learned Interfaces** (frontmatter present) and
+**Primitives** (no frontmatter); each entry carries the `intent` as
+JSDoc plus an `@example` from `examples[0].input`.
+
+`apropos` is a five-bucket BM25-ish scorer
+(`src/discovery/librarySearch.ts:85`) over `lib/<tenant>` + `lib/__seed__`.
+Tools (frontmatter present) outrank primitives.
+
+**Step 3 — cold path.** No learned interface yet, so the agent writes
+the missing logic in `scripts/answer.ts`:
+
+```ts
+const candidates = await df.db.finqaCases.findSimilar(
+  "range chemicals revenue 2014 2016", 10);
+const plan = await df.lib.inferTableMathPlan({ question, filing: candidates[0] });
+const result = await df.lib.executeTableMath({ filing: candidates[0], plan: plan.value });
+return df.answer({
+  status: "answered",
+  value: result.value.roundedAnswer,
+  evidence: result.value.evidence,
+  coverage: { years: ["2014", "2016"], metric: "chemicals revenue" },
+  derivation: { operation: "range", via: ["findSimilar", "inferTableMathPlan", "executeTableMath"] },
+});
+```
+
+`datafetch commit scripts/answer.ts` runs it. **"Commit" means "this
+is the final auditable answer for this intent," not a git commit.**
+The data plane runs the script through the snippet runtime, records
+every `df.*` call as a trajectory, validates the returned
+`df.answer(...)` envelope, and writes the `result/` view: `source.ts`,
+`answer.json`, `answer.md`, `validation.json`, `lineage.json`,
+`HEAD.json`, `tests/replay.json`. `result/commits/NNN/` carries the
+append-only history of every commit attempt; the top-level `result/`
+is overwritten with the most-recent accepted commit; `HEAD.json` is the
+authoritative pointer (see §4.6).
+
+**Step 4 — the observer crystallises.** The snippet runtime fires
+`onTrajectorySaved(trajectoryId)`. The observer reads the trajectory,
+runs the gate, and — if the trajectory is the current workspace head
+and qualifies — writes `<baseDir>/lib/acme/rangeTableMetric.ts`. The
+file is a typed `fn({...})` with YAML frontmatter, `@shape-hash:`
+metadata, and a body that re-walks the recorded call sequence as a
+parameterised composition.
+
+**Step 5 — the warm path.** A second mount, similar intent:
+
+```sh
+datafetch mount --tenant acme --dataset finqa \
+  --intent "What is the range of coal revenue between 2014 and 2016?"
+cd ./finqa-range-coal
+datafetch apropos "range coal revenue 2014 2016"
+```
+
+`apropos` now surfaces `rangeTableMetric` at the top — authored seconds
+ago for this tenant. The agent writes the smaller final program:
+
+```ts
+const query = "What is the range of coal revenue between 2014 and 2016?";
+const result = await df.lib.rangeTableMetric({ query, limit: 10 });
+return df.answer({
+  status: "answered",
+  value: result.value.roundedAnswer,
+  evidence: result.value.evidence,
+  coverage: { target: "coal revenue", years: ["2014", "2016"] },
+  derivation: { interface: "rangeTableMetric", query },
+});
+```
+
+`datafetch commit scripts/answer.ts`. The same answer envelope shape
+commits, but the trajectory now has one client-visible top-level call —
+`lib.rangeTableMetric` — instead of three. The runtime tags the mode
+`"interpreted"` and the tier `2`, dropping the cost block away from
+`tier:4 / mode:"novel"`. That collapse — top-level surface shrinks,
+mode flips, tier drops — is exactly what the demo's cost panel renders.
+
+### 1.2 What "commit" means
+
+Three independent things, none of them git:
+
+1. **Auditable**. The script that ran is preserved at `result/source.ts`
+   and `result/commits/NNN/source.ts`. The trajectory's full call list
+   (with timings, inputs, outputs) is at `<baseDir>/trajectories/<id>.json`
+   and copied into `result/commits/NNN/trajectory.json`.
+2. **Validated**. `df.answer(...)` returns a sealed envelope with a
+   `Symbol.for("datafetch.answer")` brand (`src/snippet/answer.ts:35`).
+   Validation runs nine gates: structuredAnswer, statusAllowed,
+   valuePresent, evidencePresent, derivationVisible, unsupportedHasReason,
+   lineagePresent, noDefaultZeroFallback, hiddenManipulationDetected.
+   `accepted = blockers.length === 0; learnable = accepted`.
+3. **Learnable**. Only accepted commits cross the gate; only commits
+   that are the current workspace head can crystallise (§4.6).
+
+### 1.3 Pitch CLI vs shipped CLI
+
+The pitch's command shape (`datafetch mount --intent`,
+`datafetch commit scripts/answer.ts`) is shipped today. The legacy
+phased verbs (`datafetch plan`, `datafetch execute`, `datafetch tsx`)
+are also shipped and live alongside it. The reconciliation:
+
+| Verb in pitch                           | Shipped today                               | What it actually does                                                                          |
+|----------------------------------------|---------------------------------------------|------------------------------------------------------------------------------------------------|
+| `datafetch mount --tenant --dataset --intent` | `src/cli/workspace.ts:80`              | POST `/v1/connect` (creates a session); materialises workspace dir on disk; pins active-session. |
+| (implicit) explore                     | `datafetch run [scripts/scratch.ts]`        | POST `/v1/snippets phase:"run"`; writes `tmp/runs/NNN/`. Non-crystallisable, results bounded to 10. |
+| `datafetch commit scripts/answer.ts`   | `src/cli/workspace.ts:144`                  | POST `/v1/snippets phase:"commit"`; writes `result/`, `result/commits/NNN/`, updates `HEAD.json`. |
+| (lower-level) "give me a session"      | `datafetch session new --tenant [--mount]`  | The same `/v1/connect`, without materialising a workspace.                                     |
+| (lower-level) "run TS in this session" | `datafetch tsx -e '<src>'` or `<file>`      | POST `/v1/snippets` (no phase). Used by `datafetch agent` and ad-hoc scripts.                  |
+| (legacy phased) plan / execute         | `datafetch plan -e ...` / `datafetch execute -e ...` | Phased trajectories under `<baseDir>/sessions/<id>/{plan/attempts,execute}/<traj>/`. |
+
+The intent-workspace flow (`mount` + `run` + `commit`) is the primary
+narrative. The session-and-snippet flow is the lower-level surface the
+workspace flow is built on. The phased verbs are the legacy form;
+phased `execute` artefacts can still crystallise.
+
+---
+
+## 2. The `fn({...})` factory and the typed surface
+
+`fn({...})` is the only way to author a typed callable in datafetch.
+The runtime refuses to expose anything else under `df.lib.<name>`. This
+is the **force-intent-declaration shape**: agents must declare intent +
+schemas + examples before the runtime will run their code.
+
+### 2.1 Shape
+
+```ts
+// src/sdk/fn.ts:36-67
+
+type FnInit<I, O> = {
+  intent: string;             // single sentence, used by man/apropos/JSDoc
+  examples: FnExample<I, O>[];// at least one input/output pair
+  input: GenericSchema<I>;    // valibot input schema
+  output: GenericSchema<O>;   // valibot output schema
+  body: RawBody<I, O>;        // pure | llm({...}) | agent({...})
+};
+
+type Fn<I, O> = ((
+  input: I,
+  ctx?: Partial<DispatchContext>,
+) => Promise<Result<O>>) & {
+  spec: FnSpec<I, O>;
+  name?: string;
 };
 ```
 
-The implementation behind a primitive is an internal concern: `pickFiling` may dispatch to a Flue sub-agent today, a SQLite cache tomorrow, a derived rule next week. **The procedures calling it do not change** because the contract does not change. This is the design property that lets the optimisation worker improve primitive implementations (Plan 009 first pay-out) transparently, and reserve procedure-body compilation (Plan 009 second pay-out) for the case where every primitive a procedure calls has converged to deterministic Atlas-compatible form. Hooks scaffold the chain *shape*; primitive modules ship typed chain *steps* with implementations. Round 1 ships ~5 to 10 primitive modules alongside ~10 to 15 hooks.
+The callable runs:
 
-### Graceful degradation when bootstrap fails
+1. Validate input via `safeParseAsync` (`src/sdk/fn.ts:177`).
+2. Dispatch the body. Pure bodies run inline. LLM and agent bodies go
+   through the registered `BodyDispatcher` (in production, `FlueBodyDispatcher`).
+3. Validate output via `safeParseAsync` (`src/sdk/fn.ts:205`).
+4. Build a per-call `Cost` block (tier, tokens, ms, llmCalls).
+5. Return `Result<O> = { value, mode, cost, provenance, escalations, warnings? }`.
 
-Three failure modes, each handled at the typing layer rather than failing closed:
+The optional second argument `Partial<DispatchContext>` is what the
+snippet runtime threads through every nested call so cost / trajectory /
+provenance / pins accumulate down the call tree
+(`src/sdk/fn.ts:172-251`).
 
-- **Sample bias omits real fields.** Adaptive sample-size widening on first pass; presence-frequency JSDoc surfaces residual bias; trajectories using undocumented fields trigger re-sampling.
-- **No discriminator field is detectable.** Emit a wide union with `unknown` typing on variant-only fields; the agent narrows via runtime checks rather than `kind === "..."`.
-- **The collection is empty.** Emit a stub with `Record<string, unknown>` plus the four primitives; first insert triggers re-bootstrap via change-stream.
+### 2.2 Body shapes
 
-Bootstrap is best-effort; the trajectory layer compensates for any over-broadness.
+Three body kinds (`src/sdk/body.ts`):
 
-The chicken-and-egg is illusory because the bootstrap is *not the answer* the agent is looking for; it is the *vocabulary in which the answer can be expressed*. The trajectory layer crystallises the answer. This is schema-on-read at the agent layer (the principle Iceberg and Delta Lake brought to data engineering) applied to a different consumer with a different artefact: a per-tenant procedure library, not a query plan.
+- **Pure**: `{ kind: "pure", fn: (input) => output }` — dispatched inline by the `fn()` callable; never reaches the `BodyDispatcher`. Default tier 2, default mode `"interpreted"`. A bare function passed as `body` is sugar for this (`normaliseBody`).
+- **LLM**: `llm({ prompt, model?, output? })` — dispatched via `FlueBodyDispatcher.dispatchLlm`. Tier 3, mode `"llm-backed"`.
+- **Agent**: `agent({ skill, model? })` — dispatched via `FlueBodyDispatcher.dispatchAgent`. References a markdown skill at `<baseDir>/lib/<tenant>/skills/<name>.md` or `<baseDir>/lib/__seed__/skills/<name>.md`. Tier 3, mode `"llm-backed"`.
 
----
+### 2.3 The Result envelope
 
-## Architecture
+`Result<T> = { value: T, mode, cost, provenance, escalations, warnings? }`,
+where `cost` is `{tier (0-4), tokens.cold/hot, ms.cold/hot, llmCalls}`
+and `provenance` is `{tenant, mount, functionName?, pins}`. `mode` and
+`tier` semantics (per `src/sdk/result.ts:6-11` and
+`src/observer/gate.ts:22-26`):
 
-```
-+---------------------------------------------------------------+
-|                          User / Judge                         |
-|   visits https://atlasfs.vercel.app/t/<tenant>                |
-|   reviews trajectory, endorses successful runs                |
-+---------------------------------+-----------------------------+
-                                  |
-                                  v
-+---------------------------------------------------------------+
-|     Vercel + Next.js  (deployed via `vercel deploy`)          |
-|     - cluster heatmap, procedure library pane                 |
-|     - hot-path overlay, two-tenant divergence view            |
-|     - trajectory review UI with endorsement button            |
-|     - app/api/agents/<name>/<id>  ->  CF Worker (SSE proxy)   |
-+---------------------------------+-----------------------------+
-                                  |
-                                  v
-+---------------------------------------------------------------+
-|     Cloudflare Worker  (Flue, --target cloudflare)            |
-|     deployed via `wrangler deploy`                            |
-|     - Pi runtime in a V8 isolate (no process.env, no fs)      |
-|     - SandboxFactory = @cloudflare/sandbox                    |
-|     - virtual module resolver for /datafetch/db/<coll>.ts     |
-|       (MongoFS.synthesize emitted at request time)            |
-|     - tree-structured trajectory, parallel tool exec          |
-|     - bindings: ATLAS (TCP), ANTHROPIC (HTTPS), VOYAGE        |
-+--+----------+--------------+---------------+------------------+
-   |          |              |               |
-   v          v              v               v
-+-----+  +---------+  +-----------+  +-----------+
-|Atlas|  |Tenant   |  |Optimise + |  |Anthropic  |
-| M10 |  |Durable  |  |Drift CF   |  |API direct |
-|     |  |Object   |  |Workers    |  |           |
-|$vec |  | SQLite: |  | (cron)    |  |Opus 4.7   |
-|$rank|  |  proc/, |  | compile + |  |  (demo)   |
-|chgs |  |  traj   |  | ts-morph  |  |Haiku 4.5  |
-+--+--+  +---------+  +-----+-----+  +-----------+
-   |                        ^
-   |                        |
-   +---- Change Streams ----+
+| Mode           | Tier      | Meaning                                                                              |
+|----------------|-----------|--------------------------------------------------------------------------------------|
+| `novel`        | 4         | First-time successful ad-hoc composition. No learned interface called. **Success state, not error.** |
+| `interpreted`  | 2 (typ.)  | Successful run that called at least one learned interface. Tier max-observed across nested calls. |
+| `llm-backed`   | 3         | Per-call mode for `llm({...})` or `agent({...})` body. Set by the fn() factory.       |
+| `cache`        | (0/1)     | Reserved for future tier. No code path emits today.                                  |
+| `compiled`     | (1)       | Reserved for the Atlas-pipeline compiled tier. No code path emits today.             |
 
-+-------------------------------------------+
-| Voyage (Atlas Embedding & Reranking API)  |
-|   voyage-4-large, rerank-2.5,             |
-|   voyage-multimodal-3.5                   |
-| invoked from Atlas pipelines              |
-| (no separate API key)                     |
-+-------------------------------------------+
-```
+`tier` is a `0|1|2|3|4` scalar. Convention: 2 = substrate roundtrip
+(`db.*`) or pure-TS interpreted body, 3 = LLM, 4 = novel composition.
+0 and 1 are reserved.
 
-| Component | Responsibility |
-|-----------|---------------|
-| **Flue (`@flue/sdk` v0.3.x)** | Apache-2.0 sandbox agent framework that wraps Pi in a build pipeline, an HTTP/SSE server, an MCP runtime adapter, valibot-typed results, and the `SandboxFactory` integration interface. Built with `flue build --target cloudflare` and deployed via `wrangler deploy`. Per Decision #15, the Cloudflare target is the demo runtime; the Node target stays unused unless a workerd-incompat fallback fires. See `kb/br/07-flue-harness.md` for the integration brief. |
-| **Pi (`@mariozechner/pi-agent-core` + `pi-ai`)** | The agent runtime Flue drives internally. MIT-licensed, 11.5K+ stars upstream. TypeScript-native ReAct loop, tree-structured trajectory, parallel tool execution. Multi-provider model abstraction; we use the `anthropic` provider against `api.anthropic.com` direct (Bedrock is also supported but not in the demo path). Pinned via `pnpm.overrides` because Flue declares them as `*`-versioned. Emits typed virtual-module operations only. |
-| **Cloudflare Worker + Tenant Durable Object** | The runtime substrate. The Worker hosts Pi + the `@cloudflare/sandbox` connector. Each tenant gets one Durable Object instance with its own SQLite holding `procedures/`, `scratch/`, trajectories, and `tool_calls`. Cross-tenant isolation is structural — DO instances cannot share state. Replaces the AgentFS-over-NFS layer of the prior design. |
-| **MongoFS** | The codegen module we author. ~3 functions: `sample(coll, n)`, `synthesize(coll, samples) -> string`, `fingerprint(schema) -> sha256`. Imported by the Worker's virtual-module resolver to emit typed TypeScript modules at request time when the agent imports `/datafetch/db/<coll>.ts`. No longer implements a `FileSystem` interface (the prior NFS/FUSE-style design has been superseded). |
-| **Vercel + Next.js** | UI host: cluster heatmap, procedure library pane, hot-path overlay, two-tenant divergence view, trajectory review UI. The webhook surface (`app/api/agents/<name>/<id>/route.ts`) proxies into the Cloudflare Worker. Free Hobby tier covers the demo. |
-| **MongoDB Atlas (M10)** | The data plane. Hybrid retrieval primitives: `$vectorSearch`, `$search`, `$rankFusion`. Change Streams for schema-drift detection. Connection from the Worker via MongoDB driver 6.x + `cloudflare:sockets`, cached per-DO. Stores the demo corpus (BIRD-SQL subset + FinQA filings + supply-chain micro-set, ~2 GB total) and the procedure metadata. See `Demo Corpus` section below for the corpus design rationale. |
-| **Voyage (via Atlas Embedding & Reranking API)** | `voyage-4-large` for text embeddings, `rerank-2.5` for cross-encoder reranking, `voyage-multimodal-3.5` for logo similarity (typosquat cluster). Native Atlas integration since the MongoDB acquisition (Feb 2025). |
-| **Claude via Anthropic API direct** | The model. pi-ai's `anthropic` provider points at `api.anthropic.com`; `claude-haiku-4-5` for eval bulk, `claude-opus-4-7` for the demo turn. AWS Bedrock is no longer in the path (Decision #15 reversal). |
-| **Optimisation worker (Cloudflare Worker, cron)** | Sibling Worker triggered by `wrangler.toml` cron entries. Takes a promoted procedure, compiles its multi-call ReAct sequence into a single `db.collection.aggregate([...])` pipeline, validates the rewrite against shadow inputs, swaps the `procedures/<name>.ts` body to call the compiled pipeline. Reads the same Atlas + DO bindings as the runtime Worker. |
-| **Schema-drift Worker (Cloudflare Worker, Atlas Change Streams subscriber)** | Sibling Worker subscribed to Atlas Change Streams. On a structural change, recomputes the schema fingerprint and writes it to a shared DO; the optimisation worker walks `procedures/` with ts-morph and tags stale pins green/yellow/red. |
-| **Eval harness** | Replays the pre-registered intent-clustered task set on each of the three baselines (vanilla / static-typed / ours), records T_n, D_n, R_n, I_n, token cost, wall-clock, correctness, evidence completeness, renders the cluster heatmap, the procedure library pane, and the hot-path overlay. Runs locally during dev against the live Atlas + Anthropic; can also run as a Worker for production-shaped runs. |
+Errors live on a disjoint `errored: true` flag on the `TrajectoryRecord`,
+not on `mode`. A trajectory that errored does not get a "novel" or
+"interpreted" mode change.
 
----
+### 2.4 The cost-accumulation contract
 
-## Hosting & Deploy
+From `src/sdk/runtime.ts:13-37`:
 
-**Stack:** Cloudflare Workers + Durable Objects (agent runtime, sandbox, per-tenant state) + Vercel + Next.js (UI, webhook surface) + MongoDB Atlas M10 (data plane) + Anthropic API direct (Claude). Atlas is the only stack element required by the hackathon rules (`kb/resources/scope-schedule.md` lines 90-91 and 133, "MongoDB Atlas as a core component"); the rest is chosen to align with Flue's first-class `--target cloudflare` build path, give us structural per-tenant isolation via Durable Objects, and keep the Day-1 deploy story to two commands (`wrangler deploy` and `vercel deploy`). The earlier AWS-Lambda framing was a misread of `kb/resources/aws/participant-guide.md`, which is a partner credit-setup guide, not a constraint on hosting.
+- **Additive**: `tokens.cold`, `tokens.hot`, `ms.cold`, `ms.hot`, `llmCalls`.
+- **Max-observed**: `tier` (the deepest tier observed in the call tree).
 
-### Dev and deploy posture
+Every `BodyDispatcher` must obey this. The `fn()` factory only falls
+back to wall-clock `elapsedMs` when no nested call charged time.
 
-**Cloud-deployed from Day 1, with a local-first feedback loop.** The hackathon rules require a live demo running against the provided Atlas Sandbox; we cannot demo from a laptop. Two posture commitments fall out of this:
+### 2.5 Semantic learned-interface naming
 
-1. **First-90-minutes deploy gate.** Before any product work begins on Day 1, we produce a working live URL: a Cloudflare Worker that talks to Atlas + Anthropic, a Durable Object that persists across requests, and a Vercel page that proxies to the Worker. If the gate doesn't pass, we fall back per the ladder below; cloud deploy is *not* deferred to "polish later." Specific gate steps:
-   - `flue build --target cloudflare` + `wrangler deploy` -> live Worker URL responds.
-   - MongoDB driver 6.x via `cloudflare:sockets` round-trips a `db.runCommand({ ping: 1 })`.
-   - Anthropic SDK round-trips a 1-token completion from the Worker.
-   - Durable Object SQLite write/read survives a request boundary.
-   - `vercel deploy` of a stub Next.js page proxies to the Worker URL end-to-end.
+Recent commit `6c0d78d` ("feat: use semantic learned interface names")
+replaced the prior `crystallise_<hash>_<topic>` naming with clean
+semantic names. The picker (`pickTopic`, `src/observer/template.ts:478`):
 
-2. **Local-first iteration, deploy-early discipline.** Tight iteration uses `wrangler dev` (miniflare) for the Worker and `vercel dev` for the UI; the agent loop, codegen, trajectory writes, and DO state all execute locally against the live Atlas M10 and live Anthropic API. Every material change is deployed within the same working session via `wrangler deploy` + `vercel deploy` so production-only issues (Atlas TCP-socket compatibility, DO hibernation across requests, Vercel function timeout on the SSE proxy, subrequest-limit ceilings, cold-start tail latency) surface on Day 1, not on Saturday afternoon. Rule of thumb: *no more than one local commit before a corresponding cloud deploy.*
+| Trajectory signal                                          | Authored name           |
+|------------------------------------------------------------|-------------------------|
+| `lib.executeTableMath` + "range" in question text          | `rangeTableMetric`      |
+| `lib.executeTableMath` + change/delta/difference/increase  | `compareTableMetric`    |
+| `lib.executeTableMath` + ratio/percent/percentage/margin   | `ratioTableMetric`      |
+| `lib.executeTableMath` (otherwise)                         | `tableMetric`           |
+| `lib.inferTableMathPlan`                                   | `tableMathPlan`         |
+| `lib.locateFigure`                                         | `locateTableFigure`     |
+| `lib.pickFiling`                                           | `filingQuestion`        |
+| fallback                                                   | first `lib.*` slug or question slug |
 
-### Where each component runs
+The shape hash (`@shape-hash:` comment + YAML `shape-hash:`) stays as
+the deduplication and provenance key but no longer leaks into the file
+name. Legacy `crystallise_*`-prefixed names are still recognised by the
+gate and the snippet runtime as learned interfaces
+(`src/observer/gate.ts:204-208`, `src/snippet/runtime.ts:413`).
 
-| Component | Service | Notes |
-|---|---|---|
-| **UI + webhook surface** | Vercel + Next.js (App Router), Hobby tier | `app/api/agents/<name>/<id>/route.ts` proxies to the CF Worker. Free tier covers the demo. |
-| **Agent runtime (Flue + Pi)** | Cloudflare Worker, `flue build --target cloudflare`, `wrangler deploy` | Workers Paid plan ($5/mo) required: agent loops blow free-tier 10ms-CPU and 50-subrequest ceilings. |
-| **Per-tenant state** (`procedures/`, `scratch/`, trajectories, `tool_calls`) | Durable Object SQLite, one DO instance per tenant | Structural cross-tenant isolation: DO instances cannot share state. Branching is `state.storage` snapshot + replay into a sibling DO. |
-| **Agent sandbox** | `@cloudflare/sandbox` connector via Flue's `SandboxFactory` | V8 isolate with no `process.env`, no fs, no shell; bindings are the only ingress/egress. Core Design Principle #4 enforced by the platform, not engineered. |
-| **MongoDB Atlas M10** | Provided by MongoDB on AWS, region as assigned | Connection from Workers via MongoDB driver 6.x + `cloudflare:sockets`, cached per-DO (one tenant = one DO = one connection). |
-| **Voyage embedding + reranking** | Native Atlas Embedding & Reranking API | Decision #9 unchanged; no separate API key. |
-| **Claude (Opus 4.7 demo, Haiku 4.5 eval bulk)** | Anthropic API direct, `api.anthropic.com` via pi-ai's `anthropic` provider | AWS Bedrock no longer in the path; we accept the loss of AWS credit subsidy in exchange for skipping Bedrock model-access approval and AWS-account setup. |
-| **Optimisation budget worker** | Sibling Cloudflare Worker, `wrangler.toml` cron trigger | Reads the same Atlas + DO + Anthropic bindings; compiles promoted procedures to single Atlas aggregation pipelines. |
-| **Schema-drift Worker** | Sibling Cloudflare Worker subscribed to Atlas Change Streams | On a structural change, recomputes fingerprint and writes to a shared DO; the optimisation worker walks `procedures/` with ts-morph and tags stale pins. |
-| **Secrets** (`MONGODB_URI`, `ANTHROPIC_API_KEY`, optional `VOYAGE_API_KEY`) | `wrangler secret put` (Worker) + Vercel env vars (UI) | Agent never sees them per Core Design Principle #4. |
+### 2.6 The learned-interface contract
 
-### Fallback ladder (in order, all keep cloud deploy)
+A learned interface is a `<baseDir>/lib/<tenant>/<name>.ts` file with:
 
-| # | Fallback | When | Cost |
-|---|---|---|---|
-| 1 | Flue `--target cloudflare` Worker + Vercel UI | Default — passes Day-1 gate | $5/mo CF Paid + Vercel free |
-| 2 | Flue `--target node` in a Cloudflare Container | If workerd lacks a Node API Pi requires | +30 min packaging |
-| 3 | Flue `--target node` on Vercel as a Node serverless function | If Container path also fails | Per-tenant state moves to Vercel KV; lose structural DO isolation |
-| 4 | AWS Lambda + API Gateway (panic button) | If options 1-3 all fail | Half-day of AWS account + IAM + Bedrock-access setup |
+- A YAML frontmatter inside `/* --- ... --- */` (Claude Code skill
+  format): `name`, `status: provisional`, `description: |` (multi-line),
+  `trajectory:`, `shape-hash:`. The first three lines being `/* ---`
+  is the **tool signal** (`src/sdk/frontmatter.ts`); files without this
+  are "primitives", not "tools".
+- A header with `@shape-hash:`, `@origin-trajectory:`, `@origin-question:`,
+  `@steps:` for provenance.
+- A body that re-walks the recorded call sequence, parameterised. The
+  body uses `df` as a host-injected global (`declare const df: {...}`);
+  it does NOT import the `df` proxy. The interface only runs inside a
+  `df.lib.<name>(...)` call from a snippet — it doesn't work standalone.
+- For ergonomics, the file imports `import { fn, llm, agent } from "@datafetch/sdk"`.
+  `@datafetch/sdk` is a fictional npm package; the `DiskLibraryResolver`
+  rewrites those imports to absolute file:// URLs of `<repo>/src/sdk/index.ts`
+  before dynamic import (`src/snippet/library.ts:56-83`). Rewritten files
+  cache at `<repo>/.snippet-cache/<safeBase>.<mtimeMs>.ts`.
 
-Options 1-3 keep the deploy story coherent within the Cloudflare/Vercel ecosystem; option 4 is the panic button.
+### 2.7 How `df.db.<mount>.<coll>` is generated and typed
 
-### Landmines
+The bootstrap pipeline (§3.7 in the brief) writes one TypeScript module
+per collection at `<baseDir>/mounts/<mountId>/<coll>.ts`. Each module
+exports a `CollectionHandle<T>` plus an inferred TS interface for the
+document shape. Idents are camelCased from substrate names
+(`finqa_cases` → `finqaCases`, `src/bootstrap/idents.ts`). The
+`df.d.ts` regenerator surfaces these as typed
+`db.<ident>: CollectionHandle<...>` declarations.
 
-- **Workers Paid plan required.** Free tier (10ms CPU, 100K req/day, 50 subrequests/req) is too tight for agent loops. Subscribe Day 1.
-- **DO hibernation.** Durable Objects hibernate after inactivity. Flush trajectory rows after every tool call (durability is per-call, not per-session); use `state.blockConcurrencyWhile()` to keep the DO alive during a single trajectory.
-- **Atlas driver from Workers.** MongoDB driver 6.x + `cloudflare:sockets` is supported but not battle-tested for our load shape. The Day-1 deploy gate verifies it; if it fails, the fallback ladder kicks in.
-- **Vercel SSE timeout.** Hobby-tier serverless functions cap at ~10s; the agent's trajectory stream may exceed this. Mitigation: the UI subscribes to the Worker's SSE stream directly, with Vercel only serving the static shell.
-- **Cross-cloud egress.** Atlas runs on AWS; Workers are global edge. Pin the Atlas cluster to the region with the lowest latency to the audience for Round 1.
-- **Subrequest budget.** Even on Paid, 1000 subrequests per request is a real ceiling for long agent loops. Bound the ReAct loop at 50 LLM turns and budget tool calls accordingly.
+`CollectionHandle<T>` is the four-method retrieval contract
+(`src/sdk/adapter.ts`): `findExact(filter, limit?)`, `search(query, opts?)`,
+`findSimilar(query, limit?)`, `hybrid(query, opts?)` — each returning
+`Promise<T[]>`. `runCompiled`, `watch`, `ensureIndex` are declared on
+`MountAdapter` but typically thrown in MVP. The Atlas adapter reports
+`{vector:false, lex:true, stream:true, compile:true}` — only `lex` is
+exercised today; `findSimilar`/`hybrid` delegate to `search`
+(`src/adapter/atlas/AtlasMountAdapter.ts:307-317`).
 
-### Out-of-pocket budget
+### 2.8 `df.answer({...})` commits the auditable answer
 
-CF Workers Paid ($5) + Vercel Hobby ($0) + Atlas M10 (provided) + Anthropic API (~$15-20 across eval bulk + demo turn at Haiku 4.5 + Opus 4.7 mix) + Voyage (Atlas-bundled) ≈ **$25 total** for the full hackathon. AWS credits unused.
+`df.answer(...)` builds a sealed `AnswerEnvelope` with a
+`Symbol.for("datafetch.answer")` brand (`src/snippet/answer.ts`). The
+input takes `status` (`"answered" | "unsupported" | "abstain"`),
+`value` / `evidence` / `derivation` (required for `"answered"`),
+optional `coverage`, and `reason` (required for `"unsupported"`).
+`validateAnswerEnvelope()` runs nine gates (per §1.2). `accepted ===
+blockers.length === 0`; `learnable === accepted`. A failed validation
+does not raise; the snippet completes, the trajectory is saved, the
+workspace's `result/HEAD.json` does not advance.
 
 ---
 
-## Data Flow
+## 3. The snippet/runtime layer
 
-The pipeline stages from input to output, per query:
+`src/snippet/` is the per-snippet evaluator. It takes a TS source
+string, runs it as if it were `npx tsx`, and returns the snippet
+envelope (stdout, stderr, exit code, trajectory id, cost, mode,
+function name, call lists, phase, crystallisable flag, artifact dir,
+answer, validation).
 
-1. **Bootstrap.** The Cloudflare Worker boots and hydrates the tenant Durable Object. The Worker registers a virtual module resolver: `/datafetch/db/<coll>.ts` and `/datafetch/views/<name>.ts` resolve via MongoFS codegen against the live Atlas cluster (samples + schema inference + JSDoc + fingerprint constant); `/datafetch/procedures/<name>.ts`, `/datafetch/scratch/...`, and `/datafetch/hooks/<domain>/<intent>.ts` resolve against the tenant DO's SQLite store (hooks are seeded read-only at deploy time; procedures and scratch are writable per-tenant).
+### 3.1 Why bash drives the workspace
 
-2. **Discovery.** The agent (or user) `ls /datafetch/db/`, `cat /datafetch/db/packages.ts`. MongoFS's `readdir` lists collections; `readFile` synthesises the typed module from the live cluster (sample documents, `mongodb-schema` inference, JSDoc with examples, schema fingerprint constant).
+The agent surface is bash, by design. The README's invocation pattern
+is:
 
-3. **Match check (intent routing).** The user's natural-language query is embedded and compared against the embedded signatures plus JSDoc descriptions of every procedure in the tenant's `procedures/` directory. High-confidence match (above a configured cosine threshold) -> deterministic execution path, the procedure is invoked directly, no LLM is consulted on the query, the call is logged with `mode: "deterministic"`. Mid-confidence match -> the matched procedure name is passed to the agent as a hint along with the typed surface. No match -> fall through to Step 4. The matcher runs host-side, before the LLM ever enters the loop, so cost convergence kicks in at the routing layer rather than waiting for the agent to discover the procedure itself.
-
-4. **Hook lookup, then novel ReAct.** No match -> Pi spawns a fresh agent with the typed surface loaded. The agent's first move is to look for a hook in `/datafetch/hooks/` whose intent description matches the user's query (via the same embedding-search mechanism as Step 3, just over hooks rather than procedures). If a hook is found, the agent loads it and follows the suggested chain shape, narrowing the bootstrap to specific collections and primitive compositions. If no hook matches, the agent falls back to raw collection exploration. Either way, each typed call is intercepted by MongoFS, executed against Atlas, and recorded as a row in `tool_calls` along with timing, tokens, and parent-trajectory id.
-
-5. **Hybrid retrieval inside a typed call.** A single `db.packages.hybrid({...})` call expands into a `$rankFusion` pipeline that combines `$vectorSearch` (Voyage embeddings) and `$search` (BM25), with optional reranking via `voyage-rerank-2.5`. The agent never sees the pipeline.
-
-6. **Synthesis.** The agent's snippet returns a structured payload (verdict, evidence). Only what the snippet `console.log`s enters the agent's context; intermediate hits stay in the sandbox.
-
-7. **Review prompt.** The trajectory is rendered (graph view: green for deterministic, red for LLM-invocation) and the user is asked: correct? satisfies intent? needs more?
-
-8. **Crystallisation.** On endorsement, the trajectory is written to `procedures/<name>.ts` with: imports from `/datafetch/db/...`, the typed call sequence in order, schema fingerprints pinned as comments, the trajectory id for replay. A verifier replays the procedure against a shadow input and compares against the recorded result. Pass -> promotion. Fail -> rejection, with a reason recorded.
-
-9. **Budget allocation.** The promoted procedure earns optimisation budget. The worker picks the highest-value pay-out (compile-to-pipeline by default), runs it asynchronously, and swaps the procedure body when the rewrite passes verification.
-
-10. **Drift handling.** Atlas Change Streams emit on the underlying collections. On a schema change, the worker recomputes the fingerprint, walks `procedures/` with ts-morph, and flags every procedure whose pin no longer matches.
-
-11. **Eval round.** At the end of each round, the harness re-runs the pre-registered task set and updates the metric ledger. The cluster heatmap re-renders with the new round of cells.
-
----
-
-## Key Components
-
-### MongoFS (the novel piece)
-
-**Inputs:** AgentFS `FileSystem` operations (`stat`, `readdir`, `readFile`, `writeFile`, `mkdir`, `rm`, `rename`); a MongoDB Atlas connection; a sampling budget (documents per collection for schema inference).
-
-**Outputs:** Synthesised typed TypeScript modules per collection; lazily-computed schema fingerprints; allow/deny on writes (deny on `db/`, pass-through to AgentFS delta on `procedures/` and `scratch/`).
-
-**Internal logic:**
-
-- `readdir("/db/")` lists collections in the cluster.
-- `readdir("/db/<coll>/")` lists synthetic subpaths (`_samples.json`, `_schema.json`, individual indexed methods).
-- `readFile("/db/<coll>.ts")` runs `mongodb-schema` over a sampled set of documents, emits a typed TS module with: `interface <Coll>`, `SCHEMA_VERSION` constant, typed methods (`findExact`, `findSimilar`, `search`, `hybrid`), JSDoc with sampled example documents.
-- `readFile("/db/<coll>/_samples.json")` runs `db.<coll>.find().limit(5)`.
-- `readFile("/db/<coll>/_schema.json")` returns the inferred schema.
-- `writeFile("/db/...")` returns `EACCES`.
-- `writeFile("/procedures/...")` is delegated to the AgentFS overlay.
-
-### Hooks (hand-authored scaffolds)
-
-**Inputs:** hand-authored intent scaffolds at `/datafetch/hooks/<domain>/<intent>.ts`.
-
-**Outputs:** TypeScript modules imported by the agent, exposing each intent's parameter interface plus JSDoc with a suggested derivation chain and references to the relevant collections.
-
-**Internal logic:** None at runtime. Hooks are static files served by AgentFS's CoW overlay (read-only at the `hooks/` path). The host-side embedding matcher (Data Flow Step 4) finds them by comparing the user's query to the hook's JSDoc description; the agent loads the matched hook and uses the suggested chain as a starting point for code-mode derivation. Round 1 ships ~10 to 15 hooks covering the FinQA financial computations and supply-chain safety queries the demo exercises. Hooks are shared across tenants; per-tenant procedure overlays at `/procedures/` supersede the hook once an intent has been crystallised for that tenant.
-
-### Procedure crystallisation pipeline
-
-**Inputs:** a session id, an endorsement decision, the trajectory rows from `tool_calls` for that session.
-
-**Outputs:** a TypeScript file in `procedures/`, a row in `procedure_metadata` binding the procedure to its source trajectory and pinned fingerprints.
-
-**Internal logic:** The trajectory is already valid TypeScript by construction. The pipeline replays the trajectory against shadow inputs to compute a deterministic-mode result and compares it against the original. On success, the trajectory is committed to `procedures/<name>.ts`, fingerprints are pinned, and budget is allocated.
-
-### Schema fingerprint + drift workflow
-
-**Inputs:** Atlas Change Stream events.
-
-**Outputs:** updated fingerprint constants; flags on procedures whose pin is stale.
-
-**Internal logic:** On a structural change to a collection, recompute the schema, hash it, compare to the existing fingerprint. On change, walk `procedures/` with ts-morph, find every procedure whose pin matches the *old* fingerprint, run the eval suite against each with the new schema, tag green / partial / broken, surface in the library pane.
-
-### Eval harness
-
-**Inputs:** the pre-registered task set with three label layers (answer, evidence, canonical pathway); a baseline configuration (vanilla / static-typed / ours); a seed.
-
-**Outputs:** per-task metric rows in a metric ledger; the cluster heatmap; the procedure library pane; the hot-path overlay.
-
-**Internal logic:** Runs each task end to end on the chosen baseline, captures T_n, D_n, R_n, I_n, token cost, wall-clock, correctness, evidence completeness. Aggregates within-cluster, across-cluster, and out-of-cluster.
-
-### Optimisation-budget worker
-
-**Inputs:** a promoted procedure or an observed primitive, an allocated budget, a target pay-out.
-
-**Outputs:** a faster implementation that satisfies the same contract; a verification result.
-
-**Internal logic:** Two verifier-checked pay-out levels. (1) **Primitive-impl improvement** — replace a primitive's body with a cheaper implementation (cache, derived rule, smaller model) that satisfies the same contract; procedures calling it do not change. Runs continuously at primitive granularity. (2) **Procedure-body compilation** — when every primitive a procedure calls is deterministic and Atlas-compatible, compile the call sequence to a single `$rankFusion`/`aggregate` pipeline; swap the body on verifier success. Conditional on the procedure's primitive set having converged.
-
----
-
-## Security Model
-
-**Trust boundaries:**
-
-1. **User <-> Pi.** The user is trusted; the agent is not. The user reviews and endorses; the agent proposes.
-
-2. **Pi <-> AgentFS / MongoFS.** The agent has only the typed filesystem surface. No HTTP client, no shell, no `process.env` access. Reads from `db/` are unrestricted; writes to `db/` are blocked at the FS layer with `EACCES`.
-
-3. **MongoFS <-> Atlas.** A single connection string with a single user, scoped to the demo cluster. Stored in AWS Systems Manager Parameter Store, never committed to git, never reaches the agent's context.
-
-4. **Optimisation worker <-> Atlas.** Runs in AWS Lambda with an IAM role scoped to the demo cluster. Pipeline rewrites are validated against shadow inputs before swap.
-
-**Input validation:** User snippets are executed in a V8 isolate with `globalOutbound: null`. Procedure files are written to a directory in the AgentFS overlay, not directly to the host filesystem. The verifier shadow-input comparison is the gate for promotion; failed verifications are recorded but not promoted.
-
-**Secrets handling:**
-
-- `VOYAGE_API_KEY` (if standalone Voyage is used; preferred path is Atlas-native Embedding API which does not require a separate key)
-- `MONGODB_URI` (Atlas connection string)
-- AWS credentials for Lambda
-
-All three live in AWS Systems Manager Parameter Store. Lambda receives them via IAM role; the local agent runtime receives them via environment variable. Neither path lets the agent itself observe them.
-
-**Threat model:** A malicious user query attempts to exfiltrate secrets via prompt injection into the agent. The structural defense is bindings-not-network in the sandbox; even a fully compromised agent cannot make a network call. A secondary defense is that the agent cannot read its own context window state through the sandbox surface.
-
-A schema-drift event occurs while a procedure is mid-replay. The fingerprint check at procedure entry is the gate; a stale-pin procedure refuses to run and is flagged for re-derivation.
-
----
-
-## Schema / API Surface
-
-### What the agent sees
-
-The agent imports from typed paths under the mount. The minimum surface per collection:
-
-```typescript
-// /datafetch/db/packages.ts: synthesised by MongoFS.readFile
-
-export interface Package {
-  name: string;
-  version: string;
-  publishedAt: string;
-  maintainer: { id: string; trustScore: number };
-  // ... inferred fields
-}
-
-export const SCHEMA_VERSION = "sha256:c3f1a8..." as const;
-
-export const packages: {
-  /** Exact lookup by indexed fields. */
-  findExact(filter: Partial<Package>): Promise<Package[]>;
-  /** Vector search over content. */
-  findSimilar(text: string, k?: number): Promise<Package[]>;
-  /** BM25 over indexed text fields. */
-  search(text: string, opts?: SearchOpts): Promise<Package[]>;
-  /** $rankFusion of vector + BM25, optional reranker. */
-  hybrid(q: HybridQuery, weights?: Weights): Promise<Package[]>;
-};
+```sh
+claude --bare --allowedTools \
+  "Bash(datafetch *) Bash(cat *) Bash(ls *) Bash(jq *)"
 ```
 
-### What the user sees
+Four allowlist entries. No tool catalog. The agent reasons in shell:
+`cat AGENTS.md`, `cat df.d.ts`, `datafetch apropos`, `datafetch run`,
+`datafetch commit`. Inside a snippet the agent gets a typed `df`
+global and `npx tsx` execution, but the entry point is always a bash
+verb. This is the kb/br/12 browser-harness convention applied to a
+data plane: don't hand the agent a tool catalog; hand it bash and a
+typed namespace it can `cat`.
 
-The mount root (`/datafetch/`) contains:
+### 3.2 How a snippet runs
 
-| Path | Contents |
-|------|----------|
-| `db/` | Typed TS modules per collection. Read-only. |
-| `db/<coll>/_samples.json` | Lazy sample documents. |
-| `db/<coll>/_schema.json` | Inferred schema. |
-| `views/` | Curated query modules (e.g. `recent_compromises.ts`). |
-| `hooks/<domain>/` | Hand-authored intent scaffolds, shared across tenants. Read-only. |
-| `procedures/` | The user's personal library. Writable via the overlay. |
-| `scratch/` | Workspace for in-flight queries. Writable. |
-| `_trajectories/` | Read-only views of `tool_calls`, queryable as JSON. |
+`DiskSnippetRuntime.run({source, phase, sourcePath, sessionCtx})`
+(`src/snippet/runtime.ts`):
 
-### CLI verbs (host side, not exposed to the agent)
+1. Mint or reuse a trajectory id (`traj_<14-iso>_<6-rand>`); build a
+   `TrajectoryRecorder`.
+2. Build a `DispatchContext` (tenant, mountIds, recorder, accumulator).
+3. Build the `df` global via `buildDf({sessionCtx, dispatchCtx})`
+   (`src/snippet/dfBinding.ts`).
+4. Wrap the source in an async IIFE with a `__df_done` export, write
+   it to a `.mts` temp file (or sibling of `sourcePath`), `await import(<file>)`.
+5. Capture `console.*` output. Set `errored`/`mode` based on whether
+   the snippet errored AND whether any recorded call hit a learned
+   interface (`calledLearnedInterface`, `src/snippet/runtime.ts:405`).
+   Mode is `"novel"` (no learned interface, tier bumped to 4) vs
+   `"interpreted"` (learned-interface call observed). Errored
+   trajectories keep default mode and set `errored: true`.
+6. Set cost, provenance, phase metadata; `recorder.save()` writes
+   `<baseDir>/trajectories/<id>.json`.
+7. For phased runs, write the per-phase artefact tree
+   (`<baseDir>/sessions/<sessionId>/<phase>/<trajectoryId>/...`).
+   For `commit` phases, also write `answer.json`, `validation.json`,
+   `answer.md`, `lineage.json`.
+8. Fire `onTrajectorySaved(id)` — the observer hook.
 
-| Command | Effect |
-|---------|--------|
-| `atlasfs mount <conn>` | Starts the NFS server, mounts at `/datafetch/`. |
-| `atlasfs branch <name>` | Snapshots the AgentFS overlay for branching. |
-| `atlasfs eval <round>` | Runs the pre-registered eval set on the chosen baseline. |
-| `atlasfs review <session_id>` | Opens the trajectory review UI for a session. |
-| `atlasfs budget <proc>` | Inspects or runs the optimisation worker on a procedure. |
+### 3.3 The `df` binding
 
----
+`buildDf()` returns the `df` global with four entry points:
+`df.db.<ident>.{findExact,search,findSimilar,hybrid}(...)`, `df.lib.<name>(input)`,
+`df.answer(envelope)`, and `df.run(asyncFn)`. `df.db.<ident>` resolves
+through `getMountRuntimeRegistry()`; substrate calls record one
+`PrimitiveCallRecord` per call and charge tier-2 cost. `df.lib.<name>`
+resolves through `getLibraryResolver()` (`DiskLibraryResolver`,
+`src/snippet/library.ts`), threading the shared `DispatchContext` into
+the inner `Fn` callable so cost accumulates. The resolver does layered
+lookup: tenant overlay first (`<baseDir>/lib/<tenant>/<name>.ts`), then
+seed (`<baseDir>/lib/__seed__/<name>.ts`). `df.run(asyncFn)` wraps an
+async block as `Result<T>` so non-fn-shaped logic still threads through
+the cost accumulator. Plan and run phases bound result limits to 10
+(`PLAN_RESULT_LIMIT`, `src/snippet/dfBinding.ts:65`) — the "exploration
+is deliberately narrow" affordance: a plan/run snippet cannot
+accidentally pull a million rows.
 
-## Demo Corpus
+### 3.4 Phases
 
-The Round 1 corpus is a **three-source hybrid** chosen to satisfy the schema-emergent thesis on three orthogonal axes of polymorphism plus provide published baseline comparability and visceral demo legibility. The full design rationale lives in [`br/06-bird-finqa-corpus.md`](./br/06-bird-finqa-corpus.md); this section captures the load-bearing facts and integration points.
+| Phase     | Crystallisable? | Where artefacts land                                                | Used by                                  |
+|-----------|-----------------|---------------------------------------------------------------------|------------------------------------------|
+| (none)    | no              | `<baseDir>/trajectories/<id>.json` only                             | `datafetch tsx`, `datafetch agent` REPL  |
+| `plan`    | no              | `<baseDir>/sessions/<id>/plan/attempts/<traj>/...`                  | `datafetch plan` (legacy)                |
+| `execute` | yes             | `<baseDir>/sessions/<id>/execute/<traj>/...`                        | `datafetch execute` (legacy)             |
+| `run`     | no              | `<baseDir>/sessions/<id>/run/attempts/<traj>/...` + `tmp/runs/NNN/` (workspace) | `datafetch run` (workspace flow)  |
+| `commit`  | yes (with accepted validation) | `<baseDir>/sessions/<id>/commit/<traj>/...` + `result/`, `result/commits/NNN/` (workspace) | `datafetch commit` (workspace flow) |
 
-### The three components
+`plan` and `run` are **exploratory**: artefacts go under `attempts/`,
+they are never crystallisable, and result limits are bounded to 10.
+`execute` and `commit` are **committed**: artefacts can be learned
+from. `commit` additionally requires `df.answer(...)` validation
+passing. The intent-workspace flow uses `run` + `commit`. The legacy
+phased CLI uses `plan` + `execute`. Both produce trajectories that the
+observer's gate can promote.
 
-**BIRD-SQL subset, 3 to 5 databases, ~1 to 2 GB after load.** A subset of the BIRD-SQL benchmark ([Li et al., NeurIPS 2023, arXiv:2305.03111](https://arxiv.org/abs/2305.03111)) loaded into MongoDB Atlas as collections (one collection per source table within each database). Recommended starter picks: `video_games`, `european_football_2`, `financial`, `formula_1`, `debit_card_specializing`. Source: supervision pairs from [`xu3kev/BIRD-SQL-data-train`](https://huggingface.co/datasets/xu3kev/BIRD-SQL-data-train) on HuggingFace (2.33 MB), row-level data from BIRD's official 33.4 GB GitHub release. **Role:** cross-collection polymorphism plus published baseline comparability (Spider, BIRD, DAIL-SQL, EvoMQL).
+Test pin: `tests/snippet-runtime-phase.test.ts`.
 
-**FinQA full, ~36 MB after load.** All 8,281 examples (6,251 train + 883 validation + 1,147 test) of the FinQA benchmark ([Chen et al., EMNLP 2021, arXiv:2109.00122](https://arxiv.org/abs/2109.00122)) loaded into MongoDB Atlas as **two complementary collections** that lean into the document model rather than flattening it:
+### 3.5 LLM-backed bodies dispatch through Flue
 
-- **`finqa_cases`**, the primary collection. Each FinQA example is a single rich nested document with `question`, `company`, `filingYear`, `preText`, `postText`, `table` (with `rows` and `cells` as nested arrays carrying `normalizedLabel`, `column`, `value`), `provenance`, `goldProgram`, and `goldAnswer`. Queries operate over the nested structure directly via `$filter` over `table.rows` and `$reduce` over `cells`, no relational denormalisation.
-- **`finqa_search_units`**, the sidecar retrieval collection. Contains row summaries, table summaries, case summaries, and pre/post-text chunks with embeddings (Voyage `voyage-4-large`). This is an indexing layer for semantic and lexical discovery, not a normalised view of the case data.
-
-Source: HF mirror at [`dreamerdeo/finqa`](https://huggingface.co/datasets/dreamerdeo/finqa) plus the original [`czyssrs/FinQA`](https://github.com/czyssrs/FinQA) repo for the gold program annotations the HF mirror omits. With the user's "remove the document, force search" twist applied at evaluation time. **Role:** within-document polymorphism plus the "compilable program is the procedure" demonstration. The two-collection split makes the Mongo-native pitch concrete: MongoDB stores nested financial evidence (`finqa_cases`), retrieval sidecars (`finqa_search_units`), and learned derivations and compiled pipelines (`atlasfs_procedures`), all in the same data plane.
-
-**Supply-chain micro-set, ~10 MB, ~10 hand-crafted queries.** Hand-crafted on Day 1 from npm registry metadata, GitHub Security Advisories, OSV, and published incidents (event-stream, ua-parser-js, xz-utils, polyfill.io). **Role:** Round 1 demo narrative spine because of its visceral stakes ("is this dependency safe to install?") and multimodal coverage (`voyage-multimodal-3.5` for typosquat-logo detection). Not in the formal eval; load-bearing only for the demo.
-
-### Why three sources
-
-The schema-emergent thesis is tested on three locations of polymorphism (per `br/02`):
-
-| Polymorphism location | BIRD subset | FinQA | Supply-chain |
-|----------------------|-------------|-------|--------------|
-| Within a collection (document polymorphism) | low (uniform tables) | high (table-layout variation across companies) | medium |
-| Across collections within a cluster (collection polymorphism) | **high** (15 to 25 collections, wildly different schemas) | n/a (single collection) | medium |
-| Across queries within a tenant | covered by both | covered by both | covered |
-
-BIRD provides the cross-collection polymorphism that supply-chain alone could not. FinQA provides within-document polymorphism with explicit gold programs. Supply-chain provides the demo narrative anchor. The three are complementary, not redundant.
-
-### Two simulated tenants for L_n
-
-The two-tenant scheme that drives Dimension 1 (interface emergence, library divergence) per the section above:
-
-- **Tenant A, `data-analyst`:** intent prior weighted toward BIRD aggregation and window-function queries (publishers by sales, legislator tenure, formula-1 podium counts). Crystallises BIRD-shaped procedures.
-- **Tenant B, `financial-analyst`:** intent prior weighted toward FinQA financial computation queries (YoY revenue growth, operating margin, fuel-expense ratio). Crystallises FinQA-shaped procedures.
-
-By Round 5, the two tenants' `procedures/` libraries do not overlap; L_n (Jaccard distance between procedure signature sets) approaches 1.0. The divergence is dramatic enough to read at a glance in the demo's two-pane file-tree visual.
-
-### Round 1 demo narrative split
-
-The supply-chain micro-set is the **stage anchor**; BIRD+FinQA is the **proof backbone**. The 3-minute demo (per `roadmap.md` Plan 010) splits:
-
-- **Beats 1 + 3** (setup + cost convergence) use supply-chain queries because "is event-stream safe to install?" lands faster than "compute the YoY change in fuel-expense ratio for AAL".
-- **Beats 2 + 4** (tenant divergence + 2D divergence chart) use BIRD+FinQA because the two-tenant L_n divergence is the chart that needs scale and comparability.
-
-This split is structural, not optional. Round 1's 45% live-demo weight rewards visceral; the eval scoring rewards comparability. Both serve different beats.
-
-### Worked example, Union Pacific 2017 lease obligations
-
-The Round 1 demo's headline derivation is a multi-step calculation that exercises every layer of the system end to end. Demo wording:
-
-> "For Union Pacific's 2017 lease obligations, what percentage of total minimum lease payments was due in 2019, combining operating and capital leases?"
-
-Derivation:
-
-```
-2019 amount = 359 (operating) + 156 (capital) = 515
-total amount = 2649 (operating) + 1079 (capital) = 3728
-share = 515 / 3728 = 0.13814
-share percent = 13.814%
-```
-
-The chain the agent must produce:
-
-1. find the UNP 2017 filing in `finqa_cases`
-2. locate the lease-obligations table on the filing
-3. select the 2019 row
-4. select the total row
-5. select the operating-leases and capital-leases columns
-6. sum each row over those columns
-7. divide numerator by denominator
-8. return answer plus evidence cells
-
-This is exactly the chain a hook scaffolds and a procedure crystallises. After endorsement and budget pay-out, the procedure body becomes a single Atlas aggregation pipeline:
-
-```typescript
-// /datafetch/procedures/financial-analyst/calculate_obligation_due_share.ts
-
-const pipeline = [
-  { $match: { company: "UNP", filingYear: 2017, kind: "finqa_case" } },
-  {
-    $project: {
-      dueRow: {
-        $first: {
-          $filter: {
-            input: "$table.rows",
-            as: "row",
-            cond: { $eq: ["$$row.normalizedLabel", "2019"] }
-          }
-        }
-      },
-      totalRow: {
-        $first: {
-          $filter: {
-            input: "$table.rows",
-            as: "row",
-            cond: {
-              $eq: [
-                "$$row.normalizedLabel",
-                "total_minimum_lease_payments"
-              ]
-            }
-          }
-        }
-      }
-    }
-  },
-  {
-    $project: {
-      numerator: {
-        $reduce: {
-          input: {
-            $filter: {
-              input: "$dueRow.cells",
-              as: "cell",
-              cond: {
-                $in: [
-                  "$$cell.column",
-                  ["operating_leases", "capital_leases"]
-                ]
-              }
-            }
-          },
-          initialValue: 0,
-          in: { $add: ["$$value", "$$this.value"] }
-        }
-      },
-      denominator: {
-        $reduce: {
-          input: {
-            $filter: {
-              input: "$totalRow.cells",
-              as: "cell",
-              cond: {
-                $in: [
-                  "$$cell.column",
-                  ["operating_leases", "capital_leases"]
-                ]
-              }
-            }
-          },
-          initialValue: 0,
-          in: { $add: ["$$value", "$$this.value"] }
-        }
-      }
-    }
-  },
-  {
-    $project: {
-      answer: { $divide: ["$numerator", "$denominator"] },
-      answerPercent: {
-        $multiply: [{ $divide: ["$numerator", "$denominator"] }, 100]
-      },
-      numerator: 1,
-      denominator: 1
-    }
-  }
-];
-```
-
-The pitch payoff: the learned reasoning chain becomes a database-native aggregation. MongoDB is the execution engine, not just the storage layer. Round 0 invokes the LLM N times to produce one answer; Round 5 runs this single aggregation in milliseconds. The cost-convergence chart's slope is exactly this transition. This worked example anchors Beat 4 of the demo (the cost-convergence beat); the Atlas pipeline appears in the side panel as the procedure body swaps from ReAct sequence to compiled aggregation.
-
-### ETL and storage
-
-Total post-load size: ~2 GB (~1.5 GB BIRD subset + ~36 MB FinQA + ~10 MB supply-chain + ~0.5 GB vector indexes). M10 cluster has ~10 GB storage default, so ample headroom. ETL effort: half a day on Day 1 (`loadBird.ts`, `loadFinQA.ts`, hand-craft supply-chain). Plan 001 budget covers this.
+`installFlueDispatcher` (`src/flue/install.ts`) wires
+`setBodyDispatcher(new FlueBodyDispatcher({...}))`. The dispatcher uses
+Flue **as a library** (`@flue/sdk/internal`'s `createFlueContext`
+constructed in-process); there is no Flue server, and the credential
+boundary is `src/flue/session.ts` — the only place LLM keys are read.
+Both `llm({...})` and `agent({skill})` bodies route through one path:
+render a prompt (skill markdown for agent bodies; the prompt string for
+llm bodies, both with the structured input as a JSON code block) →
+`session.prompt(text, {model})` (one persistent Flue session per tenant)
+→ `extractStructuredOrText` parses JSON out of the response (handles
+bare JSON, ```json fences, and prose-prefixed JSON) → the `fn()`
+factory's outer `output` schema validates the parsed value. Charges
+`llmCalls += 1`, `ms.cold += elapsed`, `tier = max(_, 3)`. Default
+model: `openai-codex/gpt-5.3-codex-spark`; override via
+`DATAFETCH_LLM_MODEL`/`DF_LLM_MODEL`; per D-016, the body's own `model`
+field always wins.
 
 ---
 
-## Key Decisions
+## 4. The observer and crystallisation
 
-| # | Decision | Rationale |
-|---|----------|-----------|
-| 1 | ~~NFS, not FUSE, as the transport~~ **Obsoleted by Decision #15.** | The agent runs inside a Cloudflare Worker; `/datafetch/` is a virtual module surface resolved by the Worker, not a real filesystem. No transport choice is required because there is no filesystem to transport. The original rationale (zero install friction across macOS/Linux/Windows) is also moot since the Worker hosts the agent, not the demo laptop. |
-| 2 | ~~AgentFS as the VFS engine, not a hand-rolled NFS server~~ **Obsoleted by Decision #15.** | Replaced by Cloudflare Durable Objects + a virtual module resolver inside the Worker. AgentFS's CoW overlay, NFS server, `tool_calls` audit table, and MCP fallback are all replaced by per-tenant DO SQLite. ~1000 LoC of dependency surface eliminated. |
-| 3 | MongoFS as the only novel infrastructure piece | A pure codegen module (~3 functions: `sample`, `synthesize`, `fingerprint`) imported by the Worker's virtual-module resolver. No longer implements a `FileSystem` interface; the prior NFS/FUSE-style design has been superseded by the Cloudflare runtime substrate (Decision #15). |
-| 4 | Lazy codegen via `readFile`, not a build-time artefact | A user who `cat`s the typed module and an agent that imports it get the same lazily-computed content. No stale-output failure mode, no separate codegen directory. |
-| 5 | Schema fingerprint as a TypeScript constant | Pinning a procedure to a fingerprint becomes an `import` and a constant comparison. Drift detection is `ts-morph` over `procedures/`, no custom dep tracker. |
-| 6 | User-endorsed crystallisation, not auto-induction | Reuse rate by construction. Direct answer to *Library Learning Doesn't*. Aligns with the hackathon's "live demo, show the agentic behaviour" framing, the endorsement step is the visible agentic moment. |
-| 7 | Compile-to-pipeline as the v1 budget pay-out | Most legible to a judge ("watch the procedure go from 30s to 2s"), most aligned with MongoDB's native capabilities, and the cleanest demonstration of the convergence claim. |
-| 8 | Pi via Flue (`@flue/sdk`), not bare Pi | Flue wraps `@mariozechner/pi-agent-core` in a build pipeline, HTTP/SSE server, MCP adapter, valibot-typed results, and `SandboxFactory` interface, ~500 to 1000 lines of scaffolding we don't have to author. We use pi-ai's `anthropic` provider against `api.anthropic.com` direct (Bedrock is also supported but not in the demo path; see Decision #15 for the Cloudflare deploy story). Live-tested 2026-05-01; see `kb/br/07-flue-harness.md`. |
-| 9 | Voyage via Atlas Embedding & Reranking API, not standalone | Native Atlas integration since Feb 2025 acquisition. One less API key, one less rate-limit headache, hits the "MongoDB as a core component" gate squarely. |
-| 10 | Pre-registered intent-clustered eval as the central artefact | The headline chart is the moat made visible. Without pre-registration, every positive curve is rationalisable as p-hacking. Eligibility cost is half a day on day one. |
-| 11 | Three-baseline comparison, not just our system | Vanilla agentic RAG and static-typed environment are the comparison points. The chart that wins is the divergence chart, which only exists if we run all three. |
-| 12 | No DataFetch / envrun.ai branding in the hackathon repo | Original-work rule plus strategic discretion. Working codename `AtlasFS`. Brand decisions deferred to post-submission. |
-| 13 | Three-source corpus: BIRD subset + FinQA + supply-chain micro-set | BIRD: cross-collection polymorphism + published baselines (Spider, BIRD, DAIL-SQL, EvoMQL). FinQA: within-document polymorphism + compilable gold programs. Supply-chain: Round 1 demo viscerality + multimodal coverage. Three polymorphism axes, three demo beats. See `br/06`. |
-| 14 | Static schema discovery for Round 1, dynamic as Round 2/3 stretch | ~10 to 30 collections, ~6K to 12K tokens — fits Claude's context comfortably. Hooks (Decision #17) narrow the agent's surface to a domain's known intents. Dynamic (`db.search` + `db.execute` per Cloudflare Code Mode) is the right destination if the corpus grows past ~5 databases or for Round 3 polish. |
-| 15 | `flue build --target cloudflare` for the demo runtime, deployed via `wrangler deploy`; Vercel + Next.js for the UI | Re-read of `kb/resources/scope-schedule.md` lines 90-91 and 133: the hackathon mandates Atlas as a core component but is silent on hosting; `kb/resources/aws/participant-guide.md` is a partner credit-setup guide, not a hosting constraint. Flue ships a first-class `--target cloudflare` path with Durable Object SQLite session storage and the `@cloudflare/sandbox` connector — exactly what AtlasFS needs for structural per-tenant isolation and a no-network V8 sandbox. Cloudflare deploy is two commands (`wrangler deploy` + `vercel deploy`); the AWS Lambda + API Gateway + IAM + Parameter Store + Bedrock-access path is half a day of yak-shaving on Day 1 we cannot afford given the 6.5-hour build window before submissions close. Anthropic API direct replaces Bedrock; we accept the loss of AWS credit subsidy ($100-200) for a simpler deploy story. The Node target stays unused unless we hit a workerd-incompat fallback per the ladder in Hosting & Deploy. |
-| 16 | Custom `DurableObjectSessionStore` plus `tool_calls` ETL, not Flue's defaults | Flue's `InMemorySessionStore` doesn't survive Worker hibernation. Replace with a ~50-line `SessionStore` writing `SessionData` to the tenant Durable Object's SQLite via `state.storage`, plus an ~80-line ETL that walks `SessionData.entries` and writes per-tenant rows to `tool_calls` for crystallisation. The DO instance is the per-tenant boundary: cross-tenant isolation is structural, not conventional. Pin `pi-agent-core` and `pi-ai` via `pnpm.overrides` (Flue declares them `*`). |
-| 17 | Hand-authored hooks at `/datafetch/hooks/<domain>/<intent>.ts`, not a generic catalog system | The bootstrap is over-broad and the procedure does not yet exist for novel intents; hooks bridge that gap with domain-aware suggested chain shapes (relevant collections, parameter interface, derivation sketch in JSDoc). Hand-authoring ~10 to 15 hooks for FinQA + supply-chain is half a day of work and gives the agent a starting point on novel intents without building catalog infrastructure or the 7-card-type maturity ladder discussed in earlier design memos. Hook inference from schema + sampled queries is a post-hackathon research problem; for Round 1 the demo gain is what matters. Shared across tenants; superseded per-tenant by procedures once an intent crystallises. |
-| 18 | Embedding-based intent routing for procedure, hook, and primitive lookup, not signature matching | Signature matching breaks on natural-language paraphrase. Embedding the user query against signature + JSDoc and thresholding on cosine is robust and runs host-side, so high-confidence procedure hits skip the LLM entirely. The same mechanism applies uniformly to all typed primitives regardless of implementation (deterministic Atlas calls, stochastic sub-agent calls, cached lookups, derived rules): the matcher routes by contract, not by impl. |
-| 19 | FinQA modelled as `finqa_cases` (nested) plus `finqa_search_units` (sidecar), not flattened | Lean into the document model. Each case is a rich nested document with `table.rows`, `cells`, `provenance`, `goldProgram`, `goldAnswer`; the sidecar holds searchable summaries plus embeddings. Compiled pipelines operate on the nested structure directly via `$filter`/`$reduce` (see the Union Pacific 2017 worked example). |
-| 20 | Hand-authored primitive modules with non-deterministic implementations exposed as siblings of synthesised collection modules, not as a separate stochastic-tools tier | The typed-interface contract is what enables composition and crystallisation; the implementation behind a primitive (Atlas call, Flue sub-agent, cached lookup, derived rule) is an internal concern. Treating these as siblings under `/datafetch/db/<utility>.ts` keeps the toolbox uniform: same matcher (Decision #18), same composition rules, same crystallisation. The budget worker improves primitive implementations transparently before any procedure-level compilation. See "Primitive modules" subsection in Bootstrap to Emergence. |
+The observer is the in-process worker that consumes saved trajectories
+and crystallises qualifying ones into learned interfaces. It is
+fire-and-forget from the snippet runtime's perspective.
+
+### 4.1 The trajectory recorder
+
+`TrajectoryRecorder` (`src/trajectory/recorder.ts`) captures every
+call. The on-disk record at `<baseDir>/trajectories/<id>.json` carries
+`id` (`traj_<14-iso>_<6-rand>`), `tenantId`, `question` (first non-empty
+line of the snippet source), `mode`, `calls: PrimitiveCallRecord[]`,
+`result`, `createdAt`, `errored?` (disjoint from mode), `cost?`,
+`provenance?` (`{tenant, mount, functionName?}`), `phase?`,
+`crystallisable?`, `sourcePath?`, `artifactDir?`, and on commit phases
+`answer?` + `answerValidation?`.
+
+`PrimitiveCallRecord` carries `index`, `primitive`, `input`, `output`,
+`startedAt`, `durationMs`, `scope?` (`{depth, callPath, parentPrimitive,
+rootPrimitive}`), and a reserved `pin?` field for content-addressable
+pins (not yet populated).
+
+**Captured on every** `df.db.<ident>.<method>` call in `dfBinding` and
+on every `df.lib.<name>` call (the Fn callable's body itself doesn't
+record; the snippet runtime records at the `df.lib` boundary).
+
+**What is NOT redacted**: literal call inputs and outputs land in the
+JSON file as-is. There is no PII filter, no token redaction, no size
+cap. The `answer` and `answerValidation` are written back once the
+snippet commits via `df.answer(...)`. Recent commit `e3059cd` ("fix:
+keep derived trajectory values internal") prevents some derived-only
+intermediate values from leaking into the visible
+`provenance.functionName`.
+
+Test pin: `tests/trajectory-recorder.test.ts`.
+
+### 4.2 Call scope: client-visible vs nested
+
+`summarizeCallScopes()` (`src/trajectory/callScope.ts`) splits
+client-visible calls (depth 0) from calls nested inside a learned
+interface (depth > 0). The server returns this on the snippet envelope
+(`src/server/v1snippets.ts:115`) as `callPrimitives`,
+`clientCallPrimitives`, `nestedCallPrimitives`, plus per-call
+`nestedCalls: [{primitive, parent, root, depth}]` and
+`nestedByRoot: [{root, count}]`. This is what powers the demo's "Q1
+has 4 top-level calls; Q2 has 1 call (collapse: 3)" panel.
+
+### 4.3 The callshape detector + gate
+
+`shouldCrystallise()` (`src/observer/gate.ts:54-191`) runs six checks:
+
+1. Phase is `execute` or `commit` (or legacy unphased).
+2. `commit` phase requires `answerValidation.accepted === true`.
+3. `crystallisable !== false` on the trajectory.
+4. ≥2 distinct primitive calls.
+5. `errored !== true` and no error-shaped output on any call.
+6. Mode in `{novel, interpreted}`. LLM-backed/cache/compiled
+   excluded per D-015.
+7. No call already hits a known learned interface (those reinforce,
+   not re-learn).
+8. First call is a `db.*` returning a list with at least one
+   downstream `lib.*` consuming it (loose data-flow check via
+   `consumesEarlierOutput`, `src/observer/gate.ts:231-255`).
+9. `shapeHash` not already in `<baseDir>/lib/<tenant>/*.ts`
+   (scanned via `@shape-hash:` marker by `readLibrarySnapshot`).
+
+The MVP collapses the design's `N>=3 convergent trajectories` to
+`N=1`: every qualifying trajectory crystallises immediately. The
+shape-hash dedup is what stops re-running the same snippet from
+producing a second copy.
+
+Test pins: `tests/observer-gate.test.ts`, `tests/observer-callshape.test.ts`.
+
+### 4.4 The template stage
+
+`extractTemplate()` (`src/observer/template.ts`) walks the call list
+and produces a `CallTemplate`:
+
+- **Parameters**: input bindings (`param` for top-level inputs vs
+  `ref:outN[...]` for derived bindings).
+- **Steps**: per-step output names (`out0`, `out1`, ...), call shape
+  hints (`positional-query-limit`, `positional-query-opts`,
+  `positional-filter-limit`, `single-arg`).
+- **Shape hash**: FNV-1a 32-bit hex of the canonical step list
+  (primitives + sorted field-binding kinds, NOT literal values). This
+  is what makes the same intent re-shaped identically across questions
+  hash to the same id.
+- **Topic / name**: from `pickTopic()` (§2.5).
+
+Test pin: `tests/observer-template.test.ts`.
+
+### 4.5 The author
+
+`authorFunction()` (`src/observer/author.ts`) writes the file. Two
+paths:
+
+1. **Pure-composition source generation** (`generatePureSource`,
+   `src/observer/author.ts:154`) — emits TypeScript that re-walks the
+   trajectory's call sequence, parameterised. Specialised body for
+   `rangeTableMetric` (`renderRangeTableMetricBody`,
+   `src/observer/author.ts:264`) emits a candidate-validation loop that
+   retries `pickFiling/inferTableMathPlan/executeTableMath` until a
+   numeric result returns.
+2. **Codifier-skill fallback** — if `generatePureSource` returns null,
+   dispatches the `finqa_codify_table_function` skill
+   (`seeds/skills/finqa_codify_table_function.md`) through the
+   registered `BodyDispatcher`. Expects `{source}` containing
+   `fn({...})` source.
+
+The pure-composition path is the load-bearing one. **The observer
+learns from VISIBLE TS, not from prompts.** The codifier-skill path
+exists as a safety net for shapes the template extractor doesn't know
+how to render.
+
+After write, the observer awaits `regenerateManifest` and
+`regenerateWorkspaceMemory` so the next caller sees the new function in
+`df.d.ts` and `AGENTS.md` immediately
+(`src/observer/author.ts:133-141`).
+
+Test pin: `tests/observer-author.test.ts`.
+
+### 4.6 Workspace-head tracking
+
+A subtle but load-bearing piece, added in the recent commit cluster
+`893369c` / `96a474e` / `8c28f31` / `8473145` / `d1f87b3` ("feat: track
+intent workspace heads", "fix: learn from current workspace head").
+
+`<workspace>/result/HEAD.json` is the workspace's authoritative pointer
+to the current accepted commit's trajectory id. For commit trajectories
+with a `sourcePath` pointing into a `.datafetch/workspace.json`-rooted
+directory, the observer walks up to find the workspace, polls
+`result/HEAD.json` for up to 2s (`workspaceHeadTimeoutMs`,
+`src/observer/workspaceHead.ts:26-62`), and resolves to one of three
+outcomes: `not-workspace` (default gating applies), `head` (HEAD points
+at this trajectory id; the observer proceeds with `allowOverwrite:true`),
+or `stale` (HEAD points elsewhere; the observer skips this trajectory).
+
+This means an agent can iterate on the same intent in a workspace —
+commit, see validation fail, fix the script, commit again — and only
+the most-recent accepted commit's trajectory will be allowed to
+crystallise. Earlier commits live in `result/commits/NNN/` for audit,
+but they are not authoritative. `allowOverwrite:true` lets the new
+head's trajectory supersede a previously authored interface that
+happened to have the same shape hash.
+
+Test pin: `tests/observer-workspace-head.test.ts`.
+
+### 4.7 Multi-tenant isolation in the observer
+
+Per `tests/observer-multi-tenant.test.ts` and the install path:
+`createServer()` does **not** pin the observer to a tenant by default
+(`src/server/server.ts:74-83`). Each trajectory's own `tenantId` field
+decides the destination
+(`<baseDir>/lib/<trajectory.tenantId>/<name>.ts`). An explicit
+`opts.tenantId` or `DATAFETCH_TENANT` env override can re-narrow to a
+single-tenant deployment. The demo (`runDemo`) uses this override path
+to pin the observer to `"demo-tenant"` for the canonical scenario
+(§9).
+
+### 4.8 Derived bindings
+
+Many learned-interface bodies need to reference an earlier step's
+output (e.g., `executeTableMath` consumes the filing returned by
+`pickFiling`). The template stage labels these as derived bindings:
+
+| Binding kind         | Generated body reference                       |
+|----------------------|------------------------------------------------|
+| `param`              | `input.<name>`                                 |
+| `ref:out0`           | the entire output of step 0                    |
+| `ref:out0[0]`        | first element of step 0's array output        |
+| `ref:out0.field`     | field access on step 0's object output        |
+
+Derived bindings are **internal to the body**; they are not exposed in
+the public input schema. The schema only carries `param` bindings — the
+real top-level inputs the agent passes.
+
+Test pin: `tests/observer-derived-bindings.test.ts`.
 
 ---
 
-## Open design questions
+## 5. The diagnostic / lineage story
 
-These are tracked here so the docs reflect what is unresolved, not so we resolve them now.
+The pitch's diagnostic framing:
 
-1. **Static or dynamic schema discovery?** **Resolved for Round 1** by Decisions #14, #17, #18: static namespace (~6K to 12K tokens) loads upfront; hooks scaffold novel intents; the host-side matcher routes repeat intents to procedures without invoking the LLM. Dynamic discovery (Cloudflare-style `searchCollection()`/`loadType()`) is deferred until the corpus exceeds ~50 collections. See `br/06` for sizing analysis.
+```
+Client-visible call:
+  lib.rangeTableMetric
 
-2. **Vanilla RAG baseline implementation: LangGraph + MongoDB or hand-roll?** Hand-roll is more original-work-friendly; framework is more credible. Tentative: LangGraph with a clear "we wired this up, didn't build it" disclosure in README.
+Nested server-side implementation:
+  db.finqaCases.findSimilar
+  lib.inferTableMathPlan
+  lib.executeTableMath
+```
 
-3. **Scoring granularity: binary endorse/reject or graded 1-5?** Tentative: binary for v1; saves UI cost; matches the falsification framing.
+This is what `summarizeCallScopes()` returns and what the snippet
+envelope surfaces as `clientCallPrimitives` vs `nestedCallPrimitives`.
+Two consequences:
 
-4. **Per-tenant overlays for the demo: simulated or real?** **Resolved by Decision #15:** two real Durable Object instances, addressed via `https://atlasfs.vercel.app/t/data-analyst` and `https://atlasfs.vercel.app/t/financial-analyst`. Different agent system prompts (different intent priors over the eval set: data-analyst weighted toward BIRD aggregations; financial-analyst weighted toward FinQA computations) drive different trajectories into different DO SQLite stores. The two-pane divergence view reads real DO state.
+- **The agent's API gets simpler over time.** First run: the agent
+  composes 4 calls. Second run on a similar shape: the agent calls 1
+  learned interface. The typed surface the agent reaches for stops
+  growing once the shape has crystallised.
+- **The audit trail does not get simpler.** The trajectory still records
+  every nested `db.*` and `lib.*` call. Lineage is preserved at full
+  resolution.
 
-5. **Cross-tenant procedure-library leakage.** **Resolved by Decisions #15 + #16:** the per-tenant boundary is now a Durable Object instance; DO instances cannot share SQLite state, so cross-tenant leakage is physically impossible rather than enforced by path convention. Per-tenant `tool_calls` namespaces, fingerprint pins, and codegen cache keys all live within the tenant's DO storage.
+### 5.1 What lands in `result/`
 
-6. **Personal vs shared library (cross-tenant routing-score moat).** Tentative: personal-per-tenant for v1, shared-with-routing-scores as roadmap.
+| File              | Source                                                 | Status       |
+|-------------------|--------------------------------------------------------|--------------|
+| `source.ts`       | The exact script that ran                              | Shipped      |
+| `answer.json`     | The validated `df.answer(...)` envelope                | Shipped      |
+| `answer.md`       | Human-readable rendering of the answer                 | Shipped      |
+| `validation.json` | Per-gate validation report                             | Shipped      |
+| `lineage.json`    | The trajectory's call list, scoped (client vs nested)  | Shipped      |
+| `HEAD.json`       | Workspace head pointer (this commit's trajectory id)   | Shipped      |
+| `tests/replay.json` | Frozen replay test (input + expected output)         | Shipped      |
 
-7. **AgentFS license verification.** **Obsoleted by Decision #15:** AgentFS is no longer in the architecture; per-tenant state lives in Durable Object SQLite, not in an AgentFS CoW overlay. The license check is no longer required.
+The `result/commits/NNN/` subtree is append-only commit history. The
+top-level `result/` is overwritten with the most-recent accepted
+commit, but every prior commit lives at `result/commits/<n>/` with the
+same shape (source.ts, answer.json, validation.json, lineage.json,
+trajectory.json).
 
-8. **Sandbox runtime for the agent.** **Resolved by Decisions #8 and #15.** The runtime is `@cloudflare/sandbox` via Flue's `SandboxFactory`, hosted in a Cloudflare Worker. The agent imports from `/datafetch/db/<coll>.ts` virtual modules resolved by MongoFS at request time; per-tenant state lives in the tenant's Durable Object SQLite. The earlier NFS-mount path (AgentFS + Pi `sandbox: 'local'` with `cwd: '/datafetch/'`) is superseded.
+The pitch's notion of `result/lineage.json` corresponds to the shipped
+`lineage.json`: it carries the client-visible vs nested call split, the
+trajectory id, and the per-call primitives. The pitch's `replay.json`
+maps to `result/tests/replay.json`. Both are shipped.
 
-9. **Flue API churn risk.** Flue is at v0.3.5 with an explicit "Experimental, APIs may change" warning, 131 commits over the 2026-04-29-to-30 weekend, 2 contributors, no test suite, no CI. `@mariozechner/pi-agent-core` and `@mariozechner/pi-ai` are `*`-pinned upstream. Mitigation per Decision #16: pin Flue and both upstream packages exactly via `pnpm.overrides`, treat each Flue bump as a deliberate maintenance event. Open question is what cadence we adopt post-hackathon if we keep AtlasFS alive; for the 48-hour build, we freeze Flue at the version we install on Day 1.
+### 5.2 Replay tests pin a learned interface
+
+`result/tests/replay.json` is the frozen input + expected output of
+the commit. When the observer authors a learned interface from the
+trajectory, the replay test gives a direct way to check whether the
+authored body produces the same answer the trajectory recorded. Today
+the replay file is written by the workspace flow at commit time; a
+future automated re-runner can use it to validate authored interfaces
+on every change to the underlying primitives.
+
+---
+
+## 6. The server surface (Hono)
+
+The data plane is a single Hono app, mounted on `/v1/connect`,
+`/v1/sessions`, `/v1/snippets`, `/v1/bash`, `/v1/mounts`, `/health`.
+`createServer({baseDir?, tenantId?})` (`src/server/server.ts:63`) is the
+entry. Boot order is load-bearing:
+
+```
+installSnippetRuntime
+  → installFlueDispatcher
+    → installObserver
+```
+
+`installObserver` is NOT pinned to a `tenantId` by default; multi-tenant
+routing relies on the trajectory's own `tenantId`.
+
+### 6.1 Routes
+
+| Route               | Method | Request                                             | Response                                                | Caller                          |
+|---------------------|--------|-----------------------------------------------------|---------------------------------------------------------|---------------------------------|
+| `/health`           | GET    | —                                                   | `{ok, baseDir}`                                         | debugging                       |
+| `/v1/mounts`        | POST   | `{id, source: {kind:"atlas", uri, db}, warmup?, policy?}` | SSE stream of stage events; final `inventory`+`done` | (alternative path; CLI publish runs in-process today) |
+| `/v1/mounts`        | GET    | —                                                   | `{mounts: [{mountId, adapterId, collections}]}`         | debugging                       |
+| `/v1/mounts/:id`    | DELETE | —                                                   | `{ok:true, mountId}` or 404                             | manual teardown                 |
+| `/v1/connect`       | POST   | `{tenantId, mountIds?}`                             | `SessionRecord{sessionId, tenantId, mountIds, createdAt, lastActiveAt}` | `datafetch session new`, `datafetch mount` |
+| `/v1/sessions`      | GET    | —                                                   | `{sessions: SessionRecord[]}`                            | `datafetch session list`        |
+| `/v1/sessions/:id`  | GET    | —                                                   | `SessionRecord` or 404                                  | `datafetch session resume`, lookups |
+| `/v1/sessions/:id`  | DELETE | —                                                   | `{ok:true, sessionId}` or 404                           | `datafetch session end/switch`  |
+| `/v1/bash`          | POST   | `{sessionId, tenantId, mountIds, command}`          | `{stdout, stderr, exitCode}`                            | smoke tests; not in CLI today   |
+| `/v1/snippets`      | POST   | `{sessionId, source, phase?, sourcePath?}`          | full snippet envelope (below)                           | `datafetch tsx`, `plan`, `execute`, `run`, `commit` |
+
+`/v1/connect` regenerates `df.d.ts` and `AGENTS.md` for the tenant
+after creating the session record (`src/server/v1connect.ts`).
+
+`/v1/bash` maintains an in-memory `BashSession` cache in
+`createBashApp` with a 30-minute TTL per `sessionId`; evictions
+flush the `/lib/` overlay before drop.
+
+### 6.2 The snippet envelope
+
+`POST /v1/snippets` returns: `stdout`, `stderr`, `exitCode`,
+`trajectoryId`, `cost`, `mode`, `functionName`, `callPrimitives`,
+`clientCallPrimitives`, `nestedCallPrimitives`, `nestedCalls`
+(`[{primitive, parent, root, depth}]`), `nestedByRoot` (`[{root,
+count}]`), `phase`, `crystallisable`, `artifactDir`, plus `answer` +
+`validation` for commit phases. This is what the workspace CLI (`run`,
+`commit`) consumes; `datafetch tsx` prints it to stdout after the
+`--- envelope ---` separator.
+
+### 6.3 The session store
+
+`SessionStore` (`src/server/sessionStore.ts`) is one JSON file per
+session at `<baseDir>/sessions/<id>.json`. Fields: `sessionId`,
+`tenantId`, `mountIds`, `createdAt`, `lastActiveAt`. The store is the
+authoritative session record; the CLI's `<baseDir>/active-session`
+plain-text pointer is a fallback resolution layer (`--session` →
+`DATAFETCH_SESSION` env → pointer file). Simplicity is intentional.
+
+Test pins: `tests/server-sessionStore.test.ts`,
+`tests/server-v1bash.test.ts`, `tests/server-v1connect.test.ts`,
+`tests/server-v1mounts.test.ts`, `tests/server-v1snippets.test.ts`.
+
+---
+
+## 7. The CLI surface
+
+`bin/datafetch.mjs` is a thin shim that runs `tsx src/cli.ts`.
+`main()` (`src/cli.ts:382`) dispatches on subcommand. Two camps of
+verbs:
+
+### 7.1 Agent-facing verbs
+
+These are what the bash-loop driver (Claude Code) calls. They are the
+verbs the `Bash(datafetch *)` allowlist exists to permit.
+
+| Verb                                          | What it does                                                                        |
+|-----------------------------------------------|-------------------------------------------------------------------------------------|
+| `datafetch mount --tenant --dataset --intent` | Creates a session + materialises an intent workspace. The primary entry point.      |
+| `datafetch run [scripts/scratch.ts]`          | POST `/v1/snippets phase:"run"`. Exploration, bounded result limits, never crystallisable. |
+| `datafetch commit [scripts/answer.ts]`        | POST `/v1/snippets phase:"commit"`. Writes `result/`, append to `result/commits/NNN/`, advances `HEAD.json` on accept. |
+| `datafetch tsx -e '<src>'` or `<file>`        | POST `/v1/snippets` with no phase. Quick scratch execution.                         |
+| `datafetch plan -e ...`                       | Legacy phased verb. POST `/v1/snippets phase:"plan"`.                               |
+| `datafetch execute -e ...`                    | Legacy phased verb. POST `/v1/snippets phase:"execute"`.                            |
+| `datafetch man <fn>`                          | Renders a man page from `describeLibraryFunction()`. NAME / SYNOPSIS / INPUT SCHEMA / OUTPUT / EXAMPLES / INVOCATION / SOURCE. |
+| `datafetch apropos <kw> [--json]`             | Five-bucket BM25-flavoured scorer over `<baseDir>/lib/<tenant>/*.ts` and `lib/__seed__/*.ts`. Tools first. |
+
+The `apropos` flow is the agent's workhorse for warm-path discovery.
+Once the observer has authored `rangeTableMetric` for a tenant, the
+next mount with a similar intent surfaces it at the top of an
+`apropos` call.
+
+### 7.2 Operator-facing verbs
+
+These are what a human runs to set up, deploy, or demo.
+
+| Verb                                          | What it does                                                                        |
+|-----------------------------------------------|-------------------------------------------------------------------------------------|
+| `datafetch publish <id> --uri --db`           | In-process `publishMount`; streams stage events; prints inventory JSON.             |
+| `datafetch server [--port] [--base-dir]`      | Boots the Hono data plane. SIGINT/SIGTERM closes mounts cleanly.                    |
+| `datafetch session new --tenant [--mount...] [--json]` | Lower-level than `mount`; does `/v1/connect` only (no workspace).            |
+| `datafetch session list/resume/end/switch/current/narrative` | Session lifecycle + narrative renderer (markdown timeline of phased artefacts). |
+| `datafetch install-skill [--path] [--force]`  | Copies `skills/datafetch/SKILL.md` to `~/.claude/skills/datafetch/SKILL.md`.        |
+| `datafetch demo [--mount] [--tenant] [--no-cache]` | The headline two-question scenario. See §9.                                    |
+| `datafetch agent [--tenant] [--mount]`        | In-process bash REPL using `BashSession` directly (does NOT go through HTTP).       |
+| `datafetch connect [--tenant]`                | In-process token+inventory dump — debug helper.                                     |
+| `help` / `--help` / `-h`                      | Prints help text.                                                                   |
+
+Common flags resolved by helpers: `--server <url>` (default
+`http://localhost:8080`, env `DATAFETCH_SERVER_URL`), `--session
+<id>` (env `DATAFETCH_SESSION`, file `<baseDir>/active-session`),
+`--base-dir <path>` (env `DATAFETCH_HOME` → `ATLASFS_HOME` →
+`cwd/.atlasfs`), `--json`.
+
+---
+
+## 8. The skill bundle and the Claude Code loop
+
+`datafetch install-skill` copies a single 265-line markdown file to
+`~/.claude/skills/datafetch/SKILL.md`. Source: `<repo>/skills/datafetch/SKILL.md`.
+
+### 8.1 Frontmatter trigger
+
+```yaml
+---
+name: datafetch
+description: Use the datafetch CLI to drive bash-shaped tenanted sessions over mounted MongoDB Atlas datasets. Triggers when the user asks about datafetch workspaces, the FinQA dataset, mounted databases, /db/ or /lib/ contents, or wants to learn a typed interface from a trajectory.
+---
+```
+
+When the user asks Claude Code something matching, Claude Code loads
+the skill body. The body covers:
+
+1. The `$DATAFETCH_HOME` workspace map.
+2. The custom verb reference (every shipped subcommand).
+3. The **three-tier reuse hierarchy**: past trajectories →
+   learned interfaces → seed primitives. Walk down them in order.
+4. The "don't fabricate" rule: snippets without a `df.db.*` call are
+   structurally suspect.
+5. `apropos` shortcut.
+6. Authoring a new function via heredoc.
+7. Plan-then-execute, intent workspace flow.
+8. Result envelope shape.
+9. **Compose the full task in one snippet** rule. Fragmented
+   trajectories cannot be learned from (the observer needs the call
+   chain to be visible in one trajectory to extract a template).
+10. Pointers into `kb/prd/`.
+
+### 8.2 The bash-only allowedTools surface
+
+Per `README.md:46-57`:
+
+```sh
+claude --bare --allowedTools \
+  "Bash(datafetch *) Bash(cat *) Bash(ls *) Bash(jq *)"
+```
+
+Four allowlist entries. The agent has bash and only those four allowed
+verb families. **No tool catalog is exposed.** This is a deliberate
+"don't give the agent a tool catalog, give it bash" stance, in line
+with the kb/br/12 browser-harness influence. The data plane is the
+long-lived server; the CLI is a thin client; the agent's whole world
+is shell.
+
+### 8.3 `df.d.ts` is the typed reach into `db/` and `lib/`
+
+When the agent runs `cat df.d.ts`, it sees a single `declare const df`
+with `db.<ident>: CollectionHandle<...>` per mounted collection, and
+`lib.<name>` entries grouped into `// --- Learned Interfaces ---` and
+`// --- Primitives ---` headers. Each `lib` entry carries a JSDoc
+`/** intent */` block plus an `@example` derived from
+`examples[0].input`. The "Learned Interfaces" group is empty until the
+observer authors the first one for the active tenant; after
+crystallisation it gets the typed signature with JSDoc derived from
+the YAML frontmatter description. `df.answer` and `df.run` are also
+declared on the namespace.
+
+---
+
+## 9. The demo (FinQA, end-to-end)
+
+`datafetch demo` (or `pnpm demo`) → `runDemo()` (`src/demo/runDemo.ts:99`)
+is the headline shipped artefact. It is the canonical scenario the
+brief, the pitch, and the e2e test all pin against.
+
+### 9.1 What it does
+
+1. Build a fresh `baseDir` under `/tmp/df-demo-<pid>-<timestamp>` (or `--base-dir`).
+2. `installSnippetRuntime`, `installFlueDispatcher`, `installObserver`. The demo pins the observer to `"demo-tenant"`, unlike `createServer()` which leaves it unpinned.
+3. Publish a mount: live Atlas if `ATLAS_URI` is set; otherwise an in-memory `StubMountAdapter` with two synthetic FinQA filings (`STUB_FILINGS`, `src/demo/runDemo.ts:787`): DOW / 2018 chemicals revenue and BTU / 2018 coal revenue.
+4. `pickCasesIdent` resolves the cases collection ident: `cases` for the in-memory stub, `finqaCases` for live Atlas.
+5. **Q1**: `> what is the range of chemicals revenue between 2014 and 2018`. The composed source calls `df.db.<ident>.findSimilar` → `df.lib.pickFiling` → `df.lib.inferTableMathPlan` → `df.lib.executeTableMath`, logs `[Q1] answer={"value":700,...}`.
+6. `awaitCrystallisation` polls `observer.observerPromise.get(id)`. On success, prints `[demo] observer learned rangeTableMetric at <path>`.
+7. (Optional `--no-cache`) deletes the learned interface before Q2, forcing a second cold path.
+8. **Discovery**: `discoverLearnedFunction` runs `searchLibrary({...})` for Q2's question and confirms the top match is `rangeTableMetric`.
+9. **Q2**: `> what is the range of coal revenue between 2014 and 2018`. The source invokes the learned interface directly: `await df.lib.rangeTableMetric({query, limit: 5, priorTickers: []})`. Logs `[Q2] mode=interpreted tier=2 llmCalls=...`.
+10. `printCostPanel` renders the comparison rows: mode, tier, `tokens.cold/hot`, `ms.cold/hot`, `llmCalls`, function, answer (with `✓ expected=X actual=X` markers).
+11. `printCallChains` renders Q1's 4-call chain vs Q2's single `rangeTableMetric` call. Final line: `Top-level surface: Q1 has 4 calls; Q2 has 1 call (collapse: 3).`
+12. `assertGoldAnswers` hard-fails if either Q's answer doesn't match gold (700 chemicals, 1000 coal).
+
+### 9.2 The cost panel
+
+The columns the demo asserts on (`tests/demo-e2e.test.ts:65-95`):
+
+| Row         | Q1                              | Q2                                |
+|-------------|---------------------------------|-----------------------------------|
+| mode        | `novel`                         | `interpreted`                     |
+| tier        | `4`                             | `2`                               |
+| function    | `executeTableMath` (or similar) | `rangeTableMetric`                |
+| llmCalls    | (many)                          | (fewer or zero on hot path)       |
+| answer      | `✓ expected=700 actual=700`     | `✓ expected=1000 actual=1000`     |
+
+Q1 is the **cold path**: ad-hoc composition, no learned interface, tier
+4. Q2 is the **warm path**: one learned-interface call,
+mode flips to `interpreted`, tier drops to 2, top-level surface
+collapses from 4 to 1. The cost panel is the visceral demonstration of
+the convergence claim.
+
+### 9.3 `--no-cache` behaviour
+
+If `--no-cache` is passed, the demo deletes the learned interface
+before Q2, forces a second cold path, and shows that without
+crystallisation the cost would not converge. This is the control: it
+proves the cost drop in the default run is the result of the warm
+path, not a difference in the underlying questions.
+
+### 9.4 Test pin
+
+`tests/demo-e2e.test.ts:46` spawns `pnpm tsx src/cli.ts demo` with
+`ATLASFS_SKIP_ENV_FILE=1` and asserts on every line of the output.
+Failure of the demo is failure of the test suite.
+
+---
+
+## 10. Multi-tenant isolation
+
+The data plane is **multi-tenant by structure, not by convention**.
+
+### 10.1 What's per-tenant vs shared
+
+| Surface                                       | Scope        |
+|-----------------------------------------------|--------------|
+| `<baseDir>/mounts/<mountId>/`                 | shared (one Atlas cluster serves all tenants) |
+| `<baseDir>/lib/<tenantId>/<name>.ts`          | per-tenant (each tenant's intents → different learned interfaces) |
+| `<baseDir>/lib/<tenantId>/skills/<name>.md`   | per-tenant (agent-skill markdown for `agent({skill})`) |
+| `<baseDir>/lib/__seed__/` and `lib/__seed__/skills/` | shared (reserved tenant id; excluded from agent-facing listings) |
+| `<baseDir>/sessions/<sessionId>.json` and `sessions/<sessionId>/...` | per-session, which is per-tenant |
+| `<baseDir>/trajectories/<id>.json`            | per-trajectory; each carries `tenantId` |
+| Workspace `result/` and `result/commits/`     | per-workspace, which is per-session |
+| `df.d.ts` / `AGENTS.md` (in `<baseDir>`)      | per-tenant (regenerated on `/v1/connect`) |
+
+A reserved tenant id matches `^__\w+__$` (e.g., `__seed__`). It is
+excluded from agent-facing tenant listings (`isReservedTenantId`,
+`src/paths.ts`).
+
+### 10.2 How isolation is enforced
+
+- The observer uses each trajectory's `tenantId` to choose the
+  destination directory (`<baseDir>/lib/<trajectory.tenantId>/<name>.ts`).
+- The `DiskLibraryResolver` does layered lookup:
+  `<baseDir>/lib/<tenant>/<name>.ts` first, then
+  `<baseDir>/lib/__seed__/<name>.ts`. Tenant overlay always wins.
+- `apropos` filters its scan to the active tenant + seed.
+- `df.d.ts` is regenerated per-tenant on `/v1/connect`.
+- The intent workspace's `lib/` symlinks directly to
+  `<baseDir>/lib/<tenant>/`.
+
+Test pin: `tests/observer-multi-tenant.test.ts` exercises a multi-tenant
+scenario end-to-end and proves no cross-tenant leakage.
+
+---
+
+## 11. Flue + Anthropic integrations
+
+### 11.1 Flue is a library, not a service
+
+`FlueBodyDispatcher` (`src/flue/dispatcher.ts:67`) constructs its own
+`FlueAgent` via `@flue/sdk/internal`'s `createFlueContext`. There is no
+Flue server; the dispatcher uses the SDK as a library inside the
+data-plane process. The credential boundary is `src/flue/session.ts`
+— the only place LLM keys are read.
+
+`FlueSessionPool` (`src/flue/session.ts:64`):
+- One persistent Flue session per tenant.
+- Lazy-constructed via `createFlueContext` + `InMemorySessionStore` +
+  `bashFactoryToSessionEnv` (an in-memory bash sandbox).
+- FIFO-evicted at cap 64 (per `enforceMapCap`, `src/util/bounded.ts`).
+
+Default model: `openai-codex/gpt-5.3-codex-spark`. Override via
+`DATAFETCH_LLM_MODEL` / `DF_LLM_MODEL`. Per D-016, the body's own
+`model` field always wins.
+
+### 11.2 Skill resolution
+
+`agent({skill})` bodies reference markdown files. Layered lookup
+(`src/flue/skill.ts:DiskSkillLoader`):
+1. Tenant overlay: `<baseDir>/lib/<tenant>/skills/<name>.md`.
+2. Seed: `<baseDir>/lib/__seed__/skills/<name>.md`.
+
+`installFlueDispatcher` mirrors `<repo>/seeds/skills/*.md` to the seed
+overlay at boot.
+
+Five seed skills exist at `seeds/skills/`. Today only
+`finqa_codify_table_function` is referenced from runtime code
+(`src/observer/author.ts:98`). The four `mint_*`/`score_*` skills
+are seeded but never dispatched — they're scaffolding for later.
+
+### 11.3 Where Anthropic SDK is invoked
+
+`@anthropic-ai/sdk` is pulled in as a dep (`package.json:25`) but not
+directly imported by `src/`. Flue uses it internally when the resolved
+provider is `anthropic`. The data plane reads `ANTHROPIC_API_KEY` (with
+`ANTHROPIC_KEY` as a legacy alias) at session-construction time.
+
+### 11.4 OpenAI Codex OAuth fallback
+
+`src/flue/session.ts:153-205` reads from `~/.claw-codex/auth.json` and
+`~/.codex/auth.json` plus several env var aliases. The data plane
+works against ChatGPT subscription tokens without an Anthropic key.
+
+Test pin: `tests/flue-skill.test.ts`. Smoke: `src/flue/__smoke__.ts`.
+
+---
+
+## 12. What's not built yet (anchored)
+
+These are designed in older docs but not shipped. The roadmap doc
+owns the schedule. One sentence each.
+
+| Reserved feature                                              | Status        |
+|---------------------------------------------------------------|---------------|
+| **NFS / FUSE filesystem mount** of `/datafetch/`              | Dead. The actual surface is `<baseDir>/mounts/<mountId>/` on local disk plus the workspace `db/` symlink. |
+| **Compiled tier** (Atlas aggregation pipeline compiler)        | `CostTier=1` reserved. `MountAdapter.runCompiled` throws `not implemented in MVP`. No code emits `mode:"compiled"`. |
+| **Vector / Voyage / `$rankFusion` retrieval**                 | Atlas adapter reports `vector:false`; `findSimilar` and `hybrid` delegate to `search` (lex-only).         |
+| **Drift detection** on schema changes                          | `MountHandle.on("drift", ...)` is on the contract but never fires. Schema fingerprints are computed and persisted; the reactive path is unimplemented. |
+| **Cross-tenant family-function promotion**                     | `MountHandle.on("family-promoted", ...)` exists but never fires. The "family functions" story (three intents collapsing to one parameterised family) is design only. |
+| **`N≥3 convergent trajectories` clustering**                  | Collapsed to `N=1` in the MVP. Shape-hash dedup is the only convergence gate.                              |
+| **User-endorsement loop**                                      | No UI, no endorsement API. Validation is automated (`validateAnswerEnvelope`); crystallisation is automatic on validation pass. |
+| **`cache` mode / tier 0–1 fast path**                         | Reserved. No code path emits `mode:"cache"`.                                                              |
+| **Pre-registered eval / variance bands**                       | No `eval/` directory. The demo's cost panel is anecdotal — no multi-seed run.                              |
+| **HTTPS / auth on the data plane**                             | `connect` returns `dft_<tenant>_<ts>` tokens but they're never validated. No TLS setup.                  |
+| **Content-addressable pins**                                   | `Provenance.pins: Record<string, string>` is in the type and always defaulted to `{}`. Reserved.         |
+| **`OpenTraces` / `agent-trace` dataset publishing**            | Different tool. Not part of datafetch's scope.                                                            |
+
+The kb/elevator and kb/mission docs may still mention some of these as
+if shipped; treat them as aspirational where they conflict with this
+list.
+
+---
+
+## 13. Reference: on-disk layout
+
+### 13.1 Under `$DATAFETCH_HOME`
+
+Default `~/.atlasfs` (canonical legacy var name `ATLASFS_HOME`).
+
+```
+mounts/<mountId>/                     # substrate-derived (shared)
+  <coll>.ts                           # typed module
+  <coll>/_descriptor.json
+  <coll>/_samples.json
+  <coll>/_stats.json
+  README.md
+  _inventory.json
+
+lib/<tenant>/<name>.ts                # learned interfaces + hand-authored fns (per-tenant)
+lib/<tenant>/skills/<name>.md         # tenant-private agent skill markdown
+lib/__seed__/<name>.ts                # re-export shims to <repo>/seeds/lib/<name>.ts
+lib/__seed__/skills/<name>.md         # mirrored from <repo>/seeds/skills/
+
+sessions/<sessionId>.json             # session record
+sessions/<sessionId>/plan/attempts/<traj>/   # non-crystallisable plan artefacts
+sessions/<sessionId>/run/attempts/<traj>/    # non-crystallisable run artefacts (workspace flow)
+sessions/<sessionId>/execute/<traj>/         # committed execute artefacts (legacy phased)
+sessions/<sessionId>/commit/<traj>/          # committed commit artefacts (workspace flow; includes answer.json, etc.)
+
+trajectories/<id>.json                # canonical trajectory record
+
+active-session                        # plain-text session-id pointer
+AGENTS.md                             # auto-generated workspace memory
+CLAUDE.md                             # symlink/alias of AGENTS.md
+df.d.ts                               # auto-generated TypeScript manifest
+```
+
+In-memory only (per-process):
+- `MountRuntimeRegistry` — `mountId → MountRuntime` map; survives across
+  `/v1/snippets` calls.
+- `BashSession` cache in `createBashApp` — TTL 30 min per `sessionId`.
+- `FlueSessionPool` — per-tenant Flue agent + session, FIFO-evicted at
+  cap 64.
+- SDK module-level singletons: `_bodyDispatcher`, `_libraryResolver`,
+  `_registry`. Replaced on each `createServer()` call.
+
+### 13.2 Intent-workspace layout (CWD-rooted)
+
+```
+.datafetch/workspace.json     # version, sessionId, tenantId, mountIds, dataset, intent, baseDir, serverUrl, createdAt
+AGENTS.md                     # workspace orientation
+CLAUDE.md                     # alias of AGENTS.md
+df.d.ts                       # copied from baseDir at mount (or fallback stub)
+
+db/                           # symlink to <baseDir>/mounts/<dataset>/ (or readme stub)
+lib/                          # symlink to <baseDir>/lib/<tenant>/ (or readme stub)
+
+scripts/
+  scratch.ts                  # exploration target for `datafetch run`
+  answer.ts                   # final program target for `datafetch commit`
+  helpers.ts
+
+tmp/runs/NNN/                 # `datafetch run` outputs (source.ts, result.json, result.md, lineage.json)
+
+result/                       # current accepted commit's view
+  source.ts
+  answer.json
+  answer.md
+  validation.json
+  lineage.json
+  HEAD.json                   # workspace head pointer
+  tests/replay.json
+  commits/NNN/                # append-only commit history (full record per attempt)
+```
+
+---
+
+## 14. The core product claim
+
+> Datafetch does not virtualize the whole dataset. It virtualizes the
+> **dataset interface**, then improves that interface from accepted,
+> evidence-backed work.
+
+Concretely: every accepted commit lands as visible TypeScript at
+`<baseDir>/lib/<tenant>/<name>.ts`. The next mount with a similar
+intent finds it via `apropos`, calls it as `df.lib.<name>(...)`, and
+the cost panel collapses. The trajectory-to-interface flow is the
+mechanism. The intent workspace is where the agent's work happens.
+The `df.answer(...)` envelope is the contract that says "this work is
+done, lineage attached, ready to learn from." Everything else in this
+doc exists to make that loop run.

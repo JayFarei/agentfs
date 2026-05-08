@@ -1,276 +1,196 @@
 ---
-title: "MongoDB-AE-Hackathon, Roadmap"
+title: "Datafetch, Roadmap"
 type: evergreen
 tags: [magic-docs]
-updated: 2026-05-01
+updated: 2026-05-07
 ---
 
 # Roadmap
 
-A synthesized narrative built from the individual plan documents in `plans/`. Groups shipped features by version, lists in-progress work, and outlines the backlog. Each entry references plan numbers.
+A truthful map of where datafetch is, what is reserved-but-not-built, and what comes next. The structure is three buckets: **Shipped (MVP)** for the user-runnable surface today, **Reserved but not shipped** for contract surface that exists in types and headers but has no implementation, and **Next** for concrete improvements ordered by leverage.
 
-The hackathon window is **Saturday, May 2** for build and Round 1 judging, and **Thursday, May 7** for Round 2 (community vote) and Round 3 (mainstage, Top 3 only). Total estimated work: **~7.5 person-days**, sequenced for two engineers across the build window with focused parallelism.
-
----
-
-## Eligibility gates (must clear by 5:00 PM Saturday)
-
-Tracking these here so they are not buried in `kb/resources/judging-criteria.md`. Failing any one disqualifies the project regardless of demo quality.
-
-- [ ] Built on the **MongoDB Atlas Sandbox** provided for the hackathon (M10 cluster, email-invite link)
-- [ ] MongoDB Atlas is a **core component** (the demo cluster is the data plane; Atlas Vector Search and `$rankFusion` are load-bearing)
-- [ ] Project addresses **Adaptive Retrieval** (theme 3)
-- [ ] Repository is **public**, before the 5:00 PM submission
-- [ ] Team size **<= 4** (solo allowed)
-- [ ] All work done **during the event**; original contributions clearly delineated in README
-- [ ] At least one team member can attend **MongoDB.local London** on May 7
-- [ ] Project is **not** "Basic RAG Application" (banned list); the differentiator from a basic RAG is the user-endorsed cross-session procedure library plus the optimisation budget worker, both visible in the demo. Banned-list risk is highest on FinQA (which can read like "ask SEC filings RAG"); mitigation is to lead the demo with crystallisation and deterministic-replay visuals, not retrieval, and to surface the two-tenant divergence visual which is structurally not a RAG pattern
-- [ ] Built on **AWS** (Top 6 finalist gate); Bedrock for the model, Lambda for the optimisation worker satisfies this without the Bedrock mid-build surprise-bill risk (kb/resources/aws/participant-guide.md)
-- [ ] **Submission package** by 5:00 PM Saturday: 1-minute demo video, public repo URL, all team members on the form
+The product claim, restated: datafetch does not virtualise the whole dataset. It virtualises the dataset interface, then improves that interface from accepted, evidence-backed work. The load-bearing primitive is the audited commit, not the snippet, not the prompt, and not the trajectory. Everything in "Next" is in service of making that primitive richer.
 
 ---
 
-## Shipped
+## Shipped (MVP)
 
-### v0.0, Pre-build (2026-05-01)
+What an agent can actually do today against a running data plane on `004-datafetch-bash-mvp`. Each item is a thing the user can run end-to-end and watch land on disk.
 
-Documentation and methodology lock-in. Plans are still being authored.
+### The intent workspace
 
-- The six top-level kb docs are filled in with the Adaptive Retrieval framing: `mission.md`, `product-design.md`, `research.md`, `market.md`, `mental-model.md`, this file.
-- Resource inventory captured under `kb/resources/` (MongoDB, AWS, partners, judging rubric).
-- Background research: `br/01` (Voyage + Code Mode); `br/18` and `br/52` queued for capture (FUSE-vs-NFS, AgentFS).
+`datafetch mount --tenant <id> --dataset <mount-id> --intent '<text>'` materialises a CWD-rooted folder with `.datafetch/workspace.json`, `scripts/{scratch.ts,answer.ts,helpers.ts}`, `tmp/runs/`, `result/{commits,tests}/`, `df.d.ts`, and symlinks `db/` and `lib/` back to `<baseDir>/mounts/<dataset>` and `<baseDir>/lib/<tenant>`. `AGENTS.md` and `CLAUDE.md` are written into the workspace for orientation. The agent moves through this folder, edits `scripts/answer.ts`, runs `datafetch run` to write notebook-shaped output to `tmp/runs/NNN/`, and then `datafetch commit` to write `result/{answer.json,answer.md,validation.json,lineage.json,tests/replay.json,HEAD.json}` plus an append-only commit at `result/commits/NNN/`. Commit means "this is the final auditable answer for this intent" — it is not a git commit. The append-only commit history plus `HEAD.json` are the workspace's audit primitive: every accepted answer is reproducible from a recorded source plus a recorded substrate access pattern, and the HEAD pointer is the only thing the observer trusts when deciding whether a commit's trajectory is current.
 
-> No code shipped yet. v0.1 begins with the day-one pre-registration plan.
+### `df.answer({...})` validation
 
----
+Validation runs nine gates: `structuredAnswer`, `statusAllowed`, `valuePresent`, `evidencePresent`, `derivationVisible`, `unsupportedHasReason`, `lineagePresent`, `noDefaultZeroFallback`, `hiddenManipulationDetected`. `accepted = blockers.length === 0` and `learnable = accepted` (`src/snippet/answer.ts:128`). The envelope is sealed with a `Symbol.for("datafetch.answer")` brand so the runtime can refuse to crystallise from anything that is not a real `df.answer(...)` return value.
 
-## In Progress
+### The bash-loop driver
 
-> Empty until Day 1. Plans 001 and 002 (below) are the first to start.
+The shipped agent surface is `claude --bare --allowedTools "Bash(datafetch *) Bash(cat *) Bash(ls *) Bash(jq *)"`. No tool catalog. The agent has bash and four allowed verbs. The skill bundle (below) is what teaches it to walk the three-tier reuse hierarchy and author functions in the `fn({...})` shape. `datafetch agent` (in-process bash REPL, does not go through HTTP) exists as an offline mode for hacking on the loop without the server.
 
----
+### The `fn({...})` factory with semantic learned-interface naming
 
-## Planned / Backlog
+`fn({intent, examples, input, output, body})` from `@datafetch/sdk` is the only way to author a callable. Body shapes are `pure | llm | agent`; bare functions normalise to `pure`. Validation is valibot on input and output. The factory is in `src/sdk/fn.ts` and the body shapes in `src/sdk/body.ts`. Crystallised functions get semantic names from `pickTopic()`: `rangeTableMetric`, `compareTableMetric`, `ratioTableMetric`, `tableMetric`, `tableMathPlan`, `locateTableFigure`, `filingQuestion`. Shape hash is the dedup key but no longer leaks into the file name. Legacy `crystallise_*` names are still recognised by the gate.
 
-The plans queue, in execution order. Effort estimates per the brief (in person-days, single-engineer focused). All plans use the `plans/000-convention.md` template.
+### The cold to warm tier flip on FinQA
 
-### Plan 001, feat: corpus ETL + pre-registered task set with three label layers
+`datafetch demo` runs Q1 ("range of chemicals revenue between 2014 and 2018") then Q2 ("range of coal revenue between 2014 and 2018"). Q1 composes four top-level calls (`db.<ident>.findSimilar` then `lib.pickFiling`, `lib.inferTableMathPlan`, `lib.executeTableMath`) and lands as `mode:"novel" tier:4`. The observer crystallises `rangeTableMetric` between Q1 and Q2. Q2 collapses to a single `lib.rangeTableMetric` call and lands as `mode:"interpreted" tier:2`. This flip is pinned by `tests/demo-e2e.test.ts` and is the cost-panel headline.
 
-**Status:** proposed. **Effort:** 1 day (was 1/2 day before the hybrid corpus). **Why first:** longest lead-time artefact; freezes the eval and the data plane *before* any optimisation work begins, which is the load-bearing methodological commitment. Every later plan depends on this. See `br/06` for full corpus rationale.
+### Per-tenant `lib/` overlay
 
-**Deliverable A: corpus ETL.** Half a day.
-- `loadBird.ts`: download BIRD's official 33.4 GB SQLite release, subset to 3 to 5 databases (recommended: `video_games`, `european_football_2`, `financial`, `formula_1`, `debit_card_specializing`), parse each SQLite table into MongoDB collections (one collection per source table). Source supervision pairs from [`xu3kev/BIRD-SQL-data-train`](https://huggingface.co/datasets/xu3kev/BIRD-SQL-data-train).
-- `loadFinQA.ts`: download [`dreamerdeo/finqa`](https://huggingface.co/datasets/dreamerdeo/finqa) from HF (8,281 examples), clone [`czyssrs/FinQA`](https://github.com/czyssrs/FinQA) for the gold program annotations the HF mirror omits, merge by `id`, insert into a single `filings` collection with polymorphic documents.
-- `loadSupplyChain.ts`: hand-crafted ~10 documents (npm registry metadata, GHSA advisories, OSV records, dependency-graph snippets for documented incidents).
-- Total post-load size target: ~2 GB across `bird_video_games`, `bird_european_football_2`, etc., plus `finqa.filings`, plus `supply_chain.{packages, advisories, dependents}`.
-- License-verification recorded in README.
+Mounts under `<baseDir>/mounts/<mountId>/` are global. Library overlays under `<baseDir>/lib/<tenant>/` are private per tenant. Reserved tenant ids (`__seed__`) hold cross-tenant primitives as re-export shims back to `<repo>/seeds/lib/`. `tests/observer-multi-tenant.test.ts` proves a trajectory's own `tenantId` field decides where its learned interface lands. The observer is not pinned to a tenant in the default `createServer()` path; it routes per-trajectory.
 
-**Deliverable B: pre-registered task set.** Half a day.
-- `eval/tasks.json` committed to the public repo on Day 1, with:
-  - 5 intent clusters of 8 tasks each (40 total):
-    - 2 BIRD clusters (e.g., `bird-video-games-publishers`, `bird-formula-1-results`).
-    - 2 FinQA clusters (e.g., `finqa-revenue-growth`, `finqa-operating-margin`).
-    - 1 supply-chain cluster (`supply-chain-risk-assessment`).
-  - 10 out-of-cluster control tasks.
-  - Per task: answer label (gold SQL / gold program / hand-labelled answer), evidence label (required source ids: db_id for BIRD, filing id for FinQA, package name for supply-chain), canonical-pathway label (near-optimal trajectory length).
-  - Per task: `tenant_id` recommendation (BIRD tasks lean to `data-analyst`, FinQA tasks lean to `financial-analyst`, supply-chain tasks span both).
-- Public commit hash recorded in `eval/PRE_REGISTRATION.md`.
+### Trajectory recording into observer crystallisation
 
-Dependencies: none. Blocks 002, 005, 006, 010.
+Every `df.db.<ident>.<method>` and every `df.lib.<name>` call is recorded as a `PrimitiveCallRecord` with depth, parent, and root. Trajectories land at `<baseDir>/trajectories/<id>.json` with no PII filter, no token redaction, and no size cap (deliberate for hackathon scope). The snippet runtime fires `onTrajectorySaved(id)` after save, the observer reads the trajectory, runs the gate (phase, validation, ≥2 distinct primitives, no error, mode in `{novel, interpreted}`, no learned-interface call already, first call returns a list consumed downstream, shape hash not yet seen), and writes `<baseDir>/lib/<tenant>/<name>.ts`. `df.d.ts` and `AGENTS.md` are regenerated immediately so the next caller sees the new function.
 
----
+### Workspace HEAD-aware crystallisation
 
-### Plan 002, feat: vanilla agentic RAG baseline
+The recent "track intent workspace heads" / "learn from current workspace head" commits (`96a474e`, `d1f87b3`, `8473145`, `8c28f31`) make the observer poll `<workspace>/result/HEAD.json` for up to 2 seconds before deciding whether a commit's trajectory is current. Superseded commits with the same shape hash are rejected as `stale`; current-head commits are allowed to overwrite a previously authored interface. This is what lets a workspace iterate toward a better answer without piling up dead learned interfaces.
 
-**Status:** proposed. **Effort:** 1/2 day. **Why second:** we need something to beat from day one. Starts in parallel with the MongoFS plan once the eval is frozen.
+### The demo with the cost panel
 
-Deliverable: a LangGraph + MongoDB Atlas Vector Search agent that answers tasks from `eval/tasks.json`. Clearly labelled in the README as "external framework, configured during the event, not built". Used as one of the three baselines in the headline divergence chart.
+`datafetch demo [--mount finqa-2024] [--no-cache]` is the load-bearing shipped artefact. The cost panel renders mode, tier, tokens.cold, tokens.hot, ms.cold, ms.hot, llmCalls, function name, and answer with `expected=X actual=X` markers. The call-graph collapse panel shows Q1's four-call chain vs Q2's single call. `assertGoldAnswers` hard-fails on mismatch (700 for chemicals, 1000 for coal).
 
-Dependencies: 001. Blocks 010.
+### The Hono server and session store
 
----
+`datafetch server` boots `createServer()` (`src/server/server.ts`) with the Hono app over `@hono/node-server`. Routes: `/health`, `/v1/mounts` (POST/GET/DELETE), `/v1/connect`, `/v1/sessions` (GET, GET-by-id, DELETE), `/v1/bash`, `/v1/snippets`. Session records persist as `<baseDir>/sessions/<id>.json`. The CLI's `<baseDir>/active-session` plain-text pointer is the resolution fallback after `--session` flag and `DATAFETCH_SESSION` env. SIGINT/SIGTERM closes mounts cleanly.
 
-### Plan 003, feat: MongoFS over AgentFS plus NFS mount
+### Multi-tenant isolation on a single data plane
 
-**Status:** proposed. **Effort:** 1.5 days. **Why third:** the only piece of novel infrastructure we author. Single TypeScript class implementing AgentFS's `FileSystem` interface against the demo Atlas cluster. Closes the loop from "agent writes typed snippet" to "typed call hits Atlas".
+A single `createServer()` process serves any number of tenants. Mounts are shared. Library overlays are tenant-private. Sessions bind one tenant to one set of mountIds. `BashSession` instances are cached per-sessionId with a 30-minute TTL and `flushLib()` on eviction. `FlueSessionPool` keeps one persistent Flue agent per tenant, FIFO-evicted at cap 64.
 
-Deliverable: `src/mongofs/index.ts` (~300 LOC) + a CLI entrypoint `atlasfs mount <conn>` that starts the AgentFS NFS server with MongoFS plugged in as the FileSystem implementation for `db/` and `views/`, and AgentFS's CoW overlay handling `procedures/` and `scratch/`.
+### The `df.d.ts` typed surface
 
-Includes:
-- `readdir`, `stat`, `readFile` for `db/` and `db/<coll>/`.
-- `writeFile` returns `EACCES` on `db/`, delegates to overlay for `procedures/` and `scratch/`.
-- License-verification of AgentFS recorded in the README.
+`<baseDir>/df.d.ts` is the Code Mode-style typed manifest. It groups library entries into "Learned Interfaces" (frontmatter present) and "Primitives" (no frontmatter). Mounts surface as typed `db.<ident>: CollectionHandle` declarations. Inline JSDoc carries each function's description block and an `@example` line built from `examples[0].input`. Regenerated on every `/v1/connect` and on every observer `authorFunction`. This is the surface the agent reads to know what is callable.
 
-Dependencies: AgentFS license check must pass on Day 1. Blocks 004, 005.
+### Apropos and man
+
+`datafetch apropos <kw>` runs a five-bucket BM25-flavoured scorer (name, intent, description, examples, source-head tokens) over the tenant's overlay and the seed library, returns ranked matches above `SCORE_THRESHOLD = 0.25`, and surfaces frontmatter-bearing tools with a small score bonus. `datafetch man <fn>` renders NAME / SYNOPSIS / INPUT SCHEMA / OUTPUT / EXAMPLES / INVOCATION / SOURCE. These are the agent's discovery primitives before it composes a fresh chain.
+
+### The skill bundle
+
+`datafetch install-skill [--path <dir>] [--force]` copies `skills/datafetch/SKILL.md` (265 lines) to `~/.claude/skills/datafetch/SKILL.md`. The skill teaches the agent the workspace layout, the custom verbs, the three-tier reuse hierarchy (past trajectories then learned interfaces then seed primitives), the "compose your full task in one snippet" rule (fragmented trajectories cannot be learned from), the `df.answer({...})` envelope shape, and the `fn({...})` authoring template via heredoc.
+
+### Test coverage
+
+28 vitest files across SDK, trajectory, snippet runtime, observer (template, gate, author, callshape, derived bindings, multi-tenant, workspace head), bootstrap (idents, infer, workspace memory), bash, server (sessionStore, v1bash, v1connect, v1mounts, v1snippets), CLI (plan-execute, session-narrative), discovery, demo-e2e, paths, util-bounded, flue-skill, adapter-runtime. Smoke harnesses live alongside their modules (`__smoke__.ts` files).
 
 ---
 
-### Plan 004, feat: codegen-as-readFile and schema fingerprints
+## Reserved but not shipped
 
-**Status:** proposed. **Effort:** 1/2 day. **Why fourth:** unlocks the typed surface; the foundation for everything that imports from `db/`.
+These appear in the type system, in contract method signatures, in seeded skill files, in the README's deferred list, or in older kb docs. No code path consumes them today. Listed here so contributors can find them without grep, and so the gap between "design surface" and "executed surface" stays visible.
 
-Deliverable: MongoFS `readFile("/db/<coll>.ts")` returns a synthesised TS module with:
-- Inferred TypeScript interface from `mongodb-schema` over a sampled set of documents.
-- `SCHEMA_VERSION` constant exported.
-- Typed methods: `findExact`, `findSimilar`, `search`, `hybrid`.
-- JSDoc comments with sampled example documents.
+### Compiled aggregation pipeline path (Tier 3 / Tier 1)
 
-Dependencies: 003. Blocks 005, 008.
+`CostTier = 0|1|2|3|4`. The shipped path uses 2 (substrate or pure) and 4 (novel composition) most heavily, with 3 reserved for LLM dispatch through Flue. Tier 1 is reserved for "compiled" — a single Atlas aggregation pipeline that subsumes a typed-call sequence. `Result.mode` includes `"compiled"` and `"cache"` for the same reason. No production code emits these. Tiers 0 and 1 are reserved.
 
----
+### Atlas aggregation pipeline compiler
 
-### Plan 005, feat: agent + procedure-library loop on top of primitives
+`MountAdapter.runCompiled` and `MountAdapter.ensureIndex` are on the contract (`src/sdk/adapter.ts`) but `AtlasMountAdapter.runCompiled` throws "not implemented in MVP" (`src/adapter/atlas/AtlasMountAdapter.ts:151`). `capabilities()` returns `compile:true` as a forward-looking signal but no caller consumes it. The optimisation budget worker that would compile a hot procedure into a single `$rankFusion` aggregate is design only.
 
-**Status:** proposed. **Effort:** 1 day. **Why fifth:** the mechanism the brief is testing. Routes novel queries to a fresh Pi agent, captures trajectories, presents review prompts, crystallises endorsed trajectories into typed procedures.
+### Vector retrieval at query time
 
-Deliverable:
-- Pi agent harness configured with Bedrock provider (Claude) and the typed filesystem surface as its only context.
-- Snippet matcher: routes matches to deterministic execution, novel snippets to the agent.
-- Trajectory capture via `tool_calls`.
-- Crystallisation pipeline: trajectory -> verifier -> `procedures/<name>.ts` -> promotion.
-- Schema-fingerprint pinning at crystallisation time.
+`AtlasMountAdapter.capabilities()` returns `vector:false`. `findSimilar` and `hybrid` both delegate to `search` (`src/adapter/atlas/AtlasMountAdapter.ts:307`), which uses Atlas Search compound `$search` queries when an index is detected and falls back to client-side regex+token-overlap otherwise. Voyage is in the dependency wishlist but not pulled in. The bootstrap pipeline detects embedding-shaped fields (role `embedding`) but no retrieval path uses them.
 
-Dependencies: 003, 004. Blocks 007, 009, 010.
+### Drift detection
 
----
+`MountHandle.on("drift", ...)` is on the contract (`src/adapter/publishMount.ts:80`) but never fires. The bootstrap pipeline computes a deterministic sha256 fingerprint of every collection's descriptor (`fingerprintDescriptor`) and persists it. The reactive path that would re-fingerprint on Atlas Change Stream events and surface stale-pinned learned interfaces is unimplemented.
 
-### Plan 006, feat: eval harness, metric ledger, cluster heatmap renderer
+### Cross-tenant family promotion
 
-**Status:** proposed. **Effort:** 1 day. **Why sixth:** so we see the picture as we work. Renders during build, not just at demo time.
+`MountHandle.on("family-promoted", ...)` is on the contract but never fires. The "three convergent intents collapse to one parameterised family" story from older kb docs has no implementation. The shipped observer dedupes on shape hash within a single tenant and writes only to that tenant's `lib/<tenantId>/` overlay; nothing cross-promotes.
 
-Deliverable:
-- `atlasfs eval <round> --baseline=<vanilla|static|ours> --tenant=<id>` runs the pre-registered task set on the chosen baseline for the chosen tenant and writes per-task metric rows.
-- Metric ledger schema: `(round, task_id, baseline, tenant_id, T_n, D_n, R_n, I_n, tokens, wall_seconds, correct, evidence_completeness, seed)`. The `tenant_id` column is added so library divergence (L_n) can be computed post-run as a Jaccard distance over `procedures/<tenant_id>/`.
-- Cluster heatmap renderer: 50 rows (tasks), N columns (rounds), cell colour by trajectory cost. Round 0 mostly red, by round 5 within-cluster cells are deep green, out-of-cluster cells stay red.
-- Multi-seed support (>=3 seeds per round).
-- Two simulated tenants for "ours" baseline: distinct system prompts plus intent-prior weights over the eval set (e.g., security-analyst leaning A+C, ML-researcher leaning B+D). Single tenant for vanilla and static-typed.
+### N≥3 convergent-trajectories clustering
 
-Dependencies: 001, 005. Blocks 010.
+The design called for the observer to wait for three convergent trajectories before crystallising. The MVP collapses that to N=1: every qualifying trajectory crystallises immediately. Shape-hash dedup is the only convergence gate. See `src/observer/worker.ts:11` and `src/observer/gate.ts:11`.
 
----
+### User-endorsement / human-in-the-loop review
 
-### Plan 007, feat: user-review UI for endorsing trajectories
+Older kb docs describe a binary endorsement step before crystallisation, with a small web UI and three review prompts. There is no UI, no endorsement API, and no review verdict on a trajectory. Validation today is automated by `validateAnswerEnvelope` (status, value, evidence, derivation, lineage, no default-zero fallback, no hidden manipulation). On `accepted === true`, crystallisation fires automatically.
 
-**Status:** proposed. **Effort:** 1/2 day. **Why seventh:** the user-curation gate, the visible agentic moment in the demo.
+### Library divergence metric and two-pane demo
 
-Deliverable:
-- A small web UI that opens on `atlasfs review <session_id>`.
-- Renders the trajectory as a graph (deterministic nodes green, LLM-invocation nodes red).
-- Three review prompts: correct? satisfies intent? needs more?
-- Binary endorsement (yes -> crystallise, no -> archive).
+No `L_n` metric is computed anywhere. No two-pane file-tree visual exists. `tests/observer-multi-tenant.test.ts` proves the routing works but no demo or UI surfaces divergence. Single-tenant FinQA is the only shipped demo scenario.
 
-Dependencies: 005. Blocks 010.
+### Pre-registered eval, multi-seed runs, variance bands
 
----
+No `eval/` directory exists. The cost panel is anecdotal — one run, two questions, hard-coded gold answers. No metric ledger, no multi-seed support, no cluster heatmap, no two-axis divergence chart, no pre-registration commit.
 
-### Plan 008, feat: drift workflow
+### NFS / FUSE filesystem mount
 
-**Status:** proposed. **Effort:** 1/2 day. **Why eighth:** schema-as-code becomes operational; the demo gains the "schema changes, the affected procedure lights up yellow" moment.
+The "Atlas mounted at /datafetch/ over NFS" pitch from older kb docs is dead. The actual surface is `<baseDir>/mounts/<mountId>/` on local disk plus an in-process `MountableFs` from `just-bash`. AgentFS is not used. There is no real filesystem mount.
 
-Deliverable:
-- Atlas Change Stream listener.
-- Fingerprint recompute on change.
-- ts-morph dependency walk over `procedures/` to find stale-pin procedures.
-- Library pane badge: green / yellow / red per procedure based on `eval-against-new-schema` result.
+### HTTPS, auth, allowlist enforcement
 
-Dependencies: 004, 005. Blocks 010.
+`/v1/connect` returns `dft_<tenant>_<ts>` opaque tokens but they are never validated. No TLS setup. `MountPolicy` exists on the contract but no allowlist is enforced.
+
+### Content-addressable pins
+
+`Provenance.pins: Record<string, string>` and `PrimitiveCallRecord.pin?: string` are in the type and always default to `{}` / undefined. No code path populates them. The intended use is content-addressing the substrate samples a learned interface was crystallised against, for replay-equivalence checks.
+
+### Codifier skill in production use
+
+Five seed skills exist at `seeds/skills/`. Only `finqa_codify_table_function` is referenced from runtime code (the observer's fallback path when pure-composition source generation returns null). The four `mint_*` / `score_*` skills are seeded but never dispatched.
+
+### Browser harness / browser-use integration
+
+Background research only (`kb/br/09`, `kb/br/12`). The architectural pattern (writable seam, two-zone separation) influenced the design but no browser-harness code is integrated.
+
+### OpenTraces dataset publishing
+
+`.opentraces.json` and `.agent-trace/` exist as artefact directories from a separate skill (`.claude/skills/opentraces`). Not part of datafetch's scope.
 
 ---
 
-### Plan 009, feat: optimisation-budget worker (compile-to-pipeline)
+## Next
 
-**Status:** proposed. **Effort:** 1 day. **Why ninth:** most pitchable artefact, shipped late so its absence does not block earlier work. Watch a procedure go from 30s to 2s when budget is spent.
+Concrete next steps, ordered by leverage. Each item names the user-visible behaviour, the rough shape of the change, and the open design question if any. No dates — this is a hackathon project, order is the only commitment.
 
-Deliverable:
-- AWS Lambda function `optimise-procedure(procedure_id)`.
-- Reads procedure body, generates a candidate `$rankFusion` / aggregate pipeline that subsumes the typed-call sequence.
-- Verifier replay against shadow inputs.
-- Body-swap on success; rollback on failure.
-- Visible state transition in the procedure library pane.
+### 1. Reconcile legacy phased verbs with the intent-workspace shape
 
-Dependencies: 005, 006. Blocks 010.
+The CLI today carries two parallel flows: the legacy `plan` / `execute` / `tsx` verbs (artefacts under `<baseDir>/sessions/<sessionId>/{plan/attempts,execute}/`) and the new `mount` / `run` / `commit` workspace verbs (artefacts under the workspace's `tmp/runs/` and `result/commits/`). Both POST to `/v1/snippets` with different `phase` strings. The observer gate accepts both, but the agent skill bundle and the user-facing pitch only describe the workspace flow. Open question: do we deprecate `plan` / `execute` outright (and migrate `datafetch session narrative` to read from workspaces), keep them as a legacy debug surface, or fold them into the workspace by making `plan` write to a workspace's `tmp/plans/` folder? The cleanest answer reads: workspace flow is canonical, phased verbs become a thin compatibility shim that errors with a pointer to `datafetch mount`. This unlocks simplifying `src/snippet/runtime.ts` artefact writing and removes a layer of conditional logic in the artefact tree.
 
----
+### 2. Decide the status of `datafetch agent` and `datafetch connect`
 
-### Plan 010, ops: three-baseline runs, two-axis chart, demo polish
+`datafetch agent` is an in-process bash REPL using `BashSession` directly without going through HTTP; it is useful for offline mode but is undocumented in the skill bundle. `datafetch connect` is an in-process token+inventory dump, a debug helper that does not actually create a session record (the real path is `datafetch session new` which posts to `/v1/connect`). Open question: do we keep these as labelled debug verbs (rename to `datafetch debug agent` / `datafetch debug connect`), promote `agent` into a first-class offline mode for the demo (so the demo can run without booting `datafetch server`), or remove them? Promoting `agent` to first-class is the most demo-friendly answer because it removes the "two terminals" requirement from the README.
 
-**Status:** proposed. **Effort:** 1 day. **Why last:** pre-demo bake. Runs all three baselines on the pre-registered eval with multiple seeds and (for "ours") multiple simulated tenants, generates the 2D divergence chart, drills the 3-minute demo, prepares Q&A talking points.
+### 3. Persist crystallised functions across sessions with explicit provenance
 
-Deliverable:
-- Five rounds of eval, three baselines, three seeds each. For "ours", two simulated tenants per seed (so 5 rounds * 3 baselines * 3 seeds * (1 or 2) tenants = 75 round-baseline-seed-tenant combinations, of which 45 are baseline runs and 30 are tenant-paired ours runs). Vanilla and static-typed do not have per-tenant procedure libraries, so they run once per round/baseline/seed.
-- Variance bands on every curve.
-- Cluster heatmap timelapse video for the standalone showcase.
-- **Two-axis divergence chart**: X = round, Y = cost (T_n or wall-clock), per-tenant lines for "ours" fanning out across rounds, baselines as flat-curve references. Confidence intervals.
-- **L_n curve**: Jaccard distance between the two simulated tenants' `procedures/` signature sets at each round, undefined for vanilla and static-typed. Rises monotonically.
-- 3-minute demo script with backup plan (pre-recorded segment, deterministic local fallback). Demo beats:
-  - **Beat 1, 0:00 to 0:30: setup.** `ls /datafetch/db/` listing collections from BIRD + FinQA + supply-chain micro-set; `cat /datafetch/db/packages.ts` showing the typed module. Use the supply-chain `packages.ts` because its schema is most legible at a glance.
-  - **Beat 2, 0:30 to 1:30: tenant divergence (Dimension 1).** Two-pane file-tree showing Tenant A (`data-analyst`) and Tenant B (`financial-analyst`) procedure libraries diverging across rounds. Tenant A fills with BIRD-shaped procedures (`top_publishers_by_sales.ts`, `legislator_tenure_by_state.ts`); Tenant B fills with FinQA-shaped procedures (`yoy_revenue_growth.ts`, `operating_margin.ts`). Same cluster, divergent libraries.
-  - **Beat 3, 1:30 to 2:30: cost convergence (Dimension 2) on a supply-chain query.** Single hand-crafted query: "is the npm package `event-stream` safe to install?". Round 0: ReAct loop with 15+ typed calls (red graph), expensive. Round 5: matched procedure, single deterministic call (all green). Atlas aggregation pipeline shown in side panel. Supply-chain chosen for visceral stakes; matches the 45% live-demo weight criterion.
-  - **Beat 4, 2:30 to 3:00: 2D divergence chart.** Both axes simultaneously visible. X = round, Y = cost (T_n). Per-tenant lines fanning out (Dimension 1). Line slopes diving (Dimension 2). 3-seed confidence intervals. Vanilla and static-typed baselines as flat references. L_n curve overlaid in a corner subplot.
-- Q&A talking points: reuse rate vs *Library Learning Doesn't*, why MongoDB Atlas specifically, why per-tenant emergence is structurally infeasible on relational substrates, why the BIRD+FinQA hybrid is not "just text-to-SQL" (cross-collection polymorphism + cross-tenant divergence + compile-to-pipeline), what would v2 look like (dynamic schema discovery via `db.search`/`db.execute` per Cloudflare's 1,000-tokens reference).
+Today the trajectory file at `<baseDir>/trajectories/<id>.json` holds the call list and the answer; the learned-interface file at `<baseDir>/lib/<tenant>/<name>.ts` holds an `@origin-trajectory:` comment and a YAML `trajectory:` field. There is no index that lets you ask "what trajectories produced this learned interface across its versions" or "which learned interfaces did this trajectory contribute to". A small `<baseDir>/lib/<tenant>/_index.json` (or a SQLite ledger) keyed by shape-hash with versioned entries would make supersession history browsable. This is the foundation for the lineage-browsing item below and for any future endorsement gate.
 
-Dependencies: 002, 005, 006, 007, 008, 009.
+### 4. Richer commit validation with replay tests
 
----
+`result/tests/replay.json` is written on every commit but not exercised. The validator checks structural properties of the answer envelope (status, value, evidence, derivation, lineage, no default-zero, no hidden manipulation). It does not re-run the snippet against a frozen version of the substrate. A replay validator that re-imports the committed `source.ts`, dispatches it against a snapshot of the relevant `db.<ident>` results, and asserts the same `df.answer({...})` would close the loop on "auditable answer" — making `commit` mean "this answer is reproducible from these exact substrate reads", which is what the pitch promises. Open question: where does the snapshot live (alongside the commit, or in a content-addressable substrate cache), and how big can the snapshots get before we need eviction.
 
-## Schedule overview
+### 5. Lineage browsing CLI
 
-```
-Day 1 (Sat May 2, 9:00 AM - 5:00 PM submission)
-+----+----+----+----+----+----+----+----+
-| 9  | 10 | 11 | 12 | 1  | 2  | 3  | 4  |  Hours after kickoff
-+----+----+----+----+----+----+----+----+
-|  P001 (1/2d)  |
-|       P002 (1/2d, parallel after P001)|
-|              P003 MongoFS (1.5d, spans into Day 2)
-|              P004 codegen (1/2d, after P003 mount works)
-|                                P005 agent loop start (1d, spans Day 2)
-+----+----+----+----+----+----+----+----+
+The artefact tree under `<workspace>/result/commits/NNN/` is rich but invisible without `cat` and `jq`. A `datafetch lineage [--workspace <path>] [--commit NNN]` command that walks `result/commits/` and renders a markdown timeline (timestamp, intent, validation status, learned-interface produced, shape hash, top-level calls) closes the audit story end-to-end. `datafetch session narrative` already does this for the legacy phased verbs; this is the workspace-flow equivalent. Cheap to ship; high demo value because it makes the audit primitive visible without diving into JSON.
 
-Day 2 (build continues, Round 1 judging on Day 1 evening means
-       Day 2 work is for Round 2 and Round 3 only, see below)
+### 6. Endorsement gate before promotion
 
-Day 1 reality: only enough to get a *first* version of the demo to Round 1
-judges by 5:00 PM. The plan above is for the full project; the Day 1 cut is
-a Pareto subset:
-- P001 frozen (no further changes)
-- P003+P004 working at "ls /datafetch/db/, cat db/packages.ts"
-- P005 working at "novel query -> trajectory captured"
-- P007 working at "endorsement -> procedure file appears"
-- P006 working at "one-round eval against P002 baseline"
+The current pipeline is: validate the answer envelope automatically, then crystallise automatically on `accepted:true`. The reserved-but-not-shipped human-review loop would insert a binary endorsement step between validation and crystallisation. The smallest viable shape: a `datafetch endorse <commit>` verb that flips a `endorsed:true` field on the trajectory, plus an observer gate change that requires `endorsed === true` (or an `auto-endorse:on-validation` flag for backwards compatibility). The bigger version is a small web UI rendering the call graph as a tree; the small version ships first. Open question: does endorsement attach to the workspace HEAD (one endorsement per commit) or to the learned interface (one endorsement per shape hash, accumulating across tenants).
 
-That cut is the Round 1 demo.
+### 7. Cross-tenant family promotion behind a flag
 
-Day 2 - 6 (Sun May 3 to Wed May 6): finish P008, P009, complete P010.
-The MongoDB.local Round 2 and Round 3 demos are the polished version.
-```
+When two tenants independently crystallise the same shape hash (or a near-shape-hash), promote the convergent function to `<baseDir>/lib/__shared__/<name>.ts` with explicit attribution, behind a `DATAFETCH_FAMILY_PROMOTION=1` flag. The shape-hash equality case is mechanical; the near-shape case requires defining a similarity metric over `CallTemplate.steps` (probably a Hamming distance over the canonical step list). Open question: how do we surface `__shared__` functions in `apropos` and `df.d.ts` — do they appear as a separate section above tenant-private learned interfaces, or merged in with a `(shared)` annotation. This item is low priority until at least two tenants are running concurrently in a real deployment.
 
-The brief's effort estimate (~7.5 person-days for two engineers in a 4-day window) is the *full* project. The Round 1 demo is the Pareto subset that hits the eligibility gates and the headline moment, deliverable in one day for two engineers.
+### 8. Drift detection on convergent shapes
+
+When the bootstrap pipeline re-fingerprints a collection's descriptor and the fingerprint changes, scan `<baseDir>/lib/<tenant>/*.ts` for learned interfaces whose `@shape-hash:` references a step that touches the changed collection. Mark them `status: stale` in the YAML frontmatter. Surface stale interfaces in `apropos` with a yellow flag and downgrade their match score. Open question: when do we re-fingerprint — on `datafetch publish` only, on a scheduled job, or via Atlas Change Streams. Change Streams would be the cleanest signal but pulls in operational complexity. The cheapest first version is "re-fingerprint on every `datafetch publish` and emit a `drift` event on the mount handle" — which makes `MountHandle.on("drift", ...)` actually fire.
+
+### 9. Vector retrieval as a first-class capability
+
+Promote `findSimilar` from a `search` alias to a real vector path when an embedding-role field is detected. This requires an embedding provider (Voyage is the wishlist; OpenAI text-embedding-3-small is a no-extra-credential alternative when `OPENAI_API_KEY` is already set), a `vector_index_<field>` Atlas Search index, and a runtime that knows how to embed the query before issuing `$vectorSearch`. The bootstrap pipeline already detects embedding-shaped fields; the missing piece is the embedding call and the index management. Open question: do we manage the index ourselves (creating it on `datafetch publish` if absent), or document that operators create it once and we read it.
+
+### 10. The compiled tier (the optimisation budget worker)
+
+The most pitchable reserved item. Background task: pick a hot learned interface (one with high invocation count and an LLM-backed inner step), generate a candidate `$rankFusion` / aggregate pipeline that subsumes the typed-call sequence, replay it against shadow inputs, and on success body-swap the function to use `df.db.<ident>.runCompiled(pipeline)` (which would itself need to land). The result envelope flips from `mode:"interpreted" tier:2` to `mode:"compiled" tier:1`, and the cost panel shows the third row of the convergence story. Open question: does the budget worker run as a separate process (background daemon polling trajectory frequency), as a Lambda triggered by an "N invocations of the same shape-hash" threshold, or inline at observer time. The Lambda answer is what older kb docs assumed; the inline answer is what fits the current architecture. This item depends on item 9 (since `$rankFusion` only matters once vector retrieval is real) and on `MountAdapter.runCompiled` being implemented.
 
 ---
 
-## Roadmap dependencies summary
+## What this roadmap does not commit to
 
-```
-P001 -> P002 -> ----------\
-                            \
-P001 -> P003 -> P004 -> P005 ---> P006 ---\
-                                            \
-                          P005 -> P007 ----- P010
-                          P005 -> P008 ----/
-                          P005 -> P009 ---/
-```
-
----
-
-## Out of scope (post-hackathon roadmap)
-
-For honesty, these are deferred:
-
-- **Production-grade multi-tenant infrastructure.** AgentFS's single-writer SQLite ceiling is fine for one-agent-one-writer; multi-tenant production needs a different overlay primitive plus auth, isolation, and billing. Note: *demonstration* of two simulated tenants on the same cluster (for the Dimension 1 / L_n story) is **in scope** for the hackathon, implemented as filesystem-path-scoped overlays (e.g., `procedures/<tenant_id>/`) under AgentFS's CoW layer. What stays out of scope is auth-isolated multi-tenancy and the routing scaffold a real SaaS would need.
-- **Vanilla `better-sqlite3` backend.** AgentFS uses Turso's `turso` crate / `@tursodatabase/database`; a fork to vanilla SQLite is straightforward but not load-bearing for the hackathon.
-- **Shared procedure library** (cross-tenant routing-score moat where one tenant's promoted procedures suggest themselves to another). v1 is per-tenant isolated; cross-tenant routing is a publishable v2.
-- **Graded scoring (1-5)** instead of binary endorsement. Saves UI cost in v1.
-- **Dynamic schema discovery** (search/execute primitives over an OpenAPI-like spec). v1 is static.
-- **Open-source `mongo-mount` package.** The MongoFS backend converted into a standalone tool; natural OSS contribution post-hackathon.
-- **Publishable measurement framework write-up.** A short paper on the T_n / D_n / R_n / I_n / L_n axes with within / across / out-of-cluster aggregations plus the three-baseline comparison; conditional on the curves moving.
+No timeline. No "v1.0 in two weeks". No implication that everything in "Next" lands in order — the order is leverage-ranked, not a queue. Items 1, 2, and 5 are cleanup work the codebase wants regardless of demo direction. Items 3 and 4 deepen the audit primitive that the pitch leans on. Item 6 is the human-loop that older kb docs promised. Items 7, 8, 9, 10 are the speculative roadmap and would each be a small project on its own. The honest read is that the MVP shipped the cold-to-warm flip and the audit-on-commit semantics, and everything in "Next" is in service of one of those two primitives — making the warm path richer (3, 6, 7, 9, 10) or making the audit path richer (1, 2, 4, 5, 8).
