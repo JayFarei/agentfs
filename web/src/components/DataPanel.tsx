@@ -39,7 +39,7 @@ export function DataPanel({
   const region = cluster?.region ?? "eu-west-1";
   const tier = cluster?.tier ?? "M40 · 3-node replica set";
   const baselines = [...new Set(evalMetrics.map((metric) => metric.baseline))];
-  const latestAtlasfs = [...evalMetrics].reverse().find((metric) => metric.baseline === "atlasfs");
+  const latestDatafetch = [...evalMetrics].reverse().find((metric) => metric.baseline === "datafetch");
 
   return (
     <main
@@ -89,7 +89,7 @@ export function DataPanel({
             {drift.length > 0 && evalMetrics.length > 0 && <span className="dot">·</span>}
             {evalMetrics.length > 0 && (
               <span>
-                eval · {baselines.join("/")} · L_n {latestAtlasfs?.L_n.toFixed(2) ?? "0.00"}
+                eval · {baselines.join("/")} · L_n {latestDatafetch?.L_n.toFixed(2) ?? "0.00"}
               </span>
             )}
           </div>

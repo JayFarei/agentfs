@@ -13,7 +13,7 @@
 #       lineage invokes the learned interface instead of recomposing from scratch.
 #
 # Required env: ATLAS_URI.
-# Optional env: ATLAS_DB_NAME (default atlasfs_hackathon),
+# Optional env: ATLAS_DB_NAME (default datafetch_hackathon),
 #               DF_TEST_PORT (default 8090),
 #               DF_AGENT_DRIVER (codex default, or claude),
 #               DEBUG=1 (dump tmux pane on failure),
@@ -45,7 +45,7 @@ Optional env:
   ANTHROPIC_KEY or
   ANTHROPIC_API_KEY               optional for DF_AGENT_DRIVER=claude if the
                                   Claude Code CLI is locally logged in
-  ATLAS_DB_NAME                   default: atlasfs_hackathon
+  ATLAS_DB_NAME                   default: datafetch_hackathon
   DF_TEST_PORT                    default: 8090
   AGENT_LOOP_TIMEOUT              per-question budget (seconds), default 300
   AGENT_LOOP_ARTIFACT_DIR         where to preserve troubleshooting artefacts

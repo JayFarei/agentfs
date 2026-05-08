@@ -18,7 +18,7 @@ export function HowItWorks({ onClose }: HowItWorksProps) {
       <div className="v01-how" onClick={(e) => e.stopPropagation()}>
         <div className="v01-cv__hd">
           <div className="v01-cv__path">
-            <span className="v01-cv__path-dim">atlasfs/</span>
+            <span className="v01-cv__path-dim">datafetch/</span>
             <span>how-it-works.md</span>
           </div>
           <div className="v01-cv__meta">
@@ -32,15 +32,15 @@ export function HowItWorks({ onClose }: HowItWorksProps) {
         </div>
         <div className="v01-how__body">
           <div className="v01-how__hero">
-            <div className="v01-how__l">ATLASFS — HOW IT WORKS</div>
+            <div className="v01-how__l">DATAFETCH - HOW IT WORKS</div>
             <h1 className="v01-how__title">
-              Search your data. The app crystallises out of the searches that
-              worked.
+              Mount a dataset. Commit visible trajectories. Let the interface
+              grow.
             </h1>
             <p className="v01-how__lede">
-              The first time someone asks a new question, the AI explores your
-              Atlas data step by step. You endorse the runs that worked. After
-              that, the same question — and its siblings — runs instantly.
+              The first time an agent asks a new question, it explores through
+              a dataset workspace and writes the repeatable logic into code.
+              After commit, reusable trajectories can become typed interfaces.
             </p>
           </div>
 
@@ -94,7 +94,7 @@ export function HowItWorks({ onClose }: HowItWorksProps) {
               <div className="v01-how__ex-tag">endorse</div>
               <div className="v01-how__ex-body">
                 <div className="v01-how__ex-cmd">
-                  $ pnpm atlasfs endorse &lt;id&gt;
+                  $ datafetch commit scripts/answer.ts
                 </div>
                 <div className="v01-how__ex-meta">→ chain saved</div>
               </div>
@@ -112,10 +112,10 @@ export function HowItWorks({ onClose }: HowItWorksProps) {
 
           <div className="v01-how__close">
             <p>
-              Every endorsement adds a named chain to your project. The library{" "}
-              <em>is</em> the application: parameters in, result out, no UI to
-              design. Two tenants on the same cluster end up with two different
-              apps, shaped by the questions they actually ask.
+              Every accepted commit gives the observer a visible program,
+              evidence, and tests to learn from. The library <em>is</em> the
+              interface: parameters in, answer envelope out, shaped by the
+              questions agents actually ask.
             </p>
           </div>
         </div>

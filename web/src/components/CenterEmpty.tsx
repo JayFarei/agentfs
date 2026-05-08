@@ -11,7 +11,7 @@ export function CenterEmpty({ userName, tenant }: CenterEmptyProps) {
         Hello {userName.toLowerCase()} — what shall we look at?
       </h2>
       <p className="v01-empty__lede">
-        Submit a question above, or pick one of the suggested chains. AtlasFS
+        Submit a question above, or pick one of the suggested chains. datafetch
         will parse the intent, match it to a chain, compile a MongoDB
         aggregation, run it against <code>{tenant}</code>, and project a typed
         result here.

@@ -76,7 +76,7 @@ export type BashSessionInit = {
   mountReader: MountReader;
   snippetRuntime: SnippetRuntime;
   libraryResolver: LibraryResolver | null;
-  // Optional. Defaults to $DATAFETCH_HOME / $ATLASFS_HOME / .atlasfs.
+  // Optional. Defaults to $DATAFETCH_HOME / $ATLASFS_HOME / .datafetch.
   baseDir?: string;
   // Optional. If supplied, propagated through SessionCtx.trajectoryId.
   trajectoryId?: string;

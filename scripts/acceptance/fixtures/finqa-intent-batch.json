@@ -2,7 +2,7 @@
   "version": 1,
   "dataset": "finqa-2024",
   "source": {
-    "db": "atlasfs_hackathon",
+    "db": "datafetch_hackathon",
     "collection": "finqa_cases",
     "sampleSize": 8474
   },

@@ -826,7 +826,7 @@ Common flags resolved by helpers: `--server <url>` (default
 `http://localhost:8080`, env `DATAFETCH_SERVER_URL`), `--session
 <id>` (env `DATAFETCH_SESSION`, file `<baseDir>/active-session`),
 `--base-dir <path>` (env `DATAFETCH_HOME` → `ATLASFS_HOME` →
-`cwd/.atlasfs`), `--json`.
+`cwd/.datafetch`), `--json`.
 
 ---
 
@@ -943,7 +943,8 @@ path, not a difference in the underlying questions.
 ### 9.4 Test pin
 
 `tests/demo-e2e.test.ts:46` spawns `pnpm tsx src/cli.ts demo` with
-`ATLASFS_SKIP_ENV_FILE=1` and asserts on every line of the output.
+`DATAFETCH_SKIP_ENV_FILE=1` and asserts on every line of the output.
+The legacy `ATLASFS_SKIP_ENV_FILE=1` alias remains supported.
 Failure of the demo is failure of the test suite.
 
 ---
@@ -1068,7 +1069,8 @@ list.
 
 ### 13.1 Under `$DATAFETCH_HOME`
 
-Default `~/.atlasfs` (canonical legacy var name `ATLASFS_HOME`).
+Default `cwd/.datafetch` (canonical env var name `DATAFETCH_HOME`;
+legacy `ATLASFS_HOME` remains supported).
 
 ```
 mounts/<mountId>/                     # substrate-derived (shared)

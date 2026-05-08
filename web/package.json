@@ -1,5 +1,5 @@
 {
-  "name": "atlasfs-web",
+  "name": "datafetch-web",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,4 +1,4 @@
-/* AtlasFS v0.1 — simplified shell */
+/* datafetch v0.1 - simplified shell */
 
 .v01 { display: flex; flex-direction: column; height: 100vh; overflow: hidden; background: var(--bg); }
 

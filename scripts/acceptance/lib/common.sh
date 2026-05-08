@@ -36,7 +36,7 @@
 #
 # Environment expectations (callers may set):
 #   ATLAS_URI         — required for setup_dataplane unless --no-publish
-#   ATLAS_DB_NAME     — defaults to "atlasfs_hackathon"
+#   ATLAS_DB_NAME     — defaults to "datafetch_hackathon"
 #   DF_AGENT_DRIVER   — codex (default) or claude
 #   DF_TEST_MODEL     — model override for the selected agent driver
 #   DF_CLAUDE_BARE    — 1 forces `claude --bare`; auto uses bare only when
@@ -65,7 +65,7 @@ SERVER_PID=""
 SERVER_LOG=""
 
 load_acceptance_env_file() {
-  if [[ "${ATLASFS_SKIP_ENV_FILE:-0}" == "1" || ! -f "$REPO_ROOT/.env" ]]; then
+  if [[ "${DATAFETCH_SKIP_ENV_FILE:-0}" == "1" || "${ATLASFS_SKIP_ENV_FILE:-0}" == "1" || ! -f "$REPO_ROOT/.env" ]]; then
     return 0
   fi
   if [[ -z "${ATLAS_URI:-}" ]]; then
@@ -232,7 +232,7 @@ setup_dataplane() {
   # HTTP publish keeps everything in one process and registers the mount in
   # the runtime registry that /v1/snippets actually consults.
   if (( publish_mount )); then
-    local atlas_db="${ATLAS_DB_NAME:-atlasfs_hackathon}"
+    local atlas_db="${ATLAS_DB_NAME:-datafetch_hackathon}"
     step "publishing finqa-2024 (HTTP, db=$atlas_db)"
     local publish_log="$DATAFETCH_HOME/publish.log"
     # /v1/mounts streams SSE; we just need the final exit status. The

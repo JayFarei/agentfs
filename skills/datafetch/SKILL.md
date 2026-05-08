@@ -16,7 +16,7 @@ interface for next time.
 
 ## Workspace layout
 
-The on-disk root is `$DATAFETCH_HOME` (default `~/.atlasfs` or the cwd's `.atlasfs/`). Read these first if present:
+The on-disk root is `$DATAFETCH_HOME` (default the cwd's `.datafetch/`; legacy `ATLASFS_HOME` is also honoured). Read these first if present:
 
 - `$DATAFETCH_HOME/AGENTS.md` — server-maintained workspace memory for this dataset.
 - `$DATAFETCH_HOME/CLAUDE.md` — compatibility alias for agents that look for Claude project instructions first.

@@ -36,7 +36,7 @@ Optional env:
   ANTHROPIC_KEY or
   ANTHROPIC_API_KEY             optional for DF_AGENT_DRIVER=claude if the
                                 Claude Code CLI is locally logged in
-  ATLAS_DB_NAME (default atlasfs_hackathon)
+  ATLAS_DB_NAME (default datafetch_hackathon)
   DF_TEST_PORT (default 8090)
   AGENT_LOOP_TIMEOUT (default 300s, per-question budget)
   DEBUG=1

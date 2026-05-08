@@ -6,7 +6,7 @@ import { locateRepoRoot } from "../src/paths.js";
 
 // Headline E2E: spawn `pnpm tsx src/cli.ts demo` and assert the cost
 // panel + call-graph collapse panel render correctly. Forces the
-// in-memory mount path via ATLASFS_SKIP_ENV_FILE=1 so the test is
+// in-memory mount path via DATAFETCH_SKIP_ENV_FILE=1 so the test is
 // hermetic (no Atlas, no LLM, no /tmp races with other test files).
 
 async function runDemoCli(): Promise<{
@@ -25,7 +25,7 @@ async function runDemoCli(): Promise<{
         cwd: repoRoot,
         env: {
           ...process.env,
-          ATLASFS_SKIP_ENV_FILE: "1",
+          DATAFETCH_SKIP_ENV_FILE: "1",
         },
       },
     );

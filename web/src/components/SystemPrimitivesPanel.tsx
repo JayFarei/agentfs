@@ -67,7 +67,7 @@ function synthAgentTs(a: ApiStoredAgent): string {
     `// ${a.description || "(no description in spec)"}`,
     ``,
     `// This typed primitive was created at runtime by an observer agent`,
-    `// and saved to ~/.atlasfs/agents/<tenant>/${a.agentName}.json so that`,
+    `// and saved to ~/.datafetch/agents/<tenant>/${a.agentName}.json so that`,
     `// future intents can re-bind to the same scorer without re-creating it.`,
     ``,
     `export interface ${ifaceName} {`,

@@ -74,6 +74,7 @@ export type {
 // --- Trajectory recorder (extended types) ---
 export {
   TrajectoryRecorder,
+  datafetchHome,
   atlasfsHome,
   trajectoryId,
   readTrajectory,

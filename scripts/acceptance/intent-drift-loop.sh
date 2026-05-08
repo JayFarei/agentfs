@@ -28,7 +28,7 @@ Optional env:
   DF_AGENT_DRIVER                 codex (default) or claude
   DF_TEST_MODEL                   driver model override
   DF_TEST_REASONING_EFFORT        Codex reasoning effort, default: medium
-  ATLAS_DB_NAME                   default: atlasfs_hackathon
+  ATLAS_DB_NAME                   default: datafetch_hackathon
   DF_TEST_PORT                    default: 8090
   AGENT_LOOP_TIMEOUT              budget seconds, default 420
   INTENT_DRIFT_ARTIFACT_DIR       diagnostic output directory

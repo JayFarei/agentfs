@@ -46,9 +46,9 @@ describe("defaultBaseDir", () => {
     expect(defaultBaseDir()).toBe("/tmp/legacy");
   });
 
-  it("falls back to <cwd>/.atlasfs when neither env is set", () => {
+  it("falls back to <cwd>/.datafetch when neither env is set", () => {
     const got = defaultBaseDir();
-    expect(got).toBe(path.join(process.cwd(), ".atlasfs"));
+    expect(got).toBe(path.join(process.cwd(), ".datafetch"));
   });
 });
 

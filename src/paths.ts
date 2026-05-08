@@ -3,7 +3,7 @@
 //
 // Centralising these eliminates two classes of drift:
 //   1. Inconsistent base-dir fallbacks. Modules that fell back to
-//      `.datafetch` while everyone else fell back to `.atlasfs` would
+//      a legacy `.atlasfs` path while everyone else used `.datafetch` would
 //      silently land artefacts in the wrong directory and the snippet
 //      runtime would not see them.
 //   2. Repeated upward-walk loops looking for `seeds/...`,
@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const RESERVED_TENANT_RE = /^__\w+__$/;
 
-const DEFAULT_BASE_DIR_NAME = ".atlasfs";
+const DEFAULT_BASE_DIR_NAME = ".datafetch";
 
 const REPO_WALK_LEVELS = 6;
 
@@ -26,9 +26,9 @@ let repoRootCache: string | null = null;
 /**
  * Resolve the on-disk workspace root.
  *
- * The chain is `DATAFETCH_HOME` → `ATLASFS_HOME` → `<cwd>/.atlasfs`.
+ * The chain is `DATAFETCH_HOME` → `ATLASFS_HOME` → `<cwd>/.datafetch`.
  * `ATLASFS_HOME` is honoured for backward compatibility with the
- * prototype's fixture trees; the canonical name is `DATAFETCH_HOME`.
+ * prototype's fixture trees; `DATAFETCH_HOME` is canonical.
  */
 export function defaultBaseDir(): string {
   return (

@@ -11,6 +11,7 @@
 
 export {
   TrajectoryRecorder,
+  datafetchHome,
   atlasfsHome,
   trajectoryId,
   readTrajectory,

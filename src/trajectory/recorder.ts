@@ -70,9 +70,16 @@ export type TrajectoryRecord = {
   answerValidation?: unknown;
 };
 
-export function atlasfsHome(): string {
-  return process.env.ATLASFS_HOME ?? path.join(process.cwd(), ".atlasfs");
+export function datafetchHome(): string {
+  return (
+    process.env.DATAFETCH_HOME ??
+    process.env.ATLASFS_HOME ??
+    path.join(process.cwd(), ".datafetch")
+  );
 }
+
+/** @deprecated Use datafetchHome(). Kept for older SDK consumers. */
+export const atlasfsHome = datafetchHome;
 
 export function trajectoryId(now = new Date()): string {
   return `traj_${now.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -173,7 +180,7 @@ export class TrajectoryRecorder {
     }
   }
 
-  async save(baseDir = atlasfsHome()): Promise<string> {
+  async save(baseDir = datafetchHome()): Promise<string> {
     const dir = path.join(baseDir, "trajectories");
     await mkdir(dir, { recursive: true });
     const file = path.join(dir, `${this.record.id}.json`);
@@ -182,7 +189,7 @@ export class TrajectoryRecorder {
   }
 }
 
-export async function readTrajectory(idOrPath: string, baseDir = atlasfsHome()): Promise<TrajectoryRecord> {
+export async function readTrajectory(idOrPath: string, baseDir = datafetchHome()): Promise<TrajectoryRecord> {
   const file = idOrPath.endsWith(".json")
     ? idOrPath
     : path.join(baseDir, "trajectories", `${idOrPath}.json`);

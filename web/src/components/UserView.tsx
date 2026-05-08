@@ -150,15 +150,17 @@ export function UserView({
           <div className="v01-search__sugg-label">DEMO INTENTS</div>
           <div className="v01-search__sugg-row">
           {suggested.map((s) => {
-            const provesIdx = s.hint?.toUpperCase().indexOf("PROVES:") ?? -1;
-            const watchIdx = s.hint?.toUpperCase().indexOf("WATCH:") ?? -1;
+            const hint = s.hint ?? "";
+            const hintUpper = hint.toUpperCase();
+            const provesIdx = hintUpper.indexOf("PROVES:");
+            const watchIdx = hintUpper.indexOf("WATCH:");
             let provesText = "";
             let watchText = "";
             if (provesIdx >= 0 && watchIdx > provesIdx) {
-              provesText = s.hint.slice(provesIdx + "PROVES:".length, watchIdx).trim().replace(/\.\s*$/, "");
-              watchText = s.hint.slice(watchIdx + "WATCH:".length).trim();
-            } else if (s.hint) {
-              provesText = s.hint;
+              provesText = hint.slice(provesIdx + "PROVES:".length, watchIdx).trim().replace(/\.\s*$/, "");
+              watchText = hint.slice(watchIdx + "WATCH:".length).trim();
+            } else if (hint) {
+              provesText = hint;
             }
             return (
               <button

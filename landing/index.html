@@ -766,6 +766,26 @@
     .ftr-row{ flex-direction: row; gap: 12px; align-items: center; }
   }
 
+  /* ═══ SYNTAX HIGHLIGHTING ═══ */
+  .hl-p   { color: var(--ink-faint); }
+  .hl-fl  { color: #d8a07a; }                    /* flags --xxx */
+  .hl-st  { color: #aac999; }                    /* "strings" */
+  .hl-fn  { color: #c8b97f; }                    /* file paths/ext */
+  .hl-id  { color: var(--hot); font-weight: 700; } /* df.* identifiers */
+  .hl-tr  { color: var(--ink-faint); }           /* tree chars */
+  .hl-ok  { color: #82b074; }                    /* status keywords */
+
+  /* inline code throughout the page picks up identifier accent */
+  .lede code,
+  .hero-strip-gloss code{
+    color: var(--hot);
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+  }
+
   /* ═══ HERO VFS TREE ═══ */
   .vfs-tree{
     margin-top: 24px;
@@ -1002,10 +1022,10 @@
 <section class="hero">
   <div class="hero-grid">
     <div class="hero-left">
-      <div class="badge">/ DATASET HARNESS</div>
-      <h1>Virtualize <span class="slash">/</span><br>the interface,<br>not the<br>dataset.</h1>
+      <div class="badge">/ CODE MODE FOR RETRIEVAL</div>
+      <h1>Mount a dataset's<br>interface <span class="slash">/</span><br>as a typed<br>module.</h1>
       <p class="lede">
-        Mount a dataset as a <em>typed virtual filesystem</em>. The agent writes TypeScript over <code>df.db.*</code>. Every accepted <code>df.answer</code> becomes a typed call in your tenant's <code>lib/</code> &mdash; sibling intents reuse it.
+        LLMs are <em>better at writing code</em> than at orchestrating tool calls. Datafetch mounts a dataset as a typed virtual filesystem &mdash; <code>df.db.*</code>, <code>df.lib.*</code>, <code>df.answer</code> &mdash; so the agent writes TypeScript over a real interface. Every accepted commit becomes a typed call in your tenant's <code>lib/</code>.
       </p>
       <div class="vfs-tree" aria-label="Mounted dataset filesystem">
         <div class="vfs-line vfs-root">/mnt/&lt;dataset&gt;/</div>
@@ -1049,8 +1069,8 @@
         </li>
         <li class="hero-strip-cell">
           <span class="hero-strip-num">/05</span>
-          <span class="hero-strip-name">GROW</span>
-          <span class="hero-strip-gloss"><code>df.lib.*</code> grows per tenant. Sibling intents reuse.</span>
+          <span class="hero-strip-name">OPTIMISE</span>
+          <span class="hero-strip-gloss"><code>df.lib.*</code> grows per tenant; provider reshapes serving from real intents.</span>
         </li>
       </ol>
     </div>
@@ -1073,7 +1093,7 @@
         <button type="button" class="loop-tab is-on" data-stage="0">
           <span class="loop-tab-num">/01</span>
           <span class="loop-tab-body">
-            <span class="loop-tab-name">PUBLISH</span>
+            <span class="loop-tab-name">INIT</span>
             <span class="loop-tab-by">dataset provider</span>
           </span>
         </button>
@@ -1087,12 +1107,19 @@
         <button type="button" class="loop-tab" data-stage="2">
           <span class="loop-tab-num">/03</span>
           <span class="loop-tab-body">
-            <span class="loop-tab-name">SHAPE</span>
-            <span class="loop-tab-by">agentic search</span>
+            <span class="loop-tab-name">WRITE</span>
+            <span class="loop-tab-by">agent · script</span>
           </span>
         </button>
         <button type="button" class="loop-tab" data-stage="3">
           <span class="loop-tab-num">/04</span>
+          <span class="loop-tab-body">
+            <span class="loop-tab-name">COMMIT</span>
+            <span class="loop-tab-by">agent · seal</span>
+          </span>
+        </button>
+        <button type="button" class="loop-tab" data-stage="4">
+          <span class="loop-tab-num">/05</span>
           <span class="loop-tab-body">
             <span class="loop-tab-name">OPTIMISE</span>
             <span class="loop-tab-by">provider · loop</span>
@@ -1609,24 +1636,31 @@ setInterval(tickLoop, 80);
 const STAGES = [
   {
     label: '/ dataset provider · boot',
-    title: 'Publish an environment.',
-    lede: 'A whitelisted dataset boots a tenanted server. The init agent shapes the base VFS so any client knows what they\'re stepping into.',
+    title: 'Init the environment.',
+    lede: 'A whitelisted dataset boots a tenanted server. The init agent shapes the base VFS template so any client knows what they\'re stepping into.',
     snippet: '$ datafetch server --datasets datasets.json\n\n  opentraces-devtime\n  ├ adapter   huggingface\n  ├ template  agent-accepted\n  └ status    ready',
     principle: 'Published environments are the unit of distribution.'
   },
   {
     label: '/ client · attach',
     title: 'Mount with intent.',
-    lede: 'Each task mounts an authenticated, isolated worktree shaped by the intent. db/ is immutable. lib/ and scripts/ are the tenant\'s.',
+    lede: 'Each task mounts an authenticated, isolated worktree shaped by the intent. db/ is immutable; lib/ and scripts/ are tenant-shaped.',
     snippet: '$ datafetch attach :8090 --tenant demo\n$ datafetch mount opentraces-devtime \\\n    --intent "summarise debug failure modes"\n\n  AGENTS.md   df.d.ts\n  db/         immutable dataset primitives\n  lib/        tenant-owned learned helpers\n  scripts/    tmp/   result/',
     principle: 'Tenanted, isolated, reproducible per intent.'
   },
   {
-    label: '/ agentic search · work',
-    title: 'Shape to the intent.',
-    lede: 'The agent edits visible TypeScript, runs probes, then commits one answer trajectory. Every run captures source plus lineage. Hidden reasoning is not learned, externalised work is.',
-    snippet: '$ datafetch run scripts/scratch.ts\n   tmp/runs/001/source.ts\n   tmp/runs/001/result.json\n   tmp/runs/001/lineage.json\n\n$ datafetch commit scripts/answer.ts\n   result/answer.md      replayable',
+    label: '/ agentic search · script',
+    title: 'Write visible code.',
+    lede: 'The agent edits scripts/ in TypeScript over df.db.*, runs probes, captures every attempt with lineage. Hidden reasoning is not learned; only externalised work is.',
+    snippet: '$ datafetch run scripts/scratch.ts\n   tmp/runs/001/source.ts\n   tmp/runs/001/result.json\n   tmp/runs/001/lineage.json',
     principle: 'Visible work is the only work that compounds.'
+  },
+  {
+    label: '/ agentic search · seal',
+    title: 'Commit one answer.',
+    lede: 'When an attempt holds, the agent commits scripts/answer.ts with a single df.answer({…}) — typed envelope, evidence, replay graph, sealed.',
+    snippet: '$ datafetch commit scripts/answer.ts\n   result/answer.md      replayable\n   result/answer.json    df.answer envelope\n   result/lineage.json   replay graph',
+    principle: 'An accepted commit is the unit of learning.'
   },
   {
     label: '/ dataset provider · loop',
@@ -1639,11 +1673,40 @@ const STAGES = [
 
 function escHtml(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
+function highlightSnippet(s){
+  let h = String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  h = h.replace(/(df\.[a-zA-Z_][\w.]*\*?)/g, '<span class="hl-id">$1</span>');
+  h = h.replace(/(&quot;[^&]*?&quot;)/g, '<span class="hl-st">$1</span>');
+  h = h.replace(/(\s|^)(--[a-zA-Z][\w-]*)/g, '$1<span class="hl-fl">$2</span>');
+  h = h.replace(/\b([A-Za-z][\w./-]*\.(ts|js|json|md|d\.ts))\b/g, '<span class="hl-fn">$1</span>');
+  h = h.replace(/^(\s*)\$/gm, '$1<span class="hl-p">$</span>');
+  h = h.replace(/([├│└─]+)/g, '<span class="hl-tr">$1</span>');
+  h = h.replace(/\b(replayable|ready|agent-accepted)\b/g, '<span class="hl-ok">$1</span>');
+  return h;
+}
+
 const STAGE_MS = 6000;
 let active = 0;
 let cycleTimer = null;
+let barAnim = null;
 
-document.documentElement.style.setProperty('--cycle-ms', STAGE_MS + 'ms');
+function restartTimerBar(){
+  const bar = document.getElementById('loop-timer-bar');
+  if(!bar) return;
+  if(barAnim){ try{ barAnim.cancel(); }catch(_){} }
+  if(typeof bar.animate === 'function'){
+    barAnim = bar.animate(
+      [{ width: '0%' }, { width: '100%' }],
+      { duration: STAGE_MS, easing: 'linear', fill: 'forwards' }
+    );
+  } else {
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+    bar.getBoundingClientRect();
+    bar.style.transition = 'width ' + STAGE_MS + 'ms linear';
+    bar.style.width = '100%';
+  }
+}
 
 function renderStage(i){
   const s = STAGES[i];
@@ -1651,17 +1714,12 @@ function renderStage(i){
     '<div class="loop-panel-l">' + escHtml(s.label) + '</div>' +
     '<h3 class="loop-panel-title">' + escHtml(s.title) + '</h3>' +
     '<p class="loop-panel-lede">' + escHtml(s.lede) + '</p>' +
-    '<pre class="loop-snippet">' + escHtml(s.snippet) + '</pre>' +
+    '<pre class="loop-snippet">' + highlightSnippet(s.snippet) + '</pre>' +
     '<div class="loop-principle"><span class="loop-principle-arr">↳</span><span>' + escHtml(s.principle) + '</span></div>';
   document.querySelectorAll('.loop-tab').forEach(function(b, j){
     b.classList.toggle('is-on', j === i);
   });
-  const bar = document.getElementById('loop-timer-bar');
-  if(bar){
-    bar.classList.remove('run');
-    void bar.offsetWidth;
-    bar.classList.add('run');
-  }
+  restartTimerBar();
 }
 
 function setActive(i){

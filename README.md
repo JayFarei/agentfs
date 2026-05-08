@@ -1,14 +1,11 @@
 # datafetch
 
-datafetch is a bash-shaped workspace over a mounted dataset. A long-lived
-data plane (HTTP server on `localhost:8080`) holds the substrate; an agent
-(Claude Code, or any tool with a bash loop) drives it through the
-`datafetch` CLI. Each tenant gets a session, a private `/lib/` overlay of
-typed TypeScript functions, and read-only access to the registered mounts.
-Snippets the agent composes are recorded; convergent trajectories
-crystallise into reusable `/lib/<tenant>/<name>.ts` files, so the second
-asking of a related intent flips from `mode: "novel"` to
-`mode: "interpreted"` with a measurable cost drop.
+datafetch is a dataset harness for coding agents. It exposes a mounted
+dataset as a bash-shaped workspace with typed TypeScript handles, writable
+intent scripts, structured run artifacts, and tenant-local learned
+interfaces. The goal is simple: the agent can explore freely, but the system
+only learns from data-molding logic that was written into the workspace and
+executed by `datafetch`.
 
 The agent's only tool is bash. The dataset surfaces as `/db/<mount>/<coll>.ts`
 modules. Tenant functions live at `/lib/<name>.ts` written through a single
@@ -27,7 +24,7 @@ cp .env.example .env || true   # create one if you haven't
 # edit .env: ATLAS_URI=mongodb+srv://... ; ANTHROPIC_API_KEY=sk-ant-...
 
 # 3. publish a mount (live Atlas; or skip and run `datafetch demo` offline)
-datafetch publish finqa-2024 --uri "$ATLAS_URI" --db atlasfs_hackathon
+datafetch publish finqa-2024 --uri "$ATLAS_URI" --db datafetch_hackathon
 
 # 4. boot the data plane (foreground or backgrounded)
 datafetch server &     # http://localhost:8080
@@ -103,8 +100,8 @@ Common flags: `--server <url>` (default `http://localhost:8080`),
 
 ## Where state lives
 
-`$DATAFETCH_HOME` defaults to `~/.atlasfs` (legacy name; the canonical env
-var name is `DATAFETCH_HOME`). Subdirectories:
+`$DATAFETCH_HOME` defaults to `<cwd>/.datafetch`. `ATLASFS_HOME` is still
+honoured as a legacy compatibility alias. Subdirectories:
 
 ```
 $DATAFETCH_HOME/
@@ -129,7 +126,7 @@ $DATAFETCH_HOME/
                                    v  shell exec
 +------------------------- datafetch CLI (client) ------------------------+
 | publish, server, session, agent, man, apropos, tsx, demo, install-skill|
-| Resolves --session / DATAFETCH_SESSION / ~/.datafetch/active-session   |
+| Resolves --session / DATAFETCH_SESSION / $DATAFETCH_HOME/active-session|
 +------------------------------------------------------------------------+
                                    |  HTTP localhost:8080
                                    v
@@ -148,11 +145,13 @@ $DATAFETCH_HOME/
 ## Environment
 
 - `DATAFETCH_HOME` — base directory for `mounts/`, `lib/`, `sessions/`,
-  `trajectories/`. Falls back to `ATLASFS_HOME`, then `<cwd>/.atlasfs`.
+  `trajectories/`. Falls back to `ATLASFS_HOME`, then `<cwd>/.datafetch`.
 - `DATAFETCH_SESSION` — fallback session id when `--session` is absent
   and `active-session` is empty.
 - `DATAFETCH_SERVER_URL` — fallback data-plane base URL (default
   `http://localhost:8080`).
+- `DATAFETCH_SKIP_ENV_FILE` — set to `1` to skip automatic `.env` loading.
+  The legacy `ATLASFS_SKIP_ENV_FILE=1` alias is also supported.
 - `ATLAS_URI` — MongoDB Atlas connection string for the live FinQA path.
 - `ANTHROPIC_API_KEY` — required for any `llm({...})` or `agent({...})`
   body dispatch on the data plane.

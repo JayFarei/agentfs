@@ -46,11 +46,11 @@ function DatasetModal({
       <div className="v01-how" onClick={(e) => e.stopPropagation()}>
         <div className="v01-cv__hd">
           <div className="v01-cv__path">
-            <span className="v01-cv__path-dim">atlasfs/</span>
+            <span className="v01-cv__path-dim">datafetch/</span>
             <span>dataset.md</span>
           </div>
           <div className="v01-cv__meta">
-            <span>{cluster?.dbName ?? "atlasfs"}</span>
+            <span>{cluster?.dbName ?? "datafetch"}</span>
             <span>·</span>
             <span>{cluster?.backend ?? "atlas"}</span>
           </div>
@@ -213,7 +213,7 @@ export function Overview({ alice, bob, cluster, setActive }: OverviewProps) {
             Two agents, one cluster, two emergent applications.
           </h1>
           <p className="v01-overview__lede">
-            Atlas data is loaded once into a typed virtual filesystem. Each
+            Dataset context is loaded once into a typed virtual filesystem. Each
             agent's chain library and primitive set grows as queries are
             exercised — the same MongoDB cluster underneath, different overlays
             on top. Pick an agent to drive their surface.

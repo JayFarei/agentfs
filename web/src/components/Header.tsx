@@ -21,8 +21,8 @@ export function Header({ active, setActive, openHow, users }: HeaderProps) {
     <header className="v01-hdr">
       <div className="v01-hdr__brand">
         <span className="v01-hdr__wm">
-          <span className="pre">atlas</span>
-          <span className="post">fs</span>
+          <span className="pre">data</span>
+          <span className="post">fetch</span>
         </span>
         <span className="v01-hdr__ver">v0.1</span>
       </div>
@@ -80,7 +80,7 @@ export function Header({ active, setActive, openHow, users }: HeaderProps) {
       <div className="v01-hdr__cluster">
         <button
           className="v01-hdr__how"
-          title="How AtlasFS works"
+          title="How datafetch works"
           onClick={openHow}
         >
           <svg

@@ -462,7 +462,7 @@ describe("datafetch plan/execute CLI", () => {
         ...process.env,
         DATAFETCH_SESSION: "",
         DATAFETCH_HOME: baseDir,
-        ATLASFS_SKIP_ENV_FILE: "1",
+        DATAFETCH_SKIP_ENV_FILE: "1",
       };
 
       const session = await runCli(

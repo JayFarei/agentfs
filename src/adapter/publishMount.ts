@@ -73,7 +73,7 @@ export type PublishMountArgs = {
   warmup?: WarmupMode;
   policy?: MountPolicy;
   // Overrides the resolved base directory. Defaults to
-  // $DATAFETCH_HOME / $ATLASFS_HOME / cwd/.atlasfs.
+  // $DATAFETCH_HOME / $ATLASFS_HOME / cwd/.datafetch.
   baseDir?: string;
 };
 
