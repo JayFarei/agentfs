@@ -1,5 +1,7 @@
 # datafetch
 
+Repository: <https://github.com/JayFarei/datafetch>
+
 datafetch is a dataset harness for coding agents. It exposes a mounted
 dataset as a bash-shaped workspace with typed TypeScript handles, writable
 intent scripts, structured run artifacts, and tenant-local learned

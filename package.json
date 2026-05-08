@@ -3,6 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JayFarei/datafetch.git"
+  },
   "bin": {
     "datafetch": "./bin/datafetch.mjs"
   },
