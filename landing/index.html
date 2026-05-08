@@ -591,17 +591,390 @@
     background-image: repeating-linear-gradient(to right, var(--ink-mute) 0 1px, transparent 1px 8px);
     margin: 24px 0;
   }
+  /* ═══ SIDE-TAB WORKFLOW ═══ */
+  .loop-section{ padding: 64px 0; }
+  .loop-grid{
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 0;
+    border: 1px solid var(--rule);
+    background: #050505;
+    min-height: 460px;
+  }
+  .loop-tabs{
+    border-right: 1px solid var(--rule);
+    display: flex; flex-direction: column;
+    background: rgba(0,0,0,0.35);
+  }
+  .loop-tab{
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-left: 2px solid transparent;
+    border-bottom: 1px dashed var(--rule);
+    padding: 18px 22px 18px 20px;
+    text-align: left;
+    cursor: pointer;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 14px;
+    align-items: start;
+    transition: color 0.12s, background 0.12s, border-left-color 0.12s;
+  }
+  .loop-tab:last-child{ border-bottom: 0; }
+  .loop-tab-num{
+    color: var(--ink-faint);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    padding-top: 2px;
+  }
+  .loop-tab-body{ display: block; }
+  .loop-tab-name{
+    display: block;
+    color: var(--ink);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+  }
+  .loop-tab-by{
+    display: block;
+    color: var(--ink-faint);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .loop-tab:hover{
+    color: var(--ink);
+    background: rgba(216,214,204,0.04);
+  }
+  .loop-tab:hover .loop-tab-num{ color: var(--ink); }
+  .loop-tab.is-on{
+    background: rgba(216,214,204,0.06);
+    border-left-color: var(--ink);
+  }
+  .loop-tab.is-on .loop-tab-num{ color: var(--ink); }
+
+  .loop-panel{
+    padding: 36px 40px 32px;
+    display: grid;
+    grid-template-rows: auto auto auto 1fr auto;
+    gap: 18px;
+  }
+  .loop-panel-l{
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .loop-panel-title{
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+    margin: 0;
+  }
+  .loop-panel-lede{
+    color: var(--ink-dim);
+    font-size: 13px;
+    line-height: 1.7;
+    margin: 0;
+    max-width: 64ch;
+  }
+  .loop-snippet{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--ink);
+    background: rgba(0,0,0,0.45);
+    border: 1px dashed var(--rule);
+    padding: 14px 18px;
+    margin: 0;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .loop-principle{
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    border-top: 1px dashed var(--rule);
+    padding-top: 14px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .loop-principle-arr{ color: var(--ink); }
+
+  /* ═══ FOOTER ═══ */
+  .ftr{ padding: 22px 0 28px; }
+  .ftr-row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .ftr-copy a{
+    color: var(--ink-dim);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    transition: color 0.14s;
+  }
+  .ftr-copy a:hover{ color: var(--ink); }
+  .openmake-mark{
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: currentColor;
+    margin-right: 6px;
+    vertical-align: baseline;
+    transition: background 0.15s ease;
+  }
+  .ftr-copy a:hover .openmake-mark{ background: #E63329; }
+  .ftr-mark-r .brand-open{ font-weight: 400; color: var(--ink-faint); }
+  .ftr-mark-r .brand-slash{ color: var(--ink-faint); }
+  .ftr-mark-r .brand-traces{ font-weight: 700; color: var(--ink); }
+
   @media (max-width: 980px){
     .hero-grid{ grid-template-columns: 1fr; min-height: 0; }
     .hero-left{ padding: 56px 24px 32px; max-width: none; justify-self: stretch; }
     .hero-right{ min-height: 480px; border-left: none; border-top: 1px solid var(--rule); }
   }
   @media (max-width: 760px){
-    .terminal-grid, .crystal, .winwin{ grid-template-columns: 1fr; }
-    .term-pane{ border-right: none; border-bottom: 1px solid var(--rule); }
-    .crystal-col{ border-right: none; border-bottom: 1px solid var(--rule); min-height: auto; }
-    .winwin > div{ border-right: none; border-bottom: 1px solid var(--rule); }
     .section-head{ grid-template-columns: 1fr; }
+    .loop-grid{ grid-template-columns: 1fr; }
+    .loop-tabs{ flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--rule); }
+    .loop-tab{
+      border-bottom: 0;
+      border-right: 1px dashed var(--rule);
+      border-left: 0;
+      border-top: 2px solid transparent;
+      min-width: 220px;
+    }
+    .loop-tab.is-on{ border-left: 0; border-top-color: var(--ink); }
+    .loop-panel{ padding: 28px 22px; }
+    .ftr-row{ flex-direction: row; gap: 12px; align-items: center; }
+  }
+
+  /* ═══ HERO VFS TREE ═══ */
+  .vfs-tree{
+    margin-top: 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.75;
+    border: 1px solid var(--rule);
+    border-left: 2px solid var(--ink-mute);
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.28);
+    max-width: 480px;
+  }
+  .vfs-line{
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--ink-faint);
+  }
+  .vfs-root{
+    color: var(--ink);
+    font-weight: 700;
+    margin-bottom: 4px;
+    letter-spacing: 0.02em;
+  }
+  .vfs-line.bright{ color: var(--ink); }
+  .vfs-line.dim{ color: var(--ink-faint); }
+  .vfs-path{
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: pre;
+  }
+  .vfs-tag{
+    flex: 0 0 auto;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border: 1px solid var(--ink-mute);
+    padding: 1px 6px;
+    white-space: nowrap;
+    line-height: 1.4;
+  }
+  .vfs-tag.yours{
+    color: var(--bg);
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  /* ═══ HERO STAMP STRIP ═══ */
+  .hero-strip{
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 4;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    height: 22%;
+    min-height: 130px;
+    border-top: 1px solid var(--rule);
+    background: linear-gradient(to bottom, rgba(5,5,5,0.65), rgba(5,5,5,0.96));
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  .hero-strip-cell{
+    padding: 12px 14px 14px;
+    border-right: 1px dashed var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    min-width: 0;
+  }
+  .hero-strip-cell:last-child{ border-right: 0; }
+  .hero-strip-num{
+    color: var(--ink-faint);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+  }
+  .hero-strip-name{
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .hero-strip-gloss{
+    color: var(--ink);
+    font-size: 11.5px;
+    letter-spacing: 0;
+    line-height: 1.55;
+    margin-top: auto;
+    word-break: break-word;
+  }
+  .hero-strip-gloss code{
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: var(--hot);
+    font-size: 11.5px;
+  }
+
+  @media (max-width: 980px){
+    .hero-strip{ grid-template-columns: repeat(2, 1fr); height: auto; min-height: 0; position: relative; }
+    .hero-strip-cell{ border-right: 1px dashed var(--rule); border-bottom: 1px dashed var(--rule); }
+    .hero-strip-cell:nth-child(2n){ border-right: 0; }
+    .hero-strip-cell:last-child{ border-bottom: 0; }
+  }
+
+  /* ═══ V2: full-screen pages + auto-cycle timer + fixed chrome/footer ═══ */
+  html{ scroll-behavior: smooth; }
+
+  .chrome{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 60;
+    background: rgba(10,10,10,0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .hero{
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
+  .hero-grid{
+    height: 100%;
+    min-height: 0;
+  }
+  .hero-left{
+    overflow: hidden;
+    padding-top: 88px;
+    padding-bottom: 24px;
+  }
+
+  .loop-section{
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: 80px 0 40px;
+    border-bottom: 0;
+  }
+  .loop-section .wrap{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-height: 0;
+  }
+  .loop-section .section-head{ margin-bottom: 0; }
+  .loop-section .loop-grid{
+    flex: 1;
+    min-height: 0;
+  }
+  .loop-section .loop-panel{
+    overflow-y: auto;
+  }
+
+  /* timer bar — sits flush under the loop-grid */
+  .loop-timer{
+    height: 2px;
+    background: rgba(216,214,204,0.08);
+    border-left: 1px solid var(--rule);
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    position: relative;
+    overflow: hidden;
+  }
+  .loop-timer-bar{
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 0;
+    background: var(--ink);
+    transition: width var(--cycle-ms, 6000ms) linear;
+  }
+  .loop-timer-bar.run{ width: 100%; }
+
+  /* footer at very bottom — normal flow, not sticky */
+  .ftr{
+    position: relative;
+    z-index: 1;
+    padding: 14px 0 18px;
+    background: var(--bg);
+    border-top: 1px solid var(--rule);
+  }
+  .ftr-icons{
+    display: inline-flex;
+    gap: 16px;
+    align-items: center;
+  }
+  .logo-link{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    color: var(--ink-faint);
+    text-decoration: none;
+    transition: color 0.14s, transform 0.14s;
+  }
+  .logo-link:hover{ color: var(--ink); transform: translateY(-1px); }
+  .logo-link svg{ display: block; }
+
+  @media (max-width: 760px){
+    .loop-section{ padding: 72px 0 80px; }
   }
 </style>
 </head>
@@ -629,264 +1002,129 @@
 <section class="hero">
   <div class="hero-grid">
     <div class="hero-left">
-      <div class="badge">/ OWN YOUR INTERFACE</div>
+      <div class="badge">/ DATASET HARNESS</div>
       <h1>Virtualize <span class="slash">/</span><br>the interface,<br>not the<br>dataset.</h1>
       <p class="lede">
-        Datafetch is a <em>dataset harness</em> for agentic search and action over data.
-        Mount a dataset as an intent workspace. The agent writes <em>TypeScript</em>. Every accepted <em>df.answer</em> becomes a typed call in your tenant's library.
-        The next intent discovers it, reuses it, and the program shrinks. Same answer, smaller surface — the lineage stays.
-        Two tenants asking different intent shapes over the same data plane grow two different libraries.
+        Mount a dataset as a <em>typed virtual filesystem</em>. The agent writes TypeScript over <code>df.db.*</code>. Every accepted <code>df.answer</code> becomes a typed call in your tenant's <code>lib/</code> &mdash; sibling intents reuse it.
       </p>
-      <div class="hero-meta" style="margin-top:36px; border-left:none; padding-left:0;">
-        <div class="meta-row"><span class="k">/ stage 1</span><span class="v">NOVEL &nbsp;·&nbsp; tier 4 · cold path <small>(today)</small></span></div>
-        <div class="meta-row"><span class="k">/ stage 2</span><span class="v">ENDORSED &nbsp;·&nbsp; lineage attached <small>(roadmap)</small></span></div>
-        <div class="meta-row"><span class="k">/ stage 3</span><span class="v">COMPILED &nbsp;·&nbsp; one typed call <small>(roadmap)</small></span></div>
-        <div class="stage-track-foot">▸ today: <b>NOVEL → INTERPRETED</b> &nbsp;·&nbsp; roadmap: → ENDORSED → COMPILED</div>
+      <div class="vfs-tree" aria-label="Mounted dataset filesystem">
+        <div class="vfs-line vfs-root">/mnt/&lt;dataset&gt;/</div>
+        <div class="vfs-line dim"><span class="vfs-path">├ AGENTS.md</span><span class="vfs-tag">core</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">├ df.d.ts</span><span class="vfs-tag">core</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">├ db/</span><span class="vfs-tag">immutable</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">│  ├ filings.ts</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">│  └ chunks.ts</span></div>
+        <div class="vfs-line bright"><span class="vfs-path">├ lib/</span><span class="vfs-tag yours">tenant</span></div>
+        <div class="vfs-line bright"><span class="vfs-path">│  ├ rangeTableMetric.ts</span></div>
+        <div class="vfs-line bright"><span class="vfs-path">│  └ skills/&lt;intent&gt;.md</span></div>
+        <div class="vfs-line bright"><span class="vfs-path">├ scripts/answer.ts</span><span class="vfs-tag yours">tenant</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">├ tmp/runs/*</span><span class="vfs-tag">lineage</span></div>
+        <div class="vfs-line dim"><span class="vfs-path">└ result/</span><span class="vfs-tag">sealed answer</span></div>
       </div>
     </div>
 
-    <!-- FULL-BLEED ANIMATION CANVAS -->
-    <div class="hero-right" aria-hidden="true">
-      <pre id="ascii"></pre>
+    <!-- FULL-BLEED ANIMATION CANVAS + STAMP STRIP -->
+    <div class="hero-right">
+      <pre id="ascii" aria-hidden="true"></pre>
+      <ol class="hero-strip" aria-label="Workflow">
+        <li class="hero-strip-cell">
+          <span class="hero-strip-num">/01</span>
+          <span class="hero-strip-name">INIT</span>
+          <span class="hero-strip-gloss">Provider seeds a dataset env. Init agent stamps the base VFS template.</span>
+        </li>
+        <li class="hero-strip-cell">
+          <span class="hero-strip-num">/02</span>
+          <span class="hero-strip-name">MOUNT</span>
+          <span class="hero-strip-gloss"><code>/mnt/&lt;dataset&gt;</code> appears as a typed VFS, scoped per tenant + intent.</span>
+        </li>
+        <li class="hero-strip-cell">
+          <span class="hero-strip-num">/03</span>
+          <span class="hero-strip-name">WRITE</span>
+          <span class="hero-strip-gloss">Edit <code>scripts/answer.ts</code> in visible TypeScript over <code>df.db.*</code>.</span>
+        </li>
+        <li class="hero-strip-cell">
+          <span class="hero-strip-num">/04</span>
+          <span class="hero-strip-name">COMMIT</span>
+          <span class="hero-strip-gloss">Seal one <code>df.answer({…})</code> with evidence and lineage.</span>
+        </li>
+        <li class="hero-strip-cell">
+          <span class="hero-strip-num">/05</span>
+          <span class="hero-strip-name">GROW</span>
+          <span class="hero-strip-gloss"><code>df.lib.*</code> grows per tenant. Sibling intents reuse.</span>
+        </li>
+      </ol>
     </div>
   </div>
 </section>
 
-<!-- BROADSIDE -->
-<section class="wrap">
-  <div class="broadside">
-    <div class="insignia" aria-hidden="true">
-      <div class="bar"></div>
-      <div class="bar short"></div>
-      <div class="bar"></div>
-      <div class="bar shorter"></div>
-      <div class="bar"></div>
-      <div class="bar short"></div>
-      <div class="bar"></div>
-      <div class="bar shorter"></div>
-    </div>
-    <div>
-      <div class="broadside-title">SEARCH YOUR DATA <span style="color:var(--ink-dim)">/</span> THE INTERFACE CRYSTALLISES OUT</div>
-      <div class="broadside-sub">novel &nbsp;>>>&nbsp; interpreted &nbsp;>>>&nbsp; compiled &nbsp;©&nbsp; 2026 &nbsp;·&nbsp; the library IS the application
-    </div>
-    <div class="broadside-stamp">
-      <span class="stamp-box">REV ▢ 04</span>
-      <span class="stamp-box">MOUNT-OK</span>
-      <span class="stamp-box">FLUE✓</span>
-    </div>
-  </div>
-</section>
-
-<!-- SECTION 01 — DUAL DEMO -->
-<section class="section">
+<!-- LOOP — side-tab workflow -->
+<section class="section loop-section">
   <div class="wrap">
     <div class="section-head">
-      <div class="section-num">/ 01 &nbsp;>>>&nbsp; two tenants · one dataset · two emergent libraries</div>
+      <div class="section-num">/ THE LOOP &nbsp;>>>&nbsp; publish · mount · shape · optimise</div>
       <div>
-        <h2>Same data.<br>Different intent shapes.<br>Two interfaces you own.</h2>
-        <p>Both tenants mount <span style="color:var(--ink)">mount finqa-2024</span>. <b style="color:var(--ink)">RANGE-A</b> asks range-shaped questions over filings — the canonical <em>"what is the range of chemicals revenue between 2014 and 2016?"</em>. <b style="color:var(--ink)">COMPARE-B</b> asks compare-shaped questions over the same dataset. The agent writes visible TypeScript, commits a sealed df.answer. Each accepted commit teaches the observer the shape. Two tenants on the same data plane, two typed libraries that look nothing alike.</p>
+        <h2>A dataset is an environment.<br>Mounted, shaped, returned.</h2>
+        <p>Datafetch turns a dataset into a tenanted environment. The provider publishes once. Each agentic search shapes the workspace to fit the user's intent shape. Every accepted trajectory teaches the provider how the data is actually used, so serving, indexes, and the data shape itself can be tightened against real demand.</p>
       </div>
     </div>
 
-    <div class="dual-grid">
-      <!-- AGENT A -->
-      <section>
-        <div class="agent-head">
-          <div>
-            <div class="agent-tag">/ tenant &nbsp;>>>&nbsp; A · range-shaped intents</div>
-            <div class="agent-name">RANGE-A &nbsp;<span style="color:var(--ink-faint)">claude-sonnet</span></div>
-            <div class="agent-intent">intent ▸ "range of chemicals revenue between 2014 and 2016"</div>
-          </div>
-          <span class="agent-pill">RUN ▢ <span id="runA">01</span></span>
-        </div>
-        <div class="agent-body">
-          <ul class="traj" id="trajA"></ul>
-          <div class="interface-card" id="ifaceA">
-<span class="c">// learned interface — crystallised for tenant A</span>
-<span class="k">export async function</span> <span class="t">rangeTableMetric</span>(args: {
-  query: <span class="t">string</span>; limit?: <span class="t">number</span>;
-}): <span class="t">Promise&lt;{ value: number; evidence: Evidence[] }&gt;</span>
-          </div>
-        </div>
-        <div class="agent-foot">
-          <span>▸ top-level calls · <b id="skillA">4</b> &nbsp;/&nbsp; collapse · <b id="searchA">3</b></span>
-          <span>▢ &nbsp;<b id="costA">tier 4</b></span>
-        </div>
-      </section>
+    <div class="loop-grid">
+      <nav class="loop-tabs" aria-label="Workflow stages">
+        <button type="button" class="loop-tab is-on" data-stage="0">
+          <span class="loop-tab-num">/01</span>
+          <span class="loop-tab-body">
+            <span class="loop-tab-name">PUBLISH</span>
+            <span class="loop-tab-by">dataset provider</span>
+          </span>
+        </button>
+        <button type="button" class="loop-tab" data-stage="1">
+          <span class="loop-tab-num">/02</span>
+          <span class="loop-tab-body">
+            <span class="loop-tab-name">MOUNT</span>
+            <span class="loop-tab-by">client</span>
+          </span>
+        </button>
+        <button type="button" class="loop-tab" data-stage="2">
+          <span class="loop-tab-num">/03</span>
+          <span class="loop-tab-body">
+            <span class="loop-tab-name">SHAPE</span>
+            <span class="loop-tab-by">agentic search</span>
+          </span>
+        </button>
+        <button type="button" class="loop-tab" data-stage="3">
+          <span class="loop-tab-num">/04</span>
+          <span class="loop-tab-body">
+            <span class="loop-tab-name">OPTIMISE</span>
+            <span class="loop-tab-by">provider · loop</span>
+          </span>
+        </button>
+      </nav>
 
-      <!-- AGENT B -->
-      <section>
-        <div class="agent-head">
-          <div>
-            <div class="agent-tag">/ tenant &nbsp;>>>&nbsp; B · compare-shaped intents</div>
-            <div class="agent-name">COMPARE-B &nbsp;<span style="color:var(--ink-faint)">codex-1</span></div>
-            <div class="agent-intent">intent ▸ "compare segment revenue across years"</div>
-          </div>
-          <span class="agent-pill">RUN ▢ <span id="runB">01</span></span>
-        </div>
-        <div class="agent-body">
-          <ul class="traj" id="trajB"></ul>
-          <div class="interface-card" id="ifaceB">
-<span class="c">// learned interface — crystallised for tenant B</span>
-<span class="k">export async function</span> <span class="t">compareTableMetric</span>(args: {
-  query: <span class="t">string</span>; limit?: <span class="t">number</span>;
-}): <span class="t">Promise&lt;{ value: number; evidence: Evidence[] }&gt;</span>
-          </div>
-        </div>
-        <div class="agent-foot">
-          <span>▸ top-level calls · <b id="skillB">4</b> &nbsp;/&nbsp; collapse · <b id="searchB">3</b></span>
-          <span>▢ &nbsp;<b id="costB">tier 4</b></span>
-        </div>
-      </section>
+      <article class="loop-panel" id="loop-panel" aria-live="polite"><!-- rendered by JS --></article>
     </div>
+    <div class="loop-timer" aria-hidden="true"><span class="loop-timer-bar" id="loop-timer-bar"></span></div>
 
-    <!-- convergence bar -->
-    <div class="converge">
-      <div>▸ same mount &nbsp;·&nbsp; <b>/mnt/finqa</b></div>
-      <div class="arrows">▸▸▸</div>
-      <div style="text-align:right;">two intent-shaped interfaces &nbsp;·&nbsp; <b>df.lib.rangeTableMetric()</b> &nbsp;·&nbsp; <b>df.lib.compareTableMetric()</b></div>
-    </div>
-
-    <div class="term-controls">
-      <button class="btn" id="btn-prev">◂ RUN −1</button>
-      <button class="btn" id="btn-play">▶ PLAY CYCLE</button>
-      <button class="btn" id="btn-next">RUN +1 ▸</button>
-      <button class="btn ghost" id="btn-reset">↻ RESET</button>
-      <span class="step-indicator" id="step-indicator">RUN 01 / 04 · cold</span>
-    </div>
   </div>
 </section>
 
-<!-- SECTION 02 — OPTIMISATION FEED -->
-<section class="section">
-  <div class="wrap">
-    <div class="section-head">
-      <div class="section-num">/ 02 &nbsp;>>>&nbsp; cold path · warm path · same answer</div>
-      <div>
-        <h2>Four calls become one.</h2>
-        <p>The agent commits a trajectory. The observer reads it and crystallises a typed interface. The next intent finds it via <em>apropos</em> and runs in one call. The lineage stays.</p>
-      </div>
-    </div>
-
-    <div class="dual-grid">
-      <section style="min-height:auto;">
-        <div class="agent-head">
-          <div>
-            <div class="agent-tag">/ before &nbsp;>>>&nbsp; cold path · raw trajectory</div>
-            <div class="agent-name">scripts/answer.ts &nbsp;<span style="color:var(--ink-faint)">mode=novel · tier=4</span></div>
-            <div class="agent-intent">range of chemicals revenue between 2014 and 2016</div>
-          </div>
-          <span class="agent-pill">UNOPTIMISED</span>
-        </div>
-        <div class="agent-body">
-          <ul class="traj">
-            <li data-kind="search"><span class="glyph">$</span><span class="body"><span class="cmd">datafetch apropos "range chemicals revenue"</span><span class="out">↳ no match — cold path</span></span><span class="tag search">SEARCH</span></li>
-            <li data-kind="skill"><span class="glyph">↳</span><span class="body"><span class="cmd">df.db.finqaCases.findSimilar(query, 10)</span></span><span class="tag skill">CALL</span></li>
-            <li data-kind="skill"><span class="glyph">↳</span><span class="body"><span class="cmd">df.lib.pickFiling({ question, candidates })</span></span><span class="tag skill">CALL</span></li>
-            <li data-kind="skill"><span class="glyph">↳</span><span class="body"><span class="cmd">df.lib.inferTableMathPlan({ question, filing })</span></span><span class="tag skill">CALL</span></li>
-            <li data-kind="skill"><span class="glyph">↳</span><span class="body"><span class="cmd">df.lib.executeTableMath({ filing, plan })</span></span><span class="tag skill">CALL</span></li>
-            <li data-kind="commit"><span class="glyph">▢</span><span class="body"><span class="cmd">df.answer({ value, evidence })</span></span><span class="tag">COMMIT</span></li>
-          </ul>
-        </div>
-        <div class="agent-foot">
-          <span>▸ 4 top-level calls</span>
-          <span>▢ <b>tier 4 · novel</b></span>
-        </div>
-      </section>
-
-      <section style="min-height:auto;">
-        <div class="agent-head">
-          <div>
-            <div class="agent-tag">/ after &nbsp;>>>&nbsp; warm path · learned interface</div>
-            <div class="agent-name">scripts/answer.ts &nbsp;<span style="color:var(--ink-faint)">mode=interpreted · tier=2</span></div>
-            <div class="agent-intent">range of coal revenue between 2014 and 2016</div>
-          </div>
-          <span class="agent-pill" style="background:var(--ink); color:var(--bg); border-color:var(--ink);">OPTIMISED</span>
-        </div>
-        <div class="agent-body">
-          <ul class="traj">
-            <li data-kind="search"><span class="glyph">$</span><span class="body"><span class="cmd">datafetch apropos "range coal revenue"</span><span class="out">↳ rangeTableMetric — match</span></span><span class="tag det">INDEXED</span></li>
-            <li data-kind="skill"><span class="glyph">↳</span><span class="body"><span class="cmd">df.lib.rangeTableMetric({ query, limit: 10 })</span><span class="out">↳ nested calls preserved in lineage</span></span><span class="tag det">LEARNED</span></li>
-            <li data-kind="commit"><span class="glyph">▢</span><span class="body"><span class="cmd">df.answer({ value, evidence })</span><span class="out">↳ same answer, smaller program</span></span><span class="tag det">COMMIT ✓</span></li>
-          </ul>
-        </div>
-        <div class="agent-foot">
-          <span>▸ 1 top-level call · 4 → 1</span>
-          <span>▢ <b>tier 2 · interpreted</b></span>
-        </div>
-      </section>
-    </div>
+<!-- FOOTER -->
+<footer class="ftr">
+  <div class="wrap ftr-row">
+    <span class="ftr-copy">©2026 <a href="https://openmake.ai" target="_blank" rel="noopener"><span class="openmake-mark" aria-hidden="true"></span>OpenMake</a></span>
+    <span class="ftr-icons">
+      <a class="logo-link" href="https://github.com/JayFarei/agentfs" target="_blank" rel="noopener" aria-label="GitHub — agentfs">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+      <a class="logo-link" href="https://x.com/jayfarei" target="_blank" rel="noopener" aria-label="X — @jayfarei">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <path fill="currentColor" d="M9.32 6.84 14.95 0h-1.36L8.7 6.04 4.85 0H0l5.93 9.27L0 16h1.36l5.16-6.4L11.05 16H16zM7.31 8.9l-.6-.92L1.84 1.04h2.08L7.85 6.4l.6.92L13.5 14.96h-2.08L7.31 8.9z"/>
+        </svg>
+      </a>
+    </span>
   </div>
-</section>
-
-<!-- SECTION 03 — WIN/WIN -->
-<section class="section">
-  <div class="wrap">
-    <div class="section-head">
-      <div class="section-num">/ 03 &nbsp;>>>&nbsp; for agents · for data providers</div>
-      <div>
-        <h2>You own the interface.<br>The provider sees the demand.</h2>
-        <p>The same trajectory serves both ends of the wire. The agent ends up with a typed library named in its own vocabulary — the library is the app. The provider sees the exact bash, the exact df.* composition, the exact failure modes. The interface is shaped by the work that actually got done.</p>
-      </div>
-    </div>
-
-    <div class="winwin">
-      <div>
-        <div class="ww-head">
-          <div class="ww-icon">◫</div>
-          <div>
-            <div class="who">/ agent operator &nbsp;>>>&nbsp; consumer side</div>
-            <div class="what">Your intents.<br>Your typed library.</div>
-          </div>
-        </div>
-        <ul class="ww-list">
-          <li><span class="num">A1</span><span><strong>Search, don't integrate</strong>Mount the dataset and ask. ls, grep, jq, df.*. No SDK to learn, no schema to memorise.</span></li>
-          <li><span class="num">A2</span><span><strong>Endorse what worked</strong>Commit a sealed df.answer. The trajectory becomes a named, typed call in your tenant's library.</span></li>
-          <li><span class="num">A3</span><span><strong>The library IS the app</strong>No UI to design. Parameters in, df.answer out. Visible TypeScript, not hidden state.</span></li>
-          <li><span class="num">A4</span><span><strong>It compounds</strong>apropos surfaces the learned interface. Sibling intents reuse it. Cold once, warm forever.</span></li>
-        </ul>
-      </div>
-
-      <div>
-        <div class="ww-head">
-          <div class="ww-icon">◬</div>
-          <div>
-            <div class="who">/ data provider &nbsp;>>>&nbsp; server side</div>
-            <div class="what">Read every trace.<br>Ship what's asked for.</div>
-          </div>
-        </div>
-        <ul class="ww-list">
-          <li><span class="num">B1</span><span><strong>Concrete demand signal</strong>See how agents actually use your data. Exact bash, exact df.* composition, exact failure modes. No more synthetic queries.</span></li>
-          <li><span class="num">B2</span><span><strong>Cheaper interfaces from real usage</strong>Promote derivative shapes — <em>ratioTableMetric</em>, <em>locateTableFigure</em>, <em>filingQuestion</em> — into native cheap endpoints.</span></li>
-          <li><span class="num">B3</span><span><strong>Surgical optimisation</strong>Replace expensive searches with deterministic calls. Swap LLM steps for typed primitives where the trajectory shows it's safe.</span></li>
-          <li><span class="num">B4</span><span><strong>Trajectory is the spec</strong>Every learned interface ships with the lineage that justified it. Roll back, A/B, audit.</span></li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FOOTER BROADSIDE -->
-<section class="wrap footer-broadside">
-  <div class="ftr-grid">
-    <div>
-      <div class="badge">/ engineered for agents &nbsp;>>>&nbsp; nyc</div>
-      <div class="ftr-mark">DATAFETCH<span class="slash">/</span>AI</div>
-      <p class="lede" style="margin-top:22px;">Own your interface, not someone else's app. A dataset harness for agentic search and action over data. <em>Pre-release — drop your address and we'll send the binary.</em></p>
-    </div>
-    <div style="display:grid; gap:16px; justify-items:end;">
-      <a href="https://datafetch.ai" class="ftr-cta">REQUEST EARLY ACCESS <span class="arr">>>></span></a>
-      <a href="#" class="btn ghost" style="text-decoration:none;">READ THE NOTES ↗</a>
-    </div>
-  </div>
-
-  <div class="ftr-stamps">
-    <span class="checker" aria-hidden="true"></span>
-    <span class="ring-stamp">NYC</span>
-    <span>©&nbsp;2026 &nbsp;/ DIV. RETRIEVAL</span>
-    <span style="margin-left:auto;">▢ POWERED BY FLUE ❤︎ &nbsp;>>>&nbsp; CLAUDE · CODEX</span>
-  </div>
-</section>
+</footer>
 
 <script>
 /* ---------- ASCII ANIMATION ----------
@@ -1367,167 +1605,83 @@ window.addEventListener('resize', () => { recomputeGridSize(); });
 tickAscii(0);
 setInterval(tickLoop, 80);
 
-/* ---------- DUAL-AGENT DEMO ---------- */
-/* Tenant A: range-shaped intents over FinQA. Cold path on run 01 composes
-   findSimilar → pickFiling → inferTableMathPlan → executeTableMath → df.answer.
-   By run N the warm path collapses to df.lib.rangeTableMetric → df.answer. */
-const trajA_runs = [
-  { // RUN 01 — cold: chemicals revenue
-    label:"01 / 04 · cold · novel",
-    cost:"tier 4", search:4, skill:3,
-    steps:[
-      ["search","$ ls /mnt/finqa","↳ db/  lib/  scripts/  result/"],
-      ["search","$ datafetch apropos \"range chemicals revenue\"","↳ no learned interface · cold path"],
-      ["search","$ cat scripts/answer.ts","↳ blank · agent composes from primitives"],
-      ["skill", "↳ df.db.finqaCases.findSimilar(query, 10)","▢ lex search · 10 candidates · 220ms",  "opt"],
-      ["skill", "↳ df.lib.pickFiling({ question, candidates })","▢ sonnet · 3.1s · 8.2k tok",        "opt"],
-      ["skill", "↳ df.lib.inferTableMathPlan({ question, filing })","▢ sonnet · 4.4s · 11.0k tok",   "opt"],
-      ["skill", "↳ df.lib.executeTableMath({ filing, plan })","▢ sonnet · 5.6s · 14.4k tok",         "skill"],
-      ["commit","▢ df.answer({ status, value, evidence, derivation })","↳ validateAnswerEnvelope ✓ · observer reads commit"]
-    ]
+/* ---------- WORKFLOW SIDE-TABS ---------- */
+const STAGES = [
+  {
+    label: '/ dataset provider · boot',
+    title: 'Publish an environment.',
+    lede: 'A whitelisted dataset boots a tenanted server. The init agent shapes the base VFS so any client knows what they\'re stepping into.',
+    snippet: '$ datafetch server --datasets datasets.json\n\n  opentraces-devtime\n  ├ adapter   huggingface\n  ├ template  agent-accepted\n  └ status    ready',
+    principle: 'Published environments are the unit of distribution.'
   },
-  { // RUN 02 — observer notices shape
-    label:"02 / 04 · observer reads",
-    cost:"tier 4", search:2, skill:3,
-    steps:[
-      ["search","$ tail -f .opentraces.json","↳ accepted commit · derivation: range"],
-      ["search","$ datafetch lib show","↳ candidate: rangeTableMetric · provisional"],
-      ["skill", "↳ df.lib.pickFiling({ question, candidates })","▢ sonnet · 3.1s · 8.2k tok",        "opt"],
-      ["skill", "↳ df.lib.inferTableMathPlan({ question, filing })","▢ sonnet · 4.2s · 11.0k tok",   "opt"],
-      ["skill", "↳ df.lib.executeTableMath({ filing, plan })","▢ sonnet · 4.6s · 12.0k tok",         "skill"],
-      ["commit","▢ df.answer({ ... })","↳ shape-hash matches · observer crystallises"]
-    ]
+  {
+    label: '/ client · attach',
+    title: 'Mount with intent.',
+    lede: 'Each task mounts an authenticated, isolated worktree shaped by the intent. db/ is immutable. lib/ and scripts/ are the tenant\'s.',
+    snippet: '$ datafetch attach :8090 --tenant demo\n$ datafetch mount opentraces-devtime \\\n    --intent "summarise debug failure modes"\n\n  AGENTS.md   df.d.ts\n  db/         immutable dataset primitives\n  lib/        tenant-owned learned helpers\n  scripts/    tmp/   result/',
+    principle: 'Tenanted, isolated, reproducible per intent.'
   },
-  { // RUN 03 — interpreted: warm path lights up
-    label:"03 / 04 · interpreted · warm",
-    cost:"tier 2", search:1, skill:1,
-    steps:[
-      ["search","$ datafetch apropos \"range coal revenue\"","↳ rangeTableMetric · shape match · 12ms",      "det"],
-      ["skill", "↳ df.lib.rangeTableMetric({ query, limit: 10 })","▢ one call · nested lineage preserved",    "det"],
-      ["commit","▢ df.answer({ ... })","↳ same envelope · same answer"]
-    ]
+  {
+    label: '/ agentic search · work',
+    title: 'Shape to the intent.',
+    lede: 'The agent edits visible TypeScript, runs probes, then commits one answer trajectory. Every run captures source plus lineage. Hidden reasoning is not learned, externalised work is.',
+    snippet: '$ datafetch run scripts/scratch.ts\n   tmp/runs/001/source.ts\n   tmp/runs/001/result.json\n   tmp/runs/001/lineage.json\n\n$ datafetch commit scripts/answer.ts\n   result/answer.md      replayable',
+    principle: 'Visible work is the only work that compounds.'
   },
-  { // RUN N — collapse: 3
-    label:"N / 04 · collapse · 3",
-    cost:"tier 2", search:0, skill:1,
-    steps:[
-      ["commit","▸ df.lib.rangeTableMetric({query:\"range chemicals revenue\", limit:10})","↳ typed call · top-level: 1 · collapse: 3", "det"]
-    ]
-  }
-];
-/* Tenant B: compare-shaped intents over the same FinQA mount. The cold
-   path composes the same primitives but the observer crystallises a
-   different shape. By run N the learned interface is df.lib.compareTableMetric. */
-const trajB_runs = [
-  { label:"01 / 04 · cold · novel", cost:"tier 4", search:4, skill:3,
-    steps:[
-      ["search","$ ls /mnt/finqa/db","↳ finqaCases  schemas"],
-      ["search","$ datafetch apropos \"compare segment revenue\"","↳ no learned interface · cold path"],
-      ["search","$ cat scripts/answer.ts","↳ blank · agent composes from primitives"],
-      ["skill", "↳ df.db.finqaCases.findSimilar(query, 10)","▢ lex search · 10 candidates · 240ms",      "opt"],
-      ["skill", "↳ df.lib.pickFiling({ question, candidates })","▢ sonnet · 3.4s · 9.2k tok",            "opt"],
-      ["skill", "↳ df.lib.inferTableMathPlan({ question, filing })","▢ sonnet · 3.6s · 8.4k tok",        "opt"],
-      ["skill", "↳ df.lib.executeTableMath({ filing, plan })","▢ sonnet · 4.6s · 11.4k tok",             "skill"],
-      ["commit","▢ df.answer({ status, value, evidence, derivation })","↳ derivation.operation: compare · observer reads"]
-    ]
-  },
-  { label:"02 / 04 · observer reads", cost:"tier 4", search:2, skill:3,
-    steps:[
-      ["search","$ tail -f .opentraces.json","↳ accepted commit · derivation: compare"],
-      ["search","$ datafetch lib show","↳ candidate: compareTableMetric · provisional"],
-      ["skill", "↳ df.lib.pickFiling({ question, candidates })","▢ sonnet · 3.0s · 8.6k tok",            "opt"],
-      ["skill", "↳ df.lib.inferTableMathPlan({ question, filing })","▢ sonnet · 2.6s · 6.0k tok",        "opt"],
-      ["skill", "↳ df.lib.executeTableMath({ filing, plan })","▢ sonnet · 3.4s · 8.2k tok",              "skill"],
-      ["commit","▢ df.answer({ ... })","↳ shape-hash matches · observer crystallises"]
-    ]
-  },
-  { label:"03 / 04 · interpreted · warm", cost:"tier 2", search:1, skill:1,
-    steps:[
-      ["search","$ datafetch apropos \"compare margin by year\"","↳ compareTableMetric · shape match · 18ms", "det"],
-      ["skill", "↳ df.lib.compareTableMetric({ query, limit: 10 })","▢ one call · nested lineage preserved",   "det"],
-      ["commit","▢ df.answer({ ... })","↳ same envelope · same answer"]
-    ]
-  },
-  { label:"N / 04 · collapse · 3", cost:"tier 2", search:0, skill:1,
-    steps:[
-      ["commit","▸ df.lib.compareTableMetric({query:\"compare segment revenue\", limit:10})","↳ typed call · top-level: 1 · collapse: 3", "det"]
-    ]
+  {
+    label: '/ dataset provider · loop',
+    title: 'Optimise from the wild.',
+    lede: 'Tenants accumulate lib/ helpers and accepted traces. The provider sees how the dataset is actually used and can reshape serving, indexes, or the data shape itself.',
+    snippet: 'next intent\n  ├ better AGENTS.md / scratch\n  ├ known df.db handles\n  ├ tenant lib/ helpers\n  └ prior accepted traces\n\nprovider re-publishes\n  reshape serving · reindex · reshape data',
+    principle: 'Datasets become applications by being used.'
   }
 ];
 
-function renderTraj(elId, run){
-  const ul = document.getElementById(elId);
-  ul.innerHTML = '';
-  for(const s of run.steps){
-    const [kind, cmd, out, tag] = s;
-    const li = document.createElement('li');
-    li.dataset.kind = kind;
-    const glyphMap = { search:'$', skill:'↳', commit:'▢' };
-    const tagMap = {
-      search: ['SEARCH','search'],
-      skill:  ['SKILL','skill'],
-      commit: ['COMMIT',''],
-      opt:    ['OPT ▸ DISTIL','opt'],
-      det:    ['LEARNED','det'],
-    };
-    let tagText, tagCls;
-    if(tag === 'opt'){ [tagText, tagCls] = tagMap.opt; }
-    else if(tag === 'det'){ [tagText, tagCls] = tagMap.det; }
-    else if(tag === 'skill'){ [tagText, tagCls] = tagMap.skill; }
-    else { [tagText, tagCls] = tagMap[kind] || ['',''] ; }
+function escHtml(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
-    li.innerHTML = `
-      <span class="glyph">${glyphMap[kind] || '·'}</span>
-      <span class="body"><span class="cmd">${escapeHtml(cmd)}</span><span class="out">${escapeHtml(out)}</span></span>
-      <span class="tag ${tagCls}">${tagText}</span>
-    `;
-    ul.appendChild(li);
+const STAGE_MS = 6000;
+let active = 0;
+let cycleTimer = null;
+
+document.documentElement.style.setProperty('--cycle-ms', STAGE_MS + 'ms');
+
+function renderStage(i){
+  const s = STAGES[i];
+  document.getElementById('loop-panel').innerHTML =
+    '<div class="loop-panel-l">' + escHtml(s.label) + '</div>' +
+    '<h3 class="loop-panel-title">' + escHtml(s.title) + '</h3>' +
+    '<p class="loop-panel-lede">' + escHtml(s.lede) + '</p>' +
+    '<pre class="loop-snippet">' + escHtml(s.snippet) + '</pre>' +
+    '<div class="loop-principle"><span class="loop-principle-arr">↳</span><span>' + escHtml(s.principle) + '</span></div>';
+  document.querySelectorAll('.loop-tab').forEach(function(b, j){
+    b.classList.toggle('is-on', j === i);
+  });
+  const bar = document.getElementById('loop-timer-bar');
+  if(bar){
+    bar.classList.remove('run');
+    void bar.offsetWidth;
+    bar.classList.add('run');
   }
 }
-function escapeHtml(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
-function renderRun(idx){
-  const A = trajA_runs[idx], B = trajB_runs[idx];
-  renderTraj('trajA', A);
-  renderTraj('trajB', B);
-  document.getElementById('runA').textContent = String(idx+1).padStart(2,'0');
-  document.getElementById('runB').textContent = String(idx+1).padStart(2,'0');
-  document.getElementById('costA').textContent = A.cost;
-  document.getElementById('costB').textContent = B.cost;
-  document.getElementById('skillA').textContent = A.skill;
-  document.getElementById('skillB').textContent = B.skill;
-  document.getElementById('searchA').textContent = A.search;
-  document.getElementById('searchB').textContent = B.search;
-  document.getElementById('step-indicator').textContent = 'RUN ' + A.label;
-  // dim interface card until run >= 1, glow on final
-  document.getElementById('ifaceA').style.opacity = idx < 1 ? 0.5 : 1;
-  document.getElementById('ifaceB').style.opacity = idx < 1 ? 0.5 : 1;
+function setActive(i){
+  active = i;
+  renderStage(i);
+  scheduleNext();
 }
 
-/* ---------- CONTROLS ---------- */
-let cur = 0;
-let playTimer = null;
-const prev = document.getElementById('btn-prev');
-const next = document.getElementById('btn-next');
-const play = document.getElementById('btn-play');
-const reset = document.getElementById('btn-reset');
-function go(d){ cur = Math.max(0, Math.min(trajA_runs.length-1, cur + d)); renderRun(cur); }
-prev.onclick = () => { stopPlay(); go(-1); };
-next.onclick = () => { stopPlay(); go(1); };
-reset.onclick = () => { stopPlay(); cur = 0; renderRun(cur); };
-function startPlay(){
-  play.textContent='❚❚ PAUSE'; play.dataset.active='true';
-  playTimer = setInterval(() => {
-    if(cur >= trajA_runs.length-1){ stopPlay(); return; }
-    cur++; renderRun(cur);
-  }, 2600);
+function scheduleNext(){
+  clearTimeout(cycleTimer);
+  cycleTimer = setTimeout(function(){
+    setActive((active + 1) % STAGES.length);
+  }, STAGE_MS);
 }
-function stopPlay(){
-  if(playTimer){ clearInterval(playTimer); playTimer=null; }
-  play.textContent='▶ PLAY CYCLE'; play.dataset.active='false';
-}
-play.onclick = () => { if(playTimer) stopPlay(); else { if(cur>=trajA_runs.length-1) cur=0; startPlay(); } };
-renderRun(0);
+
+document.querySelectorAll('.loop-tab').forEach(function(b, i){
+  b.addEventListener('click', function(){ setActive(i); });
+});
+
+setActive(0);
 
 
 </script>

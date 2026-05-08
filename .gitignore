@@ -12,4 +12,6 @@ src/server/types.js
 .env
 .env.local
 data/
-.claude/settings.local.json
+.agents/
+.claude/
+.opentraces.json
