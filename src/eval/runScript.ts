@@ -157,7 +157,7 @@ async function main(): Promise<void> {
         bundles: ctx.bundles,
         runnerPath: ctx.skillcraftToolRunnerPath,
       },
-      snippetTimeoutMs: ctx.snippetTimeoutMs ?? 180_000,
+      snippetTimeoutMs: ctx.snippetTimeoutMs ?? 300_000,
     },
   });
 

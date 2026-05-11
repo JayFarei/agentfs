@@ -146,7 +146,7 @@ function parseArgs(argv: string[]): Args {
     fixtureSmoke: false,
     live: false,
     timeoutMs: Number(process.env["DF_SKILLCRAFT_FULL_TIMEOUT_MS"] ?? 600_000),
-    snippetTimeoutMs: Number(process.env["DF_SKILLCRAFT_SNIPPET_TIMEOUT_MS"] ?? 180_000),
+    snippetTimeoutMs: Number(process.env["DF_SKILLCRAFT_SNIPPET_TIMEOUT_MS"] ?? 300_000),
     noLibCache: false,
     resume: false,
   };
