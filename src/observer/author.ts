@@ -118,19 +118,60 @@ export async function authorFunction(
   await fsp.mkdir(dir, { recursive: true });
   await fsp.writeFile(file, source, "utf8");
 
+  const { getHookRegistry } = await import("../hooks/registry.js");
+  const { hooksEnabled, getInterfaceMode } = await import("../hooks/mode.js");
+  const registry = getHookRegistry();
+
   // Validate the written file by attempting to load it through the
-  // resolver. If anything fails, clean up.
+  // resolver. If anything fails, behaviour depends on interface mode:
+  //   - legacy:  preserve the prior behaviour — delete the file (or
+  //              restore the previous version), surface skipped.
+  //   - any hooks mode: record a hook manifest, mark it quarantined, do
+  //              NOT delete the implementation file. The registry — not
+  //              the on-disk .ts file — owns public callability now, so
+  //              keeping the bad body around lets us treat the observer
+  //              signal as durable provider intent without exposing the
+  //              broken body to agents.
   const callable = await libraryResolver.resolve(tenantId, template.name);
   if (!callable) {
-    if (existingSource !== null) {
-      await fsp.writeFile(file, existingSource, "utf8");
-    } else {
-      await fsp.rm(file, { force: true });
+    if (!hooksEnabled()) {
+      if (existingSource !== null) {
+        await fsp.writeFile(file, existingSource, "utf8");
+      } else {
+        await fsp.rm(file, { force: true });
+      }
+      return {
+        kind: "skipped",
+        reason: `authored file failed to load (path=${pathTaken})`,
+      };
+    }
+    if (registry) {
+      await registry.validateImplementation({
+        tenantId,
+        name: template.name,
+        filePath: file,
+        implementationKind: pathTaken === "codifier" ? "skill" : "typescript",
+        intent: `learned interface ${template.name}`,
+        trajectoryId: trajectory.id,
+        shapeHash: template.shapeHash,
+      });
     }
     return {
       kind: "skipped",
-      reason: `authored file failed to load (path=${pathTaken})`,
+      reason: `authored file failed to load (path=${pathTaken}); hook recorded as quarantined under interface mode ${getInterfaceMode()}`,
     };
+  }
+
+  if (registry) {
+    await registry.validateImplementation({
+      tenantId,
+      name: template.name,
+      filePath: file,
+      implementationKind: pathTaken === "codifier" ? "skill" : "typescript",
+      intent: `learned interface ${template.name}`,
+      trajectoryId: trajectory.id,
+      shapeHash: template.shapeHash,
+    });
   }
 
   // Refresh the typed API manifest and workspace memory so the newly learned

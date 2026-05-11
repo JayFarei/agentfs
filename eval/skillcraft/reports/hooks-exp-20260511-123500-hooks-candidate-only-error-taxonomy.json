@@ -1,0 +1,87 @@
+{
+  "generatedAt": "2026-05-11T13:38:48.172Z",
+  "run": "eval/skillcraft/results/datafetch/hooks-exp-20260511-123500-hooks-candidate-only",
+  "totalEpisodes": 126,
+  "episodesWithStderr": 105,
+  "counts": {
+    "bad_or_missing_lib_export": 0,
+    "typescript_transform_failure": 9,
+    "generated_code_reference_error": 0,
+    "generated_code_type_error": 1,
+    "tool_payload_assumption_error": 3,
+    "lib_schema_validation_error": 0,
+    "agent_quota_limit_before_answer": 0,
+    "hook_quarantined": 86,
+    "hook_unsupported_fallback": 0,
+    "other": 6
+  },
+  "examples": {
+    "bad_or_missing_lib_export": [],
+    "typescript_transform_failure": [
+      {
+        "taskKey": "cocktail-menu-generator/e2",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "dnd-campaign-builder/e2",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "dnd-monster-compendium/e1",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      }
+    ],
+    "generated_code_reference_error": [],
+    "generated_code_type_error": [
+      {
+        "taskKey": "usgs-earthquake-monitor/e3",
+        "firstLine": "TypeError: Cannot read properties of undefined (reading 'analyzeRegion')"
+      }
+    ],
+    "tool_payload_assumption_error": [
+      {
+        "taskKey": "countries-encyclopedia/e1",
+        "firstLine": "Error: SkillCraft tool local-countries_get_details failed: Traceback (most recent call last):"
+      },
+      {
+        "taskKey": "dnd-campaign-builder/h1",
+        "firstLine": "Error: SkillCraft tool local-dnd_get_class_spells failed:"
+      },
+      {
+        "taskKey": "dnd-campaign-builder/m1",
+        "firstLine": "Error: SkillCraft tool local-dnd_get_class_spells failed:"
+      }
+    ],
+    "lib_schema_validation_error": [],
+    "agent_quota_limit_before_answer": [],
+    "hook_quarantined": [
+      {
+        "taskKey": "cat-facts-collector/e1",
+        "firstLine": "Error: df.lib.catfactsEncyclopedia: hook is observed only (no callable implementation). Interface mode is \"hooks-candidate-only\"; the registry will not expose this learned interface as callable."
+      },
+      {
+        "taskKey": "cat-facts-collector/e2",
+        "firstLine": "Error: df.lib.fetchCatBreedBundle: hook is observed only (no callable implementation). Interface mode is \"hooks-candidate-only\"; the registry will not expose this learned interface as callable."
+      },
+      {
+        "taskKey": "cat-facts-collector/e3",
+        "firstLine": "Error: df.lib.catfactsFamily: hook is observed only (no callable implementation). Interface mode is \"hooks-candidate-only\"; the registry will not expose this learned interface as callable."
+      }
+    ],
+    "hook_unsupported_fallback": [],
+    "other": [
+      {
+        "taskKey": "gitlab-deep-analysis/e1",
+        "firstLine": "SyntaxError: Unexpected token 'I', ...\"n_ratio\": Infinity,"
+      },
+      {
+        "taskKey": "gitlab-deep-analysis/e3",
+        "firstLine": "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@datafetch/sdk' imported from /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/hooks-exp-20260511-123500-hooks-candidate-only/episodes/gitlab-deep-analysis/e"
+      },
+      {
+        "taskKey": "jsonplaceholder-blog-analyzer/e3",
+        "firstLine": "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@datafetch/sdk' imported from /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/hooks-exp-20260511-123500-hooks-candidate-only/episodes/jsonplaceholder-blog-a"
+      }
+    ]
+  }
+}

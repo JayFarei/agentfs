@@ -323,6 +323,7 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
     error: console.error,
     debug: console.debug,
   };
+  const origProcessExit = process.exit;
   const formatArg = (v: unknown): string => {
     if (typeof v === "string") return v;
     try {
@@ -343,6 +344,9 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
   console.warn = writeLine(stderr);
   console.error = writeLine(stderr);
   console.debug = writeLine(stderr);
+  process.exit = ((code?: number | string | null | undefined): never => {
+    throw new Error(`[snippet/runtime] process.exit(${code ?? ""}) called`);
+  }) as typeof process.exit;
 
   let error: Error | undefined;
   let returnValue: unknown;
@@ -367,6 +371,7 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
     console.warn = origConsole.warn;
     console.error = origConsole.error;
     console.debug = origConsole.debug;
+    process.exit = origProcessExit;
     if (origDf === undefined) {
       delete (globalThis as Record<string, unknown>)["df"];
     } else {

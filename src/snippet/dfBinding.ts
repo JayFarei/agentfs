@@ -32,6 +32,9 @@ import {
   type DispatchContext,
   type Result,
 } from "../sdk/index.js";
+import { getHookRegistry } from "../hooks/index.js";
+import { invokeHook, describeNotCallable } from "../hooks/invoke.js";
+import { getInterfaceMode } from "../hooks/mode.js";
 
 import type { SessionCtx } from "../bash/snippetRuntime.js";
 
@@ -110,6 +113,14 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
   );
 
   // lib proxy — `df.lib.<name>`
+  //
+  // Resolution order:
+  //   1. If a HookRegistry singleton is installed AND the interface mode
+  //      is anything other than "legacy", route through the registry.
+  //      Quarantined / observed hooks are not callable; draft hooks are
+  //      callable-with-fallback (runtime crashes are converted into a
+  //      structured "unsupported" envelope).
+  //   2. Fallback: legacy LibraryResolver lookup — unchanged behaviour.
   const libProxy: Record<string, (input: unknown) => Promise<Result<unknown>>> =
     new Proxy(
       {} as Record<string, (input: unknown) => Promise<Result<unknown>>>,
@@ -117,6 +128,55 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
         get(_target, prop): ((input: unknown) => Promise<Result<unknown>>) | undefined {
           if (typeof prop !== "string") return undefined;
           return async (input: unknown): Promise<Result<unknown>> => {
+            const mode = getInterfaceMode();
+            const stackBefore = dispatchCtx.callStack ?? [];
+            const recordTrajectory = async (
+              result: Result<unknown>,
+            ): Promise<void> => {
+              if (!dispatchCtx.trajectory) return;
+              const recorder = dispatchCtx.trajectory;
+              await recorder.call(
+                `lib.${prop}`,
+                input,
+                async () => result.value,
+                scopeForStack(stackBefore),
+              );
+            };
+
+            if (mode !== "legacy") {
+              const registry = getHookRegistry();
+              if (registry) {
+                const lookup = await registry.lookup(sessionCtx.tenantId, prop);
+                if (lookup.kind === "callable") {
+                  dispatchCtx.callStack = [...stackBefore, `lib.${prop}`];
+                  let invocation;
+                  try {
+                    invocation = await invokeHook({
+                      registry,
+                      manifest: lookup.manifest,
+                      fn: lookup.fn,
+                      input,
+                      dispatch: dispatchCtx,
+                      withFallback: lookup.withFallback,
+                    });
+                  } finally {
+                    dispatchCtx.callStack = stackBefore;
+                  }
+                  await recordTrajectory(invocation.result);
+                  return invocation.result;
+                }
+                if (lookup.kind === "not-callable") {
+                  const reason = lookup.manifest.quarantine?.reason
+                    ? `${describeNotCallable(lookup.reason)} (${lookup.manifest.quarantine.reason}: ${lookup.manifest.quarantine.message})`
+                    : describeNotCallable(lookup.reason);
+                  throw new Error(
+                    `df.lib.${prop}: ${reason}. Interface mode is "${mode}"; the registry will not expose this learned interface as callable.`,
+                  );
+                }
+                // absent: fall through to legacy resolver behaviour below
+              }
+            }
+
             const resolver = getLibraryResolver();
             if (!resolver) {
               throw new Error(
@@ -136,7 +196,6 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
             // record a per-call trajectory row that captures input/output
             // for the inner call.
             const startedMs = performance.now();
-            const stackBefore = dispatchCtx.callStack ?? [];
             let result!: Result<unknown>;
             try {
               dispatchCtx.callStack = [...stackBefore, `lib.${prop}`];
@@ -156,19 +215,7 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
             }
             const elapsedMs = performance.now() - startedMs;
 
-            if (dispatchCtx.trajectory) {
-              const recorder = dispatchCtx.trajectory;
-              // Use a one-shot inline record. The fn() callable's body
-              // doesn't itself populate a trajectory record; the snippet
-              // runtime is the one that knows about df.lib.<name> as a
-              // primitive boundary, so we record here.
-              await recorder.call(
-                `lib.${prop}`,
-                input,
-                async () => result.value,
-                scopeForStack(stackBefore),
-              );
-            }
+            await recordTrajectory(result);
             void elapsedMs; // ms charging is done by the inner fn() / dispatcher.
             return result;
           };

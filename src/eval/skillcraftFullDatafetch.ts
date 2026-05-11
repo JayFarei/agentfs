@@ -823,7 +823,7 @@ function prepareAnswerSourceForRuntime(source: string, workspace: string): strin
       appendedCall = "\nreturn await main();\n";
     }
   }
-  const mainCatchInvocation = /^\s*main\s*\(\s*\)\.catch\s*\([\s\S]*?\)\s*;?\s*$/m;
+  const mainCatchInvocation = /^\s*(?:void\s+)?main\s*\(\s*\)\.catch\s*\([\s\S]*?\)\s*;?\s*$/m;
   if (mainCatchInvocation.test(body)) {
     body = body.replace(mainCatchInvocation, "");
     if (!appendedCall && /\b(?:async\s+)?function\s+main\s*\(/.test(body)) {
@@ -1185,6 +1185,12 @@ function renderLivePrompt(task: SkillCraftTask): string {
     "Use existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.",
     "When creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.",
     "Use df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.",
+    // Defensive-coding guardrails. Most runtime failures in prior eval runs came from accessing",
+    // nested fields on tool responses that turned out to be undefined (e.g. resp.foo.bar where",
+    // resp.foo is undefined). The agent's snippet then crashes before writing the output,",
+    // costing the whole task. Each of these is a one-line code change that materially helps:",
+    "Tool responses can be missing fields or be shaped differently than you expect. Always guard nested property access with optional chaining (`resp?.foo?.bar`) or an explicit `if (resp && resp.foo)` check. If a field is missing, write a sensible default (empty string, 0, empty array) to the output file rather than throwing.",
+    "Wrap the body of main() in a try/catch. On error, write a best-effort partial result to the expected output JSON file (using whatever data you have collected so far, with empty defaults for the missing pieces) before letting the error propagate. A partial output usually scores some credit; a thrown error scores zero.",
     "The evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.",
     "Do not write prose as the answer. The file content is the deliverable.",
   ].join("\n");

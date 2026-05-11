@@ -23,6 +23,8 @@ import path from "node:path";
 import { setLibraryResolver } from "../sdk/index.js";
 
 import { defaultBaseDir, locateRepoSubdir } from "../paths.js";
+import { HookRegistry, setHookRegistry } from "../hooks/registry.js";
+import { hooksEnabled } from "../hooks/mode.js";
 import { DiskLibraryResolver } from "./library.js";
 import { DiskSnippetRuntime } from "./runtime.js";
 
@@ -57,6 +59,17 @@ export async function installSnippetRuntime(
 
   const libraryResolver = new DiskLibraryResolver({ baseDir });
   setLibraryResolver(libraryResolver);
+  // The hook registry is the public-callability gate for df.lib.<name>.
+  // We install one whenever the snippet runtime boots so the df.lib
+  // proxy can consult it even when the interface mode is "legacy" (the
+  // registry is consulted but bypassed in that case). Tests that want
+  // to isolate the resolver can `setHookRegistry(null)` afterwards.
+  if (hooksEnabled()) {
+    const registry = new HookRegistry({ baseDir, resolver: libraryResolver });
+    setHookRegistry(registry);
+  } else {
+    setHookRegistry(null);
+  }
   const snippetRuntime = new DiskSnippetRuntime();
 
   return {

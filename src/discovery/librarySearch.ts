@@ -12,6 +12,9 @@ import {
   renderSchemaBlock,
   renderSynopsisArg,
 } from "../sdk/schemaRender.js";
+import { listManifests } from "../hooks/manifest.js";
+import { hooksEnabled } from "../hooks/mode.js";
+import type { HookCallability, HookMaturity } from "../hooks/types.js";
 
 export type LibraryFunctionKind = "tool" | "primitive";
 
@@ -89,6 +92,22 @@ export async function searchLibrary(
   const queryTokens = tokenise(args.query);
   if (queryTokens.size === 0) return [];
 
+  // Hook callability filter:
+  //   - Quarantined hooks are hidden unless DATAFETCH_HOOKS_SHOW_QUARANTINED=1.
+  //   - When the diagnostic flag is set, surface quarantined hooks
+  //     EVEN IF the underlying .ts file can't be loaded by the resolver
+  //     (the manifest is the source of truth).
+  //   - We carry the callability/maturity through to influence ranking
+  //     (validated > draft > observed > quarantined).
+  const showQuarantined = process.env["DATAFETCH_HOOKS_SHOW_QUARANTINED"] === "1";
+  const hookIndex = new Map<string, { maturity: HookMaturity; callability: HookCallability; intent: string }>();
+  if (hooksEnabled()) {
+    const manifests = await listManifests(args.baseDir, args.tenantId);
+    for (const m of manifests) {
+      hookIndex.set(m.name, { maturity: m.maturity, callability: m.callability, intent: m.intent });
+    }
+  }
+
   const entries = await args.resolver.list(args.tenantId);
   const scored = await Promise.all(
     entries.map(async (entry) => {
@@ -101,13 +120,67 @@ export async function searchLibrary(
     }),
   );
 
-  return scored
-    .filter((m) => m.score >= threshold)
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (a.kind !== b.kind) return a.kind === "tool" ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
+  const seen = new Set(scored.map((s) => s.name));
+  let diagnostic: RankedFunction[] = [];
+  if (hooksEnabled() && showQuarantined) {
+    // Synthesise diagnostic entries for quarantined hooks whose
+    // implementation file is unloadable — they never reach the resolver
+    // list, but the operator asked to see them.
+    for (const [name, hook] of hookIndex) {
+      if (seen.has(name)) continue;
+      if (hook.callability !== "quarantined") continue;
+      const synthScore = scoreSynthetic(name, hook.intent, queryTokens);
+      if (synthScore < threshold) continue;
+      diagnostic.push({
+        name,
+        kind: "primitive",
+        score: synthScore,
+        intent: hook.intent,
+        why: ["quarantined (diagnostic only)"],
+        invocation: `df.lib.${name}(...) // quarantined`,
+        sourcePath: "",
+      });
+    }
+  }
+
+  return [
+    ...scored
+      .filter((m) => m.score >= threshold)
+      .filter((m) => {
+        const hook = hookIndex.get(m.name);
+        if (!hook) return true;
+        if (hook.callability === "quarantined") return showQuarantined;
+        return true;
+      }),
+    ...diagnostic,
+  ].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const ah = callabilityRank(hookIndex.get(a.name));
+    const bh = callabilityRank(hookIndex.get(b.name));
+    if (ah !== bh) return bh - ah;
+    if (a.kind !== b.kind) return a.kind === "tool" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function scoreSynthetic(name: string, intent: string, queryTokens: Set<string>): number {
+  const nameTokens = tokenise(name);
+  const intentTokens = tokenise(intent);
+  let overlap = 0;
+  for (const t of queryTokens) {
+    if (nameTokens.has(t) || intentTokens.has(t)) overlap += 1;
+  }
+  return overlap === 0 ? 0 : overlap / queryTokens.size;
+}
+
+// Higher is better. validated > draft > observed > quarantined > unknown.
+function callabilityRank(hook: { maturity: HookMaturity; callability: HookCallability } | undefined): number {
+  if (!hook) return 1;
+  if (hook.callability === "quarantined") return -1;
+  if (hook.callability === "not-callable") return 0;
+  if (hook.maturity === "validated-typescript" || hook.maturity === "provider-native") return 3;
+  if (hook.callability === "callable-with-fallback") return 2;
+  return 1;
 }
 
 export async function describeLibraryFunction(

@@ -236,6 +236,16 @@ console.log("answer=" + JSON.stringify({ value: fig.value, column: fig.column, f
 `;
 
 async function main(): Promise<void> {
+  // The observer smoke is the canonical legacy learning-loop integration
+  // test: it asserts that a successful trajectory becomes an
+  // immediately-callable df.lib.<name>. Force interface mode = "legacy"
+  // so the smoke remains stable when the global default flips to
+  // hooks-candidate-only. The hook-registry test suite covers the new
+  // behaviour separately.
+  if (!process.env["DATAFETCH_INTERFACE_MODE"]) {
+    process.env["DATAFETCH_INTERFACE_MODE"] = "legacy";
+  }
+
   const baseDir = path.join(
     "/tmp",
     `df-observer-smoke-${process.pid}-${Date.now()}`,

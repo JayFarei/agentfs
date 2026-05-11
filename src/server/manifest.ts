@@ -24,6 +24,9 @@ import { readFrontmatterHead } from "../sdk/frontmatter.js";
 import type { FnSpec } from "../sdk/index.js";
 import { renderSchemaInline } from "../sdk/schemaRender.js";
 import { DiskLibraryResolver } from "../snippet/library.js";
+import { listManifests } from "../hooks/manifest.js";
+import type { VfsHookManifest } from "../hooks/types.js";
+import { hooksEnabled } from "../hooks/mode.js";
 
 // --- Public ----------------------------------------------------------------
 
@@ -69,10 +72,30 @@ async function renderManifest(opts: RegenerateManifestOpts): Promise<string> {
   const resolver = new DiskLibraryResolver({ baseDir });
   const entries = await safeList(resolver, tenantId);
 
+  // Hook registry filter: when hooks are enabled, only entries whose
+  // hook manifest says "callable" or "callable-with-fallback" reach the
+  // df.d.ts surface. Quarantined / observed hooks remain on disk and
+  // visible via apropos as diagnostics, but the typed manifest hides
+  // them so the agent never sees a callable signature it can't use.
+  let callableNames: Set<string> | null = null;
+  if (hooksEnabled()) {
+    const manifests = await listManifests(baseDir, tenantId);
+    callableNames = new Set(
+      manifests
+        .filter((m: VfsHookManifest) =>
+          m.callability === "callable" || m.callability === "callable-with-fallback",
+        )
+        .map((m: VfsHookManifest) => m.name),
+    );
+  }
+  const filteredEntries = callableNames
+    ? entries.filter((e) => callableNames!.has(e.name))
+    : entries;
+
   // Partition entries into tools (frontmatter present in the tenant
   // overlay) and primitives. One bounded read per entry.
   const annotated = await Promise.all(
-    entries.map(async (e) => {
+    filteredEntries.map(async (e) => {
       const head = await readFrontmatterHead(
         path.join(baseDir, "lib", tenantId, `${e.name}.ts`),
       );

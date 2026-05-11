@@ -26,6 +26,11 @@ async function runDemoCli(): Promise<{
         env: {
           ...process.env,
           DATAFETCH_SKIP_ENV_FILE: "1",
+          // The demo is the canonical legacy learning-loop E2E: Q1
+          // crystallises a learned interface, Q2 immediately reuses it
+          // as df.lib.<name>. Force legacy mode so the new
+          // hooks-candidate-only default does not block reuse.
+          DATAFETCH_INTERFACE_MODE: "legacy",
         },
       },
     );

@@ -1,0 +1,100 @@
+{
+  "generatedAt": "2026-05-11T13:48:47.779Z",
+  "run": "eval/skillcraft/results/datafetch/hooks-exp-20260511-123500-legacy",
+  "totalEpisodes": 126,
+  "episodesWithStderr": 38,
+  "counts": {
+    "bad_or_missing_lib_export": 0,
+    "typescript_transform_failure": 12,
+    "generated_code_reference_error": 1,
+    "generated_code_type_error": 7,
+    "tool_payload_assumption_error": 9,
+    "lib_schema_validation_error": 4,
+    "agent_quota_limit_before_answer": 0,
+    "hook_quarantined": 0,
+    "hook_unsupported_fallback": 0,
+    "other": 5
+  },
+  "examples": {
+    "bad_or_missing_lib_export": [],
+    "typescript_transform_failure": [
+      {
+        "taskKey": "cat-facts-collector/e1",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "cat-facts-collector/m2",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "gitlab-deep-analysis/e1",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      }
+    ],
+    "generated_code_reference_error": [
+      {
+        "taskKey": "rickmorty-multiverse-explorer/m2",
+        "firstLine": "ReferenceError: max_episodes is not defined"
+      }
+    ],
+    "generated_code_type_error": [
+      {
+        "taskKey": "cat-facts-collector/h1",
+        "firstLine": "TypeError: breedResults.map is not a function"
+      },
+      {
+        "taskKey": "local-dna-analysis/e1",
+        "firstLine": "TypeError: Cannot read properties of undefined (reading 'counts')"
+      },
+      {
+        "taskKey": "local-dna-analysis/e2",
+        "firstLine": "TypeError: Cannot read properties of undefined (reading 'map')"
+      }
+    ],
+    "tool_payload_assumption_error": [
+      {
+        "taskKey": "countries-encyclopedia/e1",
+        "firstLine": "Error: SkillCraft tool local-countries_get_details failed: Traceback (most recent call last):"
+      },
+      {
+        "taskKey": "countries-encyclopedia/h1",
+        "firstLine": "Error: SkillCraft tool local-countries_get_details failed: Traceback (most recent call last):"
+      },
+      {
+        "taskKey": "countries-encyclopedia/m2",
+        "firstLine": "Error: SkillCraft tool local-countries_get_details failed: Traceback (most recent call last):"
+      }
+    ],
+    "lib_schema_validation_error": [
+      {
+        "taskKey": "countries-encyclopedia/e2",
+        "firstLine": "SchemaValidationError: Schema validation failed during input"
+      },
+      {
+        "taskKey": "countries-encyclopedia/m1",
+        "firstLine": "SchemaValidationError: Schema validation failed during input"
+      },
+      {
+        "taskKey": "dnd-monster-compendium/m2",
+        "firstLine": "SchemaValidationError: Schema validation failed during input"
+      }
+    ],
+    "agent_quota_limit_before_answer": [],
+    "hook_quarantined": [],
+    "hook_unsupported_fallback": [],
+    "other": [
+      {
+        "taskKey": "dnd-campaign-builder/h1",
+        "firstLine": "Error: [snippet/runtime] timed out after 180000ms"
+      },
+      {
+        "taskKey": "gitlab-deep-analysis/h1",
+        "firstLine": "SyntaxError: Unexpected token 'I', ...\"n_ratio\": Infinity,"
+      },
+      {
+        "taskKey": "gitlab-deep-analysis/m1",
+        "firstLine": "SyntaxError: Unexpected token 'I', ...\"n_ratio\": Infinity,"
+      }
+    ]
+  }
+}

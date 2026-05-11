@@ -1,0 +1,79 @@
+{
+  "generatedAt": "2026-05-11T13:48:49.009Z",
+  "run": "eval/skillcraft/results/datafetch/hooks-exp-20260511-123500-hooks-draft",
+  "totalEpisodes": 126,
+  "episodesWithStderr": 30,
+  "counts": {
+    "bad_or_missing_lib_export": 1,
+    "typescript_transform_failure": 8,
+    "generated_code_reference_error": 0,
+    "generated_code_type_error": 15,
+    "tool_payload_assumption_error": 1,
+    "lib_schema_validation_error": 0,
+    "agent_quota_limit_before_answer": 0,
+    "hook_quarantined": 0,
+    "hook_unsupported_fallback": 0,
+    "other": 5
+  },
+  "examples": {
+    "bad_or_missing_lib_export": [
+      {
+        "taskKey": "gitlab-deep-analysis/e1",
+        "firstLine": "[snippet/library] failed to load /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/hooks-exp-20260511-123500-hooks-draft/episodes/gitlab-deep-analysis/e1/datafetch-home/lib/skillcraft-full/analyze_gitlab_proje"
+      }
+    ],
+    "typescript_transform_failure": [
+      {
+        "taskKey": "gitlab-deep-analysis/m2",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "jikan-anime-analysis/h1",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "jikan-anime-analysis/m2",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      }
+    ],
+    "generated_code_reference_error": [],
+    "generated_code_type_error": [
+      {
+        "taskKey": "cocktail-menu-generator/e2",
+        "firstLine": "TypeError: Cannot read properties of undefined (reading 'details')"
+      },
+      {
+        "taskKey": "cocktail-menu-generator/e3",
+        "firstLine": "TypeError: rawResults.map is not a function"
+      },
+      {
+        "taskKey": "cocktail-menu-generator/m2",
+        "firstLine": "TypeError: workflowResults.map is not a function"
+      }
+    ],
+    "tool_payload_assumption_error": [
+      {
+        "taskKey": "countries-encyclopedia/e1",
+        "firstLine": "Error: SkillCraft tool local-countries_get_details failed: Traceback (most recent call last):"
+      }
+    ],
+    "lib_schema_validation_error": [],
+    "agent_quota_limit_before_answer": [],
+    "hook_quarantined": [],
+    "hook_unsupported_fallback": [],
+    "other": [
+      {
+        "taskKey": "pokeapi-pokedex/e3",
+        "firstLine": "Error: Missing evolution_chain_id for pokemon 25"
+      },
+      {
+        "taskKey": "random-user-database/h1",
+        "firstLine": "Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@datafetch/sdk' imported from /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/hooks-exp-20260511-123500-hooks-draft/episodes/random-user-database/h1/workspa"
+      },
+      {
+        "taskKey": "recipe-cookbook-builder/e3",
+        "firstLine": "Error: No meal found for Spaghetti Carbonara"
+      }
+    ]
+  }
+}

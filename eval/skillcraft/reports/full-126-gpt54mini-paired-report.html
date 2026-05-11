@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Datafetch x SkillCraft Clean Full Run</title>
+<style>
+:root{--bg:#f7f8f6;--ink:#17211b;--muted:#5b675f;--line:#d9dfd9;--panel:#ffffff;--accent:#0f7b63;--bad:#a63b32;--warn:#8a6717;--good:#116b3d;}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif} main{max-width:1180px;margin:0 auto;padding:32px 24px 64px} h1{font-size:34px;line-height:1.08;margin:0 0 10px} h2{font-size:22px;margin:34px 0 12px} h3{font-size:17px;margin:22px 0 8px}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:22px 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}.metric{font-size:30px;font-weight:750}.label{color:var(--muted);font-size:13px}.good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)} table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden} th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top} th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#eef2ef} tr:last-child td{border-bottom:0}.note{border-left:4px solid var(--accent);background:#eef8f4;padding:14px 16px;border-radius:6px}.warnbox{border-left:4px solid var(--warn);background:#fff8e6;padding:14px 16px;border-radius:6px}.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 9px;margin-right:6px;background:#fff;color:var(--muted);font-size:12px} code{background:#eef2ef;padding:2px 5px;border-radius:4px}@media(max-width:800px){.grid,.cols{grid-template-columns:1fr} main{padding:22px 14px} table{font-size:13px}}
+</style>
+</head>
+<body><main>
+<p><span class="pill">Generated 2026-05-11T09:44:40.051Z</span><span class="pill">126 paired tasks</span><span class="pill">21 families</span><span class="pill">gpt-5.4-mini</span></p>
+<h1>Datafetch x SkillCraft Clean Full Run</h1>
+<p class="muted">This report supersedes the Spark-contaminated Datafetch run. The rerun used the supported <code>gpt-5.4-mini</code> model alias, completed all 126 official SkillCraft scaled tasks, and recorded zero model-limit infrastructure failures.</p>
+<div class="grid">
+  <div class="card"><div class="metric">63.5%</div><div class="label">Datafetch pass rate</div></div>
+  <div class="card"><div class="metric bad">41</div><div class="label">runtime failures</div></div>
+  <div class="card"><div class="metric good">0</div><div class="label">infra/model-limit failures</div></div>
+  <div class="card"><div class="metric">16,632</div><div class="label">avg effective tokens</div></div>
+</div>
+<section class="note"><strong>Answer to “do we have enough results?”</strong><br />Yes for diagnosis: the previous failures were materially contaminated by the Spark quota limit, and the clean bottleneck is runtime/interface robustness. No for a positive benchmark claim: Datafetch remains far behind SkillCraft base/skill on correctness in this run.</section>
+<h2>Arm Summary</h2>
+<table><thead><tr><th>Arm</th><th>Rows</th><th>Pass >=70</th><th>Avg Score</th><th>Avg Effective Tokens</th><th>Avg Tool Calls</th><th>Avg Reuse</th><th>Runtime Errors</th><th>Infra Errors</th></tr></thead><tbody><tr><td>skillcraft-base</td><td>126</td><td>96.0%</td><td>93.8</td><td>520,450</td><td>17</td><td>N/A</td><td>0.0%</td><td>0.0%</td></tr>
+<tr><td>skillcraft-skill</td><td>126</td><td>93.7%</td><td>92.0</td><td>201,844</td><td>10</td><td>N/A</td><td>0.0%</td><td>0.0%</td></tr>
+<tr><td>datafetch-learned</td><td>126</td><td>63.5%</td><td>62.9</td><td>16,632</td><td>12</td><td>12.3%</td><td>32.5%</td><td>0.0%</td></tr></tbody></table>
+<h2>Paired Result</h2>
+<div class="cols">
+  <div class="card"><h3>Vs SkillCraft Base</h3><p><strong>Pass delta:</strong> -32.5%<br /><strong>Score delta:</strong> -30.9 points<br /><strong>Effective token ratio:</strong> 5.3% of base<br /><strong>Tool-call ratio:</strong> 69.4% of base</p></div>
+  <div class="card"><h3>Vs SkillCraft Skill</h3><p><strong>Pass delta:</strong> -30.2%<br /><strong>Score delta:</strong> -29.1 points<br /><strong>Effective token ratio:</strong> 15.7% of skill<br /><strong>Tool-call ratio:</strong> 153.7% of skill</p></div>
+</div>
+<h2>Clean-Run Interpretation</h2>
+<ul>
+<li><strong>Model issue resolved:</strong> exact dated <code>gpt-5.4-mini-2026-03-17</code> was rejected by this Codex account, but <code>gpt-5.4-mini</code> passed smoke and completed the full run.</li>
+<li><strong>Old zeroes were not trustworthy:</strong> <code>vocabulary-builder</code> improved from quota-contaminated 0/6 to 5/6; <code>world-bank-economic-snapshot</code> improved from quota-contaminated 0/6 to 6/6.</li>
+<li><strong>Current failures are real harness failures:</strong> 41/126 rows failed at runtime with zero infra failures. The primary issue is generated TypeScript and learned-helper execution contracts.</li>
+<li><strong>Efficiency signal is real but not enough:</strong> Datafetch used only 5.3% of SkillCraft base effective tokens and 15.7% of SkillCraft skill effective tokens, but correctness is not yet competitive.</li>
+<li><strong>Reuse is too low:</strong> average reuse rate is 12.3%, below the target needed to prove learned interfaces are driving the improvement.</li>
+</ul>
+<h2>Phase Breakdown</h2>
+<table><thead><tr><th>Phase</th><th>Rows</th><th>Passes</th><th>Pass Rate</th><th>Avg Score</th><th>Runtime Errors</th></tr></thead><tbody><tr><td>train</td><td>21</td><td>10/21</td><td>47.6%</td><td>45.4</td><td>10</td></tr>
+<tr><td>warm</td><td>84</td><td>57/84</td><td>67.9%</td><td>68.5</td><td>23</td></tr>
+<tr><td>hard</td><td>21</td><td>13/21</td><td>61.9%</td><td>58.2</td><td>8</td></tr></tbody></table>
+<h2>Family Breakdown</h2>
+<div class="cols"><div class="card"><h3>Strong Families</h3><ul><li><strong>world-bank-economic-snapshot</strong>: 6/6, avg score 100.0, runtime errors 0</li>
+<li><strong>tvmaze-series-analyzer</strong>: 6/6, avg score 98.7, runtime errors 0</li>
+<li><strong>cocktail-menu-generator</strong>: 6/6, avg score 95.6, runtime errors 0</li>
+<li><strong>rickmorty-multiverse-explorer</strong>: 6/6, avg score 94.2, runtime errors 0</li>
+<li><strong>random-user-database</strong>: 6/6, avg score 90.8, runtime errors 0</li>
+<li><strong>cat-facts-collector</strong>: 4/6, avg score 86.8, runtime errors 0</li></ul></div><div class="card"><h3>Weak Families</h3><ul><li><strong>dnd-campaign-builder</strong>: 0/6, avg score 0.0, runtime errors 6</li>
+<li><strong>gitlab-deep-analysis</strong>: 1/6, avg score 14.8, runtime errors 5</li>
+<li><strong>dnd-monster-compendium</strong>: 2/6, avg score 29.7, runtime errors 4</li>
+<li><strong>usgs-earthquake-monitor</strong>: 2/6, avg score 31.1, runtime errors 4</li>
+<li><strong>countries-encyclopedia</strong>: 2/6, avg score 33.3, runtime errors 4</li>
+<li><strong>jikan-anime-analysis</strong>: 3/6, avg score 45.4, runtime errors 3</li></ul></div></div>
+<table><thead><tr><th>Family</th><th>Pass</th><th>Avg Score</th><th>Runtime Errors</th><th>Infra Errors</th><th>Avg Reuse</th><th>Avg Effective Tokens</th></tr></thead><tbody><tr><td>dnd-campaign-builder</td><td>0/6</td><td>0.0</td><td>6</td><td>0</td><td>11.4%</td><td>15,163</td></tr>
+<tr><td>gitlab-deep-analysis</td><td>1/6</td><td>14.8</td><td>5</td><td>0</td><td>4.2%</td><td>14,098</td></tr>
+<tr><td>dnd-monster-compendium</td><td>2/6</td><td>29.7</td><td>4</td><td>0</td><td>13.2%</td><td>13,222</td></tr>
+<tr><td>usgs-earthquake-monitor</td><td>2/6</td><td>31.1</td><td>4</td><td>0</td><td>10.0%</td><td>16,262</td></tr>
+<tr><td>countries-encyclopedia</td><td>2/6</td><td>33.3</td><td>4</td><td>0</td><td>4.2%</td><td>23,746</td></tr>
+<tr><td>jikan-anime-analysis</td><td>3/6</td><td>45.4</td><td>3</td><td>0</td><td>6.6%</td><td>18,600</td></tr>
+<tr><td>recipe-cookbook-builder</td><td>3/6</td><td>47.6</td><td>3</td><td>0</td><td>11.7%</td><td>13,628</td></tr>
+<tr><td>jsonplaceholder-blog-analyzer</td><td>3/6</td><td>50.0</td><td>3</td><td>0</td><td>7.4%</td><td>12,435</td></tr>
+<tr><td>local-dna-analysis</td><td>3/6</td><td>54.6</td><td>2</td><td>0</td><td>12.2%</td><td>16,980</td></tr>
+<tr><td>pokeapi-pokedex</td><td>3/6</td><td>58.4</td><td>2</td><td>0</td><td>16.8%</td><td>13,566</td></tr>
+<tr><td>dog-breeds-encyclopedia</td><td>4/6</td><td>65.0</td><td>1</td><td>0</td><td>8.9%</td><td>16,965</td></tr>
+<tr><td>openmeteo-weather</td><td>5/6</td><td>80.0</td><td>1</td><td>0</td><td>16.4%</td><td>12,864</td></tr>
+<tr><td>university-directory-builder</td><td>5/6</td><td>80.7</td><td>1</td><td>0</td><td>14.6%</td><td>18,895</td></tr>
+<tr><td>name-demographics-analyzer</td><td>5/6</td><td>81.7</td><td>1</td><td>0</td><td>12.4%</td><td>12,343</td></tr>
+<tr><td>vocabulary-builder</td><td>5/6</td><td>83.3</td><td>1</td><td>0</td><td>17.8%</td><td>12,738</td></tr>
+<tr><td>cat-facts-collector</td><td>4/6</td><td>86.8</td><td>0</td><td>0</td><td>11.6%</td><td>30,685</td></tr>
+<tr><td>random-user-database</td><td>6/6</td><td>90.8</td><td>0</td><td>0</td><td>21.4%</td><td>18,241</td></tr>
+<tr><td>rickmorty-multiverse-explorer</td><td>6/6</td><td>94.2</td><td>0</td><td>0</td><td>15.8%</td><td>13,607</td></tr>
+<tr><td>cocktail-menu-generator</td><td>6/6</td><td>95.6</td><td>0</td><td>0</td><td>10.1%</td><td>21,162</td></tr>
+<tr><td>tvmaze-series-analyzer</td><td>6/6</td><td>98.7</td><td>0</td><td>0</td><td>20.6%</td><td>18,168</td></tr>
+<tr><td>world-bank-economic-snapshot</td><td>6/6</td><td>100.0</td><td>0</td><td>0</td><td>10.3%</td><td>15,902</td></tr></tbody></table>
+<h2>What To Improve Next</h2>
+<section class="warnbox"><strong>Priority order:</strong> isolate snippet execution in a child process, compile/generated-code smoke before official evaluation, force awaited top-level returns instead of detached async calls, remove direct <code>globalThis.df</code> dependency from generated helpers, and improve helper discovery/reuse so warm tasks use learned interfaces more often.</section>
+<h2>Artifacts</h2>
+<ul>
+<li><code>eval/skillcraft/results/datafetch/full-126-gpt54mini-20260511080519</code></li>
+<li><code>eval/skillcraft/results/full-126-gpt54mini-paired-normalized.jsonl</code></li>
+<li><code>eval/skillcraft/reports/full-126-gpt54mini-paired-analysis.json</code></li>
+<li><code>eval/skillcraft/reports/full-126-gpt54mini-paired-report.md</code></li>
+</ul>
+</main></body></html>
