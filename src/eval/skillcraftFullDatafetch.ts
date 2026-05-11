@@ -542,6 +542,21 @@ async function runLiveExperimental(input: {
     artifactDir,
     availableLibFunctions,
   });
+  // Drop the episode context file the agent's `pnpm datafetch:run`
+  // command reads. With this, the agent can iteratively probe tools
+  // and rehearse snippets against the real runtime + tool bridge
+  // before committing scripts/answer.ts.
+  await fsp.writeFile(
+    path.join(workspace, ".datafetch-ctx.json"),
+    `${JSON.stringify({
+      tenantId,
+      skillcraftDir: input.skillcraftDir,
+      datafetchHome,
+      bundles: taskToolBundles(input.task),
+      skillcraftToolRunnerPath: path.resolve("eval/skillcraft/scripts/invoke-skillcraft-tool.py"),
+      snippetTimeoutMs: input.snippetTimeoutMs,
+    }, null, 2)}\n`,
+  );
   const prompt = renderLivePrompt(input.task);
   const agentRun = await runAgent({
     workspaceDir: workspace,
@@ -1208,10 +1223,14 @@ function renderLivePrompt(task: SkillCraftTask): string {
     "Use existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.",
     "When creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.",
     "Use df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.",
-    // Defensive-coding guardrails. Most runtime failures in prior eval runs came from accessing",
-    // nested fields on tool responses that turned out to be undefined (e.g. resp.foo.bar where",
-    // resp.foo is undefined). The agent's snippet then crashes before writing the output,",
-    // costing the whole task. Each of these is a one-line code change that materially helps:",
+    // Multi-turn probing affordance. Before committing to scripts/answer.ts, the agent can
+    // run any .ts snippet against the real snippet runtime + tool bridge with df bound.
+    // This lets it discover tool payload shapes empirically rather than guessing — the
+    // #1 cause of crashes in prior eval runs was the agent assuming a field exists in a
+    // tool response when it doesn't.
+    "You can probe tool responses live before committing. Write a small .ts file (e.g. `scripts/probe.ts`) that calls `await df.tool.<bundle>.<tool>({...})` (or `await df.lib.<name>({...})` to test a helper), then run `pnpm datafetch:run scripts/probe.ts` from the workspace. The script runs with the real df.* runtime and prints the result. Use this to verify tool shapes BEFORE writing scripts/answer.ts when the response shape is non-obvious. You can iterate: probe → adjust → probe again. The evaluator only scores scripts/answer.ts at the end, so probes are free except for their own token cost.",
+    // Defensive-coding guardrails. Even after probing, some failures still come from
+    // unexpected payload variants. Belt-and-suspenders.
     "Tool responses can be missing fields or be shaped differently than you expect. Always guard nested property access with optional chaining (`resp?.foo?.bar`) or an explicit `if (resp && resp.foo)` check. If a field is missing, write a sensible default (empty string, 0, empty array) to the output file rather than throwing.",
     "Wrap the body of main() in a try/catch. On error, write a best-effort partial result to the expected output JSON file (using whatever data you have collected so far, with empty defaults for the missing pieces) before letting the error propagate. A partial output usually scores some credit; a thrown error scores zero.",
     "The evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.",

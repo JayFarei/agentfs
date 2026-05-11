@@ -14,6 +14,7 @@
     "datafetch": "tsx src/cli.ts",
     "demo": "tsx src/cli.ts demo",
     "eval:skillcraft": "tsx src/eval/skillcraftFullDatafetch.ts",
+    "datafetch:run": "tsx src/eval/runScript.ts",
     "eval:skillcraft:synthetic": "tsx src/eval/skillcraftDatafetch.ts",
     "eval:skillcraft:synthetic:live": "tsx src/eval/skillcraftDatafetch.ts --live",
     "eval:skillcraft:synthetic:live:fast": "tsx src/eval/skillcraftDatafetch.ts --live --warm-fast-path",
