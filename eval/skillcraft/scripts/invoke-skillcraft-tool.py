@@ -162,7 +162,9 @@ def install_requests_shim() -> None:
         if params:
             query = urllib.parse.urlencode({key: value for key, value in params.items() if value is not None})
             full_url = f"{url}{'&' if '?' in url else '?'}{query}"
-        request = urllib.request.Request(full_url, headers=headers or {})
+        merged_headers = {"User-Agent": "Mozilla/5.0 (compatible; SkillCraft/1.0)"}
+        merged_headers.update(headers or {})
+        request = urllib.request.Request(full_url, headers=merged_headers)
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 return Response(response.status, response.read())

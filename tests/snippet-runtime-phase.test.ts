@@ -92,6 +92,65 @@ describe("DiskSnippetRuntime phase artifacts", () => {
     );
   });
 
+  it("auto-invokes top-level main() when declared but not called", async () => {
+    const baseDir = await tempBaseDir("df-runtime-autoinvoke-");
+    dirs.push(baseDir);
+
+    const runtime = new DiskSnippetRuntime();
+    const result = await runtime.run({
+      source: [
+        'async function main() {',
+        '  console.log("inside main");',
+        '}',
+      ].join("\n"),
+      phase: "execute",
+      sourcePath: "/workspace/auto/final.ts",
+      sessionCtx: {
+        sessionId: "sess_autoinvoke",
+        tenantId: "tenant-a",
+        mountIds: ["finqa"],
+        baseDir,
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    const artifactDir = result.artifactDir!;
+    const stdout = await readFile(path.join(artifactDir, "stdout.txt"), "utf8");
+    expect(stdout).toBe("inside main\n");
+    const stderr = await readFile(path.join(artifactDir, "stderr.txt"), "utf8");
+    expect(stderr).toContain("auto-invoking main()");
+  });
+
+  it("does not double-invoke main() when the script already calls it", async () => {
+    const baseDir = await tempBaseDir("df-runtime-noautoinvoke-");
+    dirs.push(baseDir);
+
+    const runtime = new DiskSnippetRuntime();
+    const result = await runtime.run({
+      source: [
+        'let count = 0;',
+        'async function main() {',
+        '  count += 1;',
+        '  console.log("count=" + count);',
+        '}',
+        'await main();',
+      ].join("\n"),
+      phase: "execute",
+      sourcePath: "/workspace/auto/final.ts",
+      sessionCtx: {
+        sessionId: "sess_no_double",
+        tenantId: "tenant-a",
+        mountIds: ["finqa"],
+        baseDir,
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    const artifactDir = result.artifactDir!;
+    const stdout = await readFile(path.join(artifactDir, "stdout.txt"), "utf8");
+    expect(stdout).toBe("count=1\n");
+  });
+
   it("records an execute run as a crystallisable committed artifact", async () => {
     const baseDir = await tempBaseDir("df-runtime-execute-");
     dirs.push(baseDir);

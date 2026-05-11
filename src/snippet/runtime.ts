@@ -298,13 +298,91 @@ type RunResp = {
 // + Node ESM as usual.
 function wrapSource(source: string): string {
   const { imports, body } = splitLeadingImports(source);
+  const autoInvokeTrailer = buildAutoInvokeTrailer(body);
   return [
     "// Stamped by DiskSnippetRuntime",
     ...imports,
     "export const __df_done = (async () => {",
     body,
+    autoInvokeTrailer,
     "})();",
   ].join("\n");
+}
+
+// Detect a common agent failure mode: the script declares
+// `async function main()` (or `run`/`solve`) but never invokes it at
+// top level, so the IIFE wrapper resolves with zero df.* calls. When
+// a candidate entry-point is declared and not visibly invoked, append
+// a runtime-guarded auto-invocation. Generic — no family or task
+// awareness. Opt-out via DATAFETCH_DISABLE_AUTO_INVOKE=1.
+const AUTO_INVOKE_NAMES = ["main", "run", "solve"] as const;
+
+export function buildAutoInvokeTrailer(body: string): string {
+  if (process.env["DATAFETCH_DISABLE_AUTO_INVOKE"] === "1") return "";
+  const targets: string[] = [];
+  for (const name of AUTO_INVOKE_NAMES) {
+    if (isDeclaredEntryPoint(body, name) && !isInvokedAtTopLevel(body, name)) {
+      targets.push(name);
+    }
+  }
+  if (targets.length === 0) return "";
+  const lines = targets.map(
+    (name) =>
+      `  // @ts-ignore — auto-invoke by DiskSnippetRuntime when ${name}() was declared but never called` +
+      `\n  if (typeof ${name} === "function") { console.error("[snippet/runtime] auto-invoking ${name}() — declaration without top-level call"); await ${name}(); }`,
+  );
+  return lines.join("\n");
+}
+
+function isDeclaredEntryPoint(body: string, name: string): boolean {
+  const declRegex = new RegExp(
+    String.raw`(^|\n)\s*(export\s+)?(async\s+)?function\s+${name}\s*\(`,
+  );
+  if (declRegex.test(body)) return true;
+  const constRegex = new RegExp(
+    String.raw`(^|\n)\s*(export\s+)?(const|let|var)\s+${name}\s*=\s*(async\s*)?\(`,
+  );
+  return constRegex.test(body);
+}
+
+function isInvokedAtTopLevel(body: string, name: string): boolean {
+  const lines = body.split("\n");
+  let depth = 0;
+  let inBlockComment = false;
+  for (const rawLine of lines) {
+    let line = rawLine;
+    if (inBlockComment) {
+      const end = line.indexOf("*/");
+      if (end < 0) continue;
+      line = line.slice(end + 2);
+      inBlockComment = false;
+    }
+    // Strip same-line block comments, then detect a comment that opens
+    // and remains unclosed.
+    line = line.replace(/\/\*[\s\S]*?\*\//g, "");
+    const blockStart = line.indexOf("/*");
+    if (blockStart >= 0) {
+      inBlockComment = true;
+      line = line.slice(0, blockStart);
+    }
+    const stripped = line.replace(/\/\/.*$/, "");
+    if (depth === 0) {
+      const invokeRegex = new RegExp(
+        String.raw`(^|[^\w$.])(await\s+|return\s+|void\s+|\(\s*await\s+|=\s*(await\s+)?)?${name}\s*\(`,
+      );
+      if (invokeRegex.test(stripped)) {
+        const decl = new RegExp(
+          String.raw`(^|[^\w$])(function|const|let|var)\s+${name}\b`,
+        );
+        if (!decl.test(stripped)) return true;
+      }
+    }
+    for (const ch of stripped) {
+      if (ch === "{") depth += 1;
+      else if (ch === "}") depth = Math.max(0, depth - 1);
+    }
+  }
+  return false;
 }
 
 async function runSnippet(args: RunArgs): Promise<RunResp> {
