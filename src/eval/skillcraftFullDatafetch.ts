@@ -11,7 +11,20 @@ const FULL_SKILLCRAFT_DATAFETCH_ADAPTER_READY = false;
 const LEVEL_ORDER = ["e1", "e2", "e3", "m1", "m2", "h1"] as const;
 const LEARN_FROM_LEVELS = new Set<string>(["e1"]);
 const DEFAULT_CODEX_MODEL = "gpt-5.4-mini";
+const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 const DEFAULT_REASONING_EFFORT = "low";
+
+// Backend selector. Defaults to codex for backwards compatibility with
+// existing run-info.json artefacts. Set DATAFETCH_AGENT=claude to route
+// every episode through `claude --print --output-format json` instead.
+// The agent's surface (workspace, prompt, scripts/answer.ts contract) is
+// identical across backends; this only swaps the LLM driver.
+type AgentBackend = "codex" | "claude";
+function resolveAgentBackend(): AgentBackend {
+  const raw = (process.env["DATAFETCH_AGENT"] ?? "codex").trim().toLowerCase();
+  if (raw === "claude") return "claude";
+  return "codex";
+}
 
 interface Args {
   skillcraftDir: string;
@@ -181,6 +194,15 @@ async function main(): Promise<void> {
     : args.libCacheDir ?? path.join(args.outDir, "lib-cache");
   if (libCacheDir) await fsp.mkdir(libCacheDir, { recursive: true });
 
+  const agentBackend = resolveAgentBackend();
+  const resolvedModel =
+    agentBackend === "claude"
+      ? resolveClaudeModel(args.model)
+      : resolveCodexModel(args.model, "DF_SKILLCRAFT_FULL_MODEL");
+  const resolvedEffort =
+    agentBackend === "claude"
+      ? resolveClaudeEffort(args.reasoningEffort)
+      : resolveCodexReasoningEffort(args.reasoningEffort, "DF_SKILLCRAFT_FULL_REASONING_EFFORT");
   const runInfo = {
     generatedAt: new Date().toISOString(),
     adapterReady: FULL_SKILLCRAFT_DATAFETCH_ADAPTER_READY,
@@ -189,8 +211,9 @@ async function main(): Promise<void> {
     libCacheDir: libCacheDir ?? null,
     selectedTasks: tasks.length,
     mode: args.live ? "live-agent-experimental" : args.fixtureSmoke ? "fixture-smoke" : args.dryRun ? "dry-run" : "not-implemented",
-    model: resolveCodexModel(args.model, "DF_SKILLCRAFT_FULL_MODEL"),
-    reasoningEffort: resolveCodexReasoningEffort(args.reasoningEffort, "DF_SKILLCRAFT_FULL_REASONING_EFFORT"),
+    agent: agentBackend,
+    model: resolvedModel,
+    reasoningEffort: resolvedEffort,
     snippetTimeoutMs: args.snippetTimeoutMs,
   };
   await fsp.writeFile(path.join(args.outDir, "run-info.json"), `${JSON.stringify(runInfo, null, 2)}\n`);
@@ -520,7 +543,7 @@ async function runLiveExperimental(input: {
     availableLibFunctions,
   });
   const prompt = renderLivePrompt(input.task);
-  const agentRun = await runCodexAgent({
+  const agentRun = await runAgent({
     workspaceDir: workspace,
     prompt,
     model: input.model,
@@ -1261,6 +1284,26 @@ function jsonSchemaType(prop: Record<string, unknown>): string {
   return "string";
 }
 
+// --- Agent dispatcher -------------------------------------------------------
+//
+// Routes the eval's per-episode agent invocation to whichever backend
+// is configured (`DATAFETCH_AGENT=codex|claude`). The caller pipes the
+// same args through either path; the dispatcher hides the binary
+// differences. Output normalises to a single AgentRun shape, so the
+// eval's downstream `writeAgentArtifacts`, `classifyAgentFailure`, and
+// AdapterEpisode population is agent-agnostic.
+async function runAgent(args: {
+  workspaceDir: string;
+  prompt: string;
+  model?: string;
+  reasoningEffort?: string;
+  timeoutMs: number;
+}): Promise<AgentRun> {
+  const backend = resolveAgentBackend();
+  if (backend === "claude") return runClaudeAgent(args);
+  return runCodexAgent(args);
+}
+
 async function runCodexAgent(args: {
   workspaceDir: string;
   prompt: string;
@@ -1309,6 +1352,106 @@ async function runCodexAgent(args: {
     exitCode: run.exitCode,
     usage: parseCodexUsage(run.stdout),
   };
+}
+
+// Claude agent runner. Drop-in parity with runCodexAgent: same input
+// args, same AgentRun output shape. Invokes the Claude Code CLI in
+// `--print` (non-interactive) mode with structured JSON output so we
+// can parse tokens/turns/cost into AgentUsage.
+//
+// Permission posture: `--dangerously-skip-permissions` is the Claude
+// equivalent of codex's `--sandbox danger-full-access` + `--ask-for-
+// approval never`. The eval workspace is a hermetic /tmp directory
+// the agent fully owns; outside-of-eval workflows must NOT inherit
+// this posture.
+async function runClaudeAgent(args: {
+  workspaceDir: string;
+  prompt: string;
+  model?: string;
+  reasoningEffort?: string;
+  timeoutMs: number;
+}): Promise<AgentRun> {
+  const model = resolveClaudeModel(args.model);
+  const effort = resolveClaudeEffort(args.reasoningEffort);
+  const started = performance.now();
+  const cliArgs = [
+    "--print",
+    "--output-format", "json",
+    "--model", model,
+    "--effort", effort,
+    "--dangerously-skip-permissions",
+    "--no-session-persistence",
+    args.prompt,
+  ];
+  const run = await spawnProcess("claude", cliArgs, args.workspaceDir, args.timeoutMs);
+
+  // Default to empty / zeroed; we overwrite from parsed JSON below
+  // when the run produced a valid result envelope.
+  let finalMessage = "";
+  const usage: AgentUsage = {
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    reasoningOutputTokens: 0,
+    llmCalls: 0,
+  };
+
+  try {
+    const parsed = JSON.parse(run.stdout) as Record<string, unknown>;
+    const result = parsed["result"];
+    if (typeof result === "string") {
+      finalMessage = result;
+    } else if (result !== undefined) {
+      finalMessage = JSON.stringify(result);
+    }
+    const rawUsage = parsed["usage"];
+    if (rawUsage && typeof rawUsage === "object") {
+      const u = rawUsage as Record<string, unknown>;
+      usage.inputTokens = numberField(u, "input_tokens");
+      usage.cachedInputTokens =
+        numberField(u, "cache_read_input_tokens") +
+        numberField(u, "cache_creation_input_tokens");
+      usage.outputTokens = numberField(u, "output_tokens");
+    }
+    usage.llmCalls = numberField(parsed, "num_turns");
+  } catch {
+    // Non-JSON output (auth failure, unauthenticated, internal error,
+    // truncation by timeout, …). Fall back to the raw stdout as the
+    // best-effort final message; the eval will record exit code and
+    // stderr for diagnosis.
+    finalMessage = run.stdout.trim();
+  }
+
+  return {
+    workspaceDir: args.workspaceDir,
+    prompt: args.prompt,
+    stdout: run.stdout,
+    stderr: run.stderr,
+    finalMessage,
+    elapsedMs: performance.now() - started,
+    exitCode: run.exitCode,
+    usage,
+  };
+}
+
+function resolveClaudeModel(explicit: string | undefined): string {
+  return (
+    explicit ??
+    process.env["DF_SKILLCRAFT_CLAUDE_MODEL"] ??
+    process.env["DF_SKILLCRAFT_FULL_MODEL"] ??
+    process.env["DF_TEST_MODEL"] ??
+    DEFAULT_CLAUDE_MODEL
+  );
+}
+
+function resolveClaudeEffort(explicit: string | undefined): string {
+  return (
+    explicit ??
+    process.env["DF_SKILLCRAFT_CLAUDE_EFFORT"] ??
+    process.env["DF_SKILLCRAFT_FULL_REASONING_EFFORT"] ??
+    process.env["DF_TEST_REASONING_EFFORT"] ??
+    DEFAULT_REASONING_EFFORT
+  );
 }
 
 function resolveCodexModel(explicit: string | undefined, envName: string): string {
