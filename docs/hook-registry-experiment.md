@@ -460,6 +460,78 @@ projection (~80%) leaves a ~15pp gap. Further closure would need:
   `resp.foo.bar` actually returns typed defaults on missing fields.
 None of these is in scope for the hook-registry slice.
 
+### Iteration 2: Claude backend + bash-native multi-turn probing
+
+After iter1 landed +24pp on the rotation surface with a one-shot
+prompt change, the obvious next lever was the one SkillCraft uses
+to reach 96% — multi-turn tool iteration. Our agent committed to a
+single `scripts/answer.ts` write; SkillCraft's agent iterates with
+real tool feedback.
+
+We added two pieces:
+
+1. **A swappable agent backend** (`DATAFETCH_AGENT=codex|claude`).
+   Codex's `exec --json` path stays untouched; `claude --print
+   --output-format json` runs alongside it. Same prompt template,
+   same workspace setup, normalised AgentRun output. Cost: ~half
+   day; primary motivation was to extend the eval beyond the codex
+   token budget, but it also unlocked a cross-agent comparison.
+
+2. **One bash-native primitive** (`pnpm datafetch:run <script.ts>`).
+   Reads `.datafetch-ctx.json` from the workspace, installs the
+   snippet runtime with the right tenant / tool bundles / timeout,
+   runs the agent-authored TS file with `df.*` bound, returns
+   stdout / stderr / exit. The agent's loop becomes:
+
+   ```bash
+   echo 'console.log(await df.tool.<bundle>.<tool>({...}))' > scripts/probe.ts
+   pnpm datafetch:run scripts/probe.ts
+   ```
+
+   No new tool API — file write + pnpm script + read output. The
+   eval prompt got one new paragraph telling the agent it can
+   iteratively probe tool shapes before committing answer.ts.
+
+**Iter2 probe (Claude + hooks-draft + probe affordance,
+cocktail-menu-generator, n=6):**
+
+| metric | iter1 (codex + defensive prompt) | iter2 (claude + probe) | delta |
+|---|---|---|---|
+| pass ≥70 | 5/6 (83%) | 6/6 (100%) | +17pp |
+| strict ≥90 | 5/6 (83%) | 6/6 (100%) | +17pp |
+| runtime err | 1 | 0 | −1 |
+| avg tokens | ~15k | ~4k | −73% |
+| avg LLM calls | ~10 | 19 | +9 |
+
+Average elapsed climbed (~230s vs ~60s) because the agent iterates,
+but Claude's prompt cache absorbed the cost — the per-task token
+budget *dropped* even with ~2× the call count. Probe files were
+authored in 5/6 tasks (3 on e1, 2 on m1, 1 each on e2/m2, 0 on h1).
+
+**Iter2 held-out validate (university-directory-builder, n=6):**
+
+| metric | baseline hooks-draft (codex) | iter2 (claude + probe) | delta |
+|---|---|---|---|
+| pass ≥70 | 3/6 (50%) | 6/6 (100%) | +50pp |
+| strict ≥90 | 3/6 (50%) | 6/6 (100%) | +50pp |
+| runtime err | 3 | 0 | −3 |
+| avg tokens | ~16k | ~7k | −56% |
+
+Pattern matches: heavy probing on e1 (51 calls, 1 probe) and m2/h1
+(50 calls each, 1 probe each), reuse-only on e2/e3 (~8 calls, 0
+probes, ~40s elapsed — pure family-cache reuse).
+
+**Combined two-family Iter2 surface (n=12):** **12/12 pass (100%),
+0 runtime errors, avg ~5.6k tokens/task.** Subject to the n=12
+caveat (single seed, two families, both type-error-prone), the
+Phase 1 path matches/exceeds the SkillCraft 96% baseline at
+**~100× lower token cost** on the family-level evidence.
+
+The remaining open question is whether this generalises to the full
+21-family / 126-task surface. The eval-driven loop is now cheap
+enough (one family in ~3-7 minutes wall clock on Claude's
+subscription) that the next session can answer it directly.
+
 ## Next steps
 
 1. Add a smoke-replay gate so hooks promote from `candidate-typescript`
