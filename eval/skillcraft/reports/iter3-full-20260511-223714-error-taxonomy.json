@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-05-11T22:44:19.365Z",
+  "run": "eval/skillcraft/results/datafetch/iter3-full-20260511-223714-combined",
+  "totalEpisodes": 0,
+  "episodesWithStderr": 0,
+  "counts": {
+    "bad_or_missing_lib_export": 0,
+    "typescript_transform_failure": 0,
+    "generated_code_reference_error": 0,
+    "generated_code_type_error": 0,
+    "tool_payload_assumption_error": 0,
+    "lib_schema_validation_error": 0,
+    "agent_quota_limit_before_answer": 0,
+    "hook_quarantined": 0,
+    "hook_unsupported_fallback": 0,
+    "other": 0
+  },
+  "examples": {
+    "bad_or_missing_lib_export": [],
+    "typescript_transform_failure": [],
+    "generated_code_reference_error": [],
+    "generated_code_type_error": [],
+    "tool_payload_assumption_error": [],
+    "lib_schema_validation_error": [],
+    "agent_quota_limit_before_answer": [],
+    "hook_quarantined": [],
+    "hook_unsupported_fallback": [],
+    "other": []
+  }
+}

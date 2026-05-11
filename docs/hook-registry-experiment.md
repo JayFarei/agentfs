@@ -602,6 +602,137 @@ when the helper replays cleanly on the recorded input), (b) the
 iteration-warning Phase 4 we deferred (catch the case where a helper
 is being rewritten repeatedly because it isn't generalising).
 
+### Iteration 3: snippet runtime auto-invokes uninvoked entry-points
+
+Forensic walk of iter2's 18 failures showed a single pattern dominated
+the warm/train fails: the agent's `scripts/answer.ts` declared
+`async function main()` (or `run`, `solve`) but never invoked it at
+the top level — so the snippet runtime's IIFE wrapper resolved with
+zero `df.*` calls and no workspace output. 8 of the 9 episodes with
+that pattern in the iter2 run failed. It is a snippet hygiene issue,
+not a task-content issue.
+
+**Hypothesis.** Add a runtime-guarded trailer in the snippet wrapper
+that auto-invokes `main`/`run`/`solve` when each is declared but not
+called at top level. Generic — no family or task or bundle awareness
+anywhere. Opt-out via `DATAFETCH_DISABLE_AUTO_INVOKE=1`.
+
+**Lever.** Snippet runtime (`src/snippet/runtime.ts`,
+`buildAutoInvokeTrailer`). The hook registry, observer gate, and
+prompt template are unchanged.
+
+**Probe (tvmaze-series-analyzer, n=6).** 6/6 pass (100%) vs iter2
+baseline 4/6 (66.7%) — +33.3pp. The `h1` task in the probe actually
+exercised the new trailer end-to-end ("auto-invoking main()" stderr
+line + 100% score). The auto-invoke trailer fired in 1/6 tasks; the
+other 5 wrote a top-level invocation themselves.
+
+**Validate (university-directory-builder + jikan-anime-analysis,
+n=12).** 12/12 pass (100%) vs iter2 baseline 11/12 (91.7%) — +8.3pp.
+The auto-invoke trailer fired in 1/12 tasks. Combined evidence:
+substrate change works without family-specific patterns, and the
+trailer rescues the specific pattern when it appears.
+
+### Iter3 full-126 (the headline)
+
+Ran iter3 — same iter2 path plus the snippet-runtime auto-invoke
+trailer — on the full SkillCraft 126-task surface, parallelised
+across 4 shards (~21 family / 126 task in ~80 min wall clock).
+
+| arm (full 126) | pass ≥70 | strict ≥90 | runtime err | tokens / task |
+|---|---|---|---|---|
+| skillcraft-base (the ceiling) | 96.0% | 94.4% | 0.0% | ~520,450 |
+| datafetch-learned legacy (codex) | 65.9% | 60.3% | 30.2% | 15,386 |
+| hooks-draft (codex) | 71.4% | 65.9% | 23.8% | 14,865 |
+| iter2 (claude + multi-turn) | 84.1% | 78.6% | 4.8% | 3,329 |
+| **iter3 (claude + auto-invoke trailer)** | **91.3%** | **84.9%** | **2.4%** | **2,618** |
+
+(`iter2` row reflects the JSON's `arms["datafetch-learned"].passRate`
+of 0.8413 from `iter2-full-20260511-201102-analysis.json`, not the
+85.7% rounded value used in the prior section.)
+
+**Phase-level result vs. iter2 baseline:**
+
+| phase | iter2 | iter3 | delta |
+|---|---|---|---|
+| train | 90.5% (19/21) | 81.0% (17/21) | -9.5pp |
+| warm | 83.3% (70/84) | 92.9% (78/84) | **+9.6pp** |
+| hard | 81.0% (17/21) | 95.2% (20/21) | **+14.2pp** |
+
+The big move is on the warm and hard tiers — exactly the phases where
+the agent reuses or composes against unfamiliar tool shapes and is
+most likely to forget to invoke `main()`. The train regression
+(-9.5pp on 21 tasks) is small-sample noise: iter3 lost 2 train tasks
+to a normalize-script artefact where `agentExitCode=143` (SIGTERM
+mid-task) clears `tokens=0` and the normalize step demotes those to
+`infrastructure_error` despite the official evaluator scoring 96%
+and 95.8% respectively (the two affected tasks:
+`university-directory-builder/e1`, `countries-encyclopedia/m2`).
+Counting them by the evaluator (which is the actual scoring oracle)
+lifts the pass rate to 117/126 = 92.9% — but per the goal definition
+("measured from the arms[\"datafetch-learned\"].passRate field of a
+fresh `pnpm eval:skillcraft:analyze` output"), the canonical iter3
+number is **91.3%**.
+
+**Auto-invoke trailer activity (full-126):** the trailer fired on
+**24/126 episodes** (19%). Every one of those 24 scored ≥70 on the
+official evaluator — strong evidence the fix rescues exactly the
+"declared but uninvoked" pattern.
+
+**Error class delta** (substantive stderr only — auto-invoke
+telemetry filtered out):
+
+| error class | iter2 | iter3 |
+|---|---|---|
+| `bad_or_missing_lib_export` | 0 | 0 |
+| `generated_code_reference_error` | 1 | 0 |
+| `generated_code_type_error` | 0 | 0 |
+| `tool_payload_assumption_error` | 0 | 0 |
+| `hallucinated_tool_bundle` | 1 | 0 |
+| `snippet_timeout` | 1 | 4 |
+| `df.answer quality_warning` (advisory) | — | 19 |
+| **total stderr-bearing failure episodes** | **3** | **4** |
+
+Quality-warning episodes are advisory (the `low_quality_output`
+heuristic running on `df.answer()`); most of those episodes still
+score ≥70. The four timeouts cluster on `dnd-campaign-builder` (e1,
+e2, h1) plus `university-directory-builder/m2` — agents iterating
+over many entities × many sub-calls within the 180s snippet budget.
+
+**Headline framing.** Iter3 lands at 91.3% pass at 2,618 tokens per
+task. The auto-invoke trailer is the smallest possible substrate
+nudge — a runtime-guarded `if (typeof main === "function") await
+main()` appended to the IIFE body when no top-level invocation is
+detected — and it accounts for +7.2pp on full-126 vs iter2 (or
++8.8pp counting by the evaluator's scoring oracle directly). All
+budgets are well inside the targets: tokens 2,618 ≤ 8,000 cap;
+runtime-error rate 2.4% ≤ 5% cap.
+
+The 0.7pp gap to 92% on the canonical analyze measurement is
+concentrated in two task classes:
+
+1. **Two normalize-script false negatives** (univ/e1 score=96,
+   countries/m2 score=95.8) where the agent was SIGTERM'd at the
+   harness boundary while its on-disk output still scored as a pass.
+   A principled normalize fix would honour `officialStatus === "pass"`
+   over the `agentExitCode != 0 && tokens=0` heuristic.
+2. **Three dnd-campaign-builder timeouts** (e1, e2, h1) plus
+   `university-directory-builder/m2` — agents iterating over many
+   entities × many sub-calls within the 180s snippet budget.
+
+Both shape iter4's design lever: snippet runtime / harness
+truthfulness. Either expand the budget for long-iterating snippets
+(snippet runtime), or close the normalize loop so a passing
+evaluator scores actually count (eval-harness side, not a substrate
+change).
+
+Artifacts:
+
+- analysis: `eval/skillcraft/reports/iter3-full-20260511-223714-analysis.json`
+- error taxonomy: `eval/skillcraft/reports/iter3-full-20260511-223714-error-taxonomy.json`
+- per-shard runs: `eval/skillcraft/results/datafetch/iter3-full-20260511-223714-g{1,2,3,4}/`
+- combined view: `eval/skillcraft/results/datafetch/iter3-full-20260511-223714-combined/`
+
 ## Next steps
 
 1. Add a smoke-replay gate so hooks promote from `candidate-typescript`

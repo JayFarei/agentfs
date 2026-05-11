@@ -1,0 +1,1795 @@
+{
+  "generatedAt": "2026-05-11T22:44:18.954Z",
+  "input": "/Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/iter3-full-20260511-223714-normalized.jsonl",
+  "rowCount": 126,
+  "arms": {
+    "datafetch-learned": {
+      "count": 126,
+      "passRate": 0.9126984126984127,
+      "statusPassRateGe90": 0.8492063492063492,
+      "avgScore": 91.34285714285713,
+      "avgTokens": 2630.9444444444443,
+      "avgEffectiveTokens": 2617.714285714286,
+      "avgCostUsd": null,
+      "avgLatencyMs": 91224.57936507936,
+      "avgToolCalls": 12.658730158730158,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 115,
+      "runtimeErrorCount": 3,
+      "infrastructureErrorCount": 3,
+      "phaseBreakdown": {
+        "train": {
+          "count": 21,
+          "passed": 17,
+          "passRate": 0.8095238095238095,
+          "avgScore": 86.84285714285713,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 1
+        },
+        "warm": {
+          "count": 84,
+          "passed": 78,
+          "passRate": 0.9285714285714286,
+          "avgScore": 92.3452380952381,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 2
+        },
+        "hard": {
+          "count": 21,
+          "passed": 20,
+          "passRate": 0.9523809523809523,
+          "avgScore": 91.83333333333334,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.023809523809523808,
+      "infrastructureErrorRate": 0.023809523809523808,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "levels": {
+    "e1": {
+      "count": 21,
+      "passRate": 0.8095238095238095,
+      "statusPassRateGe90": 0.7619047619047619,
+      "avgScore": 86.84285714285713,
+      "avgTokens": 2264.7619047619046,
+      "avgEffectiveTokens": 2256.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 94418.33333333333,
+      "avgToolCalls": 7.857142857142857,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 17,
+      "runtimeErrorCount": 1,
+      "infrastructureErrorCount": 1,
+      "phaseBreakdown": {
+        "train": {
+          "count": 21,
+          "passed": 17,
+          "passRate": 0.8095238095238095,
+          "avgScore": 86.84285714285713,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 1
+        },
+        "warm": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.047619047619047616,
+      "infrastructureErrorRate": 0.047619047619047616,
+      "officialEvaluatorCoverage": 1
+    },
+    "e2": {
+      "count": 21,
+      "passRate": 0.9047619047619048,
+      "statusPassRateGe90": 0.7619047619047619,
+      "avgScore": 88.3047619047619,
+      "avgTokens": 2220.809523809524,
+      "avgEffectiveTokens": 2187.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 58778.76190476191,
+      "avgToolCalls": 8.761904761904763,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 19,
+      "runtimeErrorCount": 1,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 21,
+          "passed": 19,
+          "passRate": 0.9047619047619048,
+          "avgScore": 88.3047619047619,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.047619047619047616,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "e3": {
+      "count": 21,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 97.67142857142859,
+      "avgTokens": 3163.3809523809523,
+      "avgEffectiveTokens": 3151.809523809524,
+      "avgCostUsd": null,
+      "avgLatencyMs": 114452.57142857143,
+      "avgToolCalls": 9.714285714285714,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 21,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 21,
+          "passed": 21,
+          "passRate": 1,
+          "avgScore": 97.67142857142859,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "h1": {
+      "count": 21,
+      "passRate": 0.9523809523809523,
+      "statusPassRateGe90": 0.8571428571428571,
+      "avgScore": 91.83333333333334,
+      "avgTokens": 2856.3809523809523,
+      "avgEffectiveTokens": 2848.0476190476193,
+      "avgCostUsd": null,
+      "avgLatencyMs": 66593.76190476191,
+      "avgToolCalls": 20.666666666666668,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 20,
+      "runtimeErrorCount": 1,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 21,
+          "passed": 20,
+          "passRate": 0.9523809523809523,
+          "avgScore": 91.83333333333334,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.047619047619047616,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "m1": {
+      "count": 21,
+      "passRate": 0.9047619047619048,
+      "statusPassRateGe90": 0.8571428571428571,
+      "avgScore": 91.49047619047619,
+      "avgTokens": 2386.7619047619046,
+      "avgEffectiveTokens": 2378.4285714285716,
+      "avgCostUsd": null,
+      "avgLatencyMs": 63860.80952380953,
+      "avgToolCalls": 14.714285714285714,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 19,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 21,
+          "passed": 19,
+          "passRate": 0.9047619047619048,
+          "avgScore": 91.49047619047619,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "m2": {
+      "count": 21,
+      "passRate": 0.9047619047619048,
+      "statusPassRateGe90": 0.8571428571428571,
+      "avgScore": 91.91428571428571,
+      "avgTokens": 2893.5714285714284,
+      "avgEffectiveTokens": 2883.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 149243.2380952381,
+      "avgToolCalls": 14.238095238095237,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 19,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 2,
+      "phaseBreakdown": {
+        "train": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 21,
+          "passed": 19,
+          "passRate": 0.9047619047619048,
+          "avgScore": 91.91428571428571,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 2
+        },
+        "hard": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0.09523809523809523,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "phases": {
+    "hard": {
+      "count": 21,
+      "passRate": 0.9523809523809523,
+      "statusPassRateGe90": 0.8571428571428571,
+      "avgScore": 91.83333333333334,
+      "avgTokens": 2856.3809523809523,
+      "avgEffectiveTokens": 2848.0476190476193,
+      "avgCostUsd": null,
+      "avgLatencyMs": 66593.76190476191,
+      "avgToolCalls": 20.666666666666668,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 20,
+      "runtimeErrorCount": 1,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 21,
+          "passed": 20,
+          "passRate": 0.9523809523809523,
+          "avgScore": 91.83333333333334,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.047619047619047616,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "train": {
+      "count": 21,
+      "passRate": 0.8095238095238095,
+      "statusPassRateGe90": 0.7619047619047619,
+      "avgScore": 86.84285714285713,
+      "avgTokens": 2264.7619047619046,
+      "avgEffectiveTokens": 2256.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 94418.33333333333,
+      "avgToolCalls": 7.857142857142857,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 17,
+      "runtimeErrorCount": 1,
+      "infrastructureErrorCount": 1,
+      "phaseBreakdown": {
+        "train": {
+          "count": 21,
+          "passed": 17,
+          "passRate": 0.8095238095238095,
+          "avgScore": 86.84285714285713,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 1
+        },
+        "warm": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.047619047619047616,
+      "infrastructureErrorRate": 0.047619047619047616,
+      "officialEvaluatorCoverage": 1
+    },
+    "warm": {
+      "count": 84,
+      "passRate": 0.9285714285714286,
+      "statusPassRateGe90": 0.8690476190476191,
+      "avgScore": 92.3452380952381,
+      "avgTokens": 2666.1309523809523,
+      "avgEffectiveTokens": 2650.3928571428573,
+      "avgCostUsd": null,
+      "avgLatencyMs": 96583.84523809524,
+      "avgToolCalls": 11.857142857142858,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 78,
+      "runtimeErrorCount": 1,
+      "infrastructureErrorCount": 2,
+      "phaseBreakdown": {
+        "train": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 84,
+          "passed": 78,
+          "passRate": 0.9285714285714286,
+          "avgScore": 92.3452380952381,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 2
+        },
+        "hard": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.011904761904761904,
+      "infrastructureErrorRate": 0.023809523809523808,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "families": {
+    "cat-facts-collector": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 0.8333333333333334,
+      "avgScore": 93.11666666666667,
+      "avgTokens": 2367.8333333333335,
+      "avgEffectiveTokens": 2357.3333333333335,
+      "avgCostUsd": null,
+      "avgLatencyMs": 92031.16666666667,
+      "avgToolCalls": 14,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 95,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 91.75,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 96.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "cocktail-menu-generator": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 96.7,
+      "avgTokens": 3017,
+      "avgEffectiveTokens": 3006.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 96700,
+      "avgToolCalls": 10.166666666666666,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 96.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 96.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 96.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "countries-encyclopedia": {
+      "count": 6,
+      "passRate": 0.6666666666666666,
+      "statusPassRateGe90": 0.6666666666666666,
+      "avgScore": 93.21666666666668,
+      "avgTokens": 3578.6666666666665,
+      "avgEffectiveTokens": 3568.8333333333335,
+      "avgCostUsd": null,
+      "avgLatencyMs": 213990.5,
+      "avgToolCalls": 15.666666666666666,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 4,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 1,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 0,
+          "passRate": 0,
+          "avgScore": 69.6,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 3,
+          "passRate": 0.75,
+          "avgScore": 98.5,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 1
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 95.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0.16666666666666666,
+      "officialEvaluatorCoverage": 1
+    },
+    "dnd-campaign-builder": {
+      "count": 6,
+      "passRate": 0.5,
+      "statusPassRateGe90": 0.5,
+      "avgScore": 50,
+      "avgTokens": 2412.6666666666665,
+      "avgEffectiveTokens": 2405.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 48845.5,
+      "avgToolCalls": 10.666666666666666,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 3,
+      "runtimeErrorCount": 3,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 0,
+          "passRate": 0,
+          "avgScore": 0,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 3,
+          "passRate": 0.75,
+          "avgScore": 75,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 0,
+          "passRate": 0,
+          "avgScore": 0,
+          "runtimeErrors": 1,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0.5,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "dnd-monster-compendium": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 100,
+      "avgTokens": 1800.8333333333333,
+      "avgEffectiveTokens": 1793.1666666666667,
+      "avgCostUsd": null,
+      "avgLatencyMs": 62551.333333333336,
+      "avgToolCalls": 4.333333333333333,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "dog-breeds-encyclopedia": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 97.13333333333333,
+      "avgTokens": 2404.5,
+      "avgEffectiveTokens": 2396,
+      "avgCostUsd": null,
+      "avgLatencyMs": 73512,
+      "avgToolCalls": 10,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 96.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 97.35,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 96.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "gitlab-deep-analysis": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 0.8333333333333334,
+      "avgScore": 97.81666666666666,
+      "avgTokens": 2343.3333333333335,
+      "avgEffectiveTokens": 2336.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 45383,
+      "avgToolCalls": 10.666666666666666,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 98.3,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 97.15,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "jikan-anime-analysis": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 94.88333333333334,
+      "avgTokens": 3502.8333333333335,
+      "avgEffectiveTokens": 3492.1666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 96824.66666666667,
+      "avgToolCalls": 16.166666666666668,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 94.55,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 91.1,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "jsonplaceholder-blog-analyzer": {
+      "count": 6,
+      "passRate": 0.8333333333333334,
+      "statusPassRateGe90": 0.8333333333333334,
+      "avgScore": 88.33333333333333,
+      "avgTokens": 2390.5,
+      "avgEffectiveTokens": 2383.1666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 59393.666666666664,
+      "avgToolCalls": 11.833333333333334,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 5,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 3,
+          "passRate": 0.75,
+          "avgScore": 82.5,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "local-dna-analysis": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 98.3,
+      "avgTokens": 2952.6666666666665,
+      "avgEffectiveTokens": 2855.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 71827.5,
+      "avgToolCalls": 12.666666666666666,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 98.175,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 97.1,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "name-demographics-analyzer": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 98.33333333333333,
+      "avgTokens": 2853.1666666666665,
+      "avgEffectiveTokens": 2842,
+      "avgCostUsd": null,
+      "avgLatencyMs": 118698.83333333333,
+      "avgToolCalls": 17.5,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 97.5,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "openmeteo-weather": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 100,
+      "avgTokens": 3310.5,
+      "avgEffectiveTokens": 3302.1666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 72728.66666666667,
+      "avgToolCalls": 15.5,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "pokeapi-pokedex": {
+      "count": 6,
+      "passRate": 0.6666666666666666,
+      "statusPassRateGe90": 0.3333333333333333,
+      "avgScore": 72.13333333333334,
+      "avgTokens": 3887.3333333333335,
+      "avgEffectiveTokens": 3871.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 155761.5,
+      "avgToolCalls": 12.833333333333334,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 4,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 0,
+          "passRate": 0,
+          "avgScore": 0,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 3,
+          "passRate": 0.75,
+          "avgScore": 86.325,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 87.5,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "random-user-database": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 99.16666666666667,
+      "avgTokens": 2205.6666666666665,
+      "avgEffectiveTokens": 2197.1666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 56018.5,
+      "avgToolCalls": 16.666666666666668,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 98.75,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "recipe-cookbook-builder": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 95.10000000000001,
+      "avgTokens": 2551.6666666666665,
+      "avgEffectiveTokens": 2540.5,
+      "avgCostUsd": null,
+      "avgLatencyMs": 93034.66666666667,
+      "avgToolCalls": 13,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 94.3,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 95.5,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 94.3,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "rickmorty-multiverse-explorer": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 0.3333333333333333,
+      "avgScore": 83.68333333333334,
+      "avgTokens": 3310.3333333333335,
+      "avgEffectiveTokens": 3298.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 101520.16666666667,
+      "avgToolCalls": 7.333333333333333,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 77.1,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 86.25,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 80,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "tvmaze-series-analyzer": {
+      "count": 6,
+      "passRate": 0.8333333333333334,
+      "statusPassRateGe90": 0.8333333333333334,
+      "avgScore": 83.33333333333333,
+      "avgTokens": 2872.6666666666665,
+      "avgEffectiveTokens": 2864.8333333333335,
+      "avgCostUsd": null,
+      "avgLatencyMs": 64347.833333333336,
+      "avgToolCalls": 14,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 5,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 3,
+          "passRate": 0.75,
+          "avgScore": 75,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "university-directory-builder": {
+      "count": 6,
+      "passRate": 0.6666666666666666,
+      "statusPassRateGe90": 0.6666666666666666,
+      "avgScore": 80.66666666666667,
+      "avgTokens": 1558.1666666666667,
+      "avgEffectiveTokens": 1551.8333333333333,
+      "avgCostUsd": null,
+      "avgLatencyMs": 251529,
+      "avgToolCalls": 11.333333333333334,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 4,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 2,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 0,
+          "passRate": 0,
+          "avgScore": 96,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 1
+        },
+        "warm": {
+          "count": 4,
+          "passed": 3,
+          "passRate": 0.75,
+          "avgScore": 73,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 1
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 96,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0.3333333333333333,
+      "officialEvaluatorCoverage": 1
+    },
+    "usgs-earthquake-monitor": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 96.28333333333335,
+      "avgTokens": 1993.8333333333333,
+      "avgEffectiveTokens": 1986.6666666666667,
+      "avgCostUsd": null,
+      "avgLatencyMs": 45081.5,
+      "avgToolCalls": 14,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 95.25,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 96.7,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "vocabulary-builder": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 100,
+      "avgTokens": 1711.1666666666667,
+      "avgEffectiveTokens": 1704.1666666666667,
+      "avgCostUsd": null,
+      "avgLatencyMs": 40225.833333333336,
+      "avgToolCalls": 14.166666666666666,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "world-bank-economic-snapshot": {
+      "count": 6,
+      "passRate": 1,
+      "statusPassRateGe90": 1,
+      "avgScore": 100,
+      "avgTokens": 2224.5,
+      "avgEffectiveTokens": 2217,
+      "avgCostUsd": null,
+      "avgLatencyMs": 55710.333333333336,
+      "avgToolCalls": 13.333333333333334,
+      "avgLearnedInterfaceCalls": 0,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0,
+      "avgReuseRate": 0,
+      "passCount": 6,
+      "runtimeErrorCount": 0,
+      "infrastructureErrorCount": 0,
+      "phaseBreakdown": {
+        "train": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "warm": {
+          "count": 4,
+          "passed": 4,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "hard": {
+          "count": 1,
+          "passed": 1,
+          "passRate": 1,
+          "avgScore": 100,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        },
+        "unknown": {
+          "count": 0,
+          "passed": 0,
+          "passRate": null,
+          "avgScore": null,
+          "runtimeErrors": 0,
+          "infrastructureErrors": 0
+        }
+      },
+      "runtimeErrorRate": 0,
+      "infrastructureErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "coverage": {
+    "arms": [
+      "datafetch-learned"
+    ],
+    "byArm": {
+      "datafetch-learned": {
+        "rows": 126,
+        "tasks": 126,
+        "officialScoredRows": 126,
+        "runtimeErrorRows": 3
+      }
+    },
+    "pairedTaskCounts": {
+      "datafetch-learned_vs_skillcraft-base": 0,
+      "datafetch-learned_vs_skillcraft-skill": 0
+    }
+  },
+  "pairedContrasts": [
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-base",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    },
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-skill",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    }
+  ]
+}
