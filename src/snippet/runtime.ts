@@ -137,6 +137,18 @@ export class DiskSnippetRuntime implements SnippetRuntime {
         : undefined;
     if (answer !== undefined) recorder.setAnswer(answer);
     if (validation !== undefined) recorder.setAnswerValidation(validation);
+    // Echo quality warnings to stderr so they're visible when the agent
+    // runs the snippet via `pnpm datafetch:run` during rehearsal. The
+    // warning doesn't block; the eval still scores the answer normally.
+    let augmentedStderr = stderr;
+    if (answer?.qualityWarnings && answer.qualityWarnings.length > 0) {
+      const lines = answer.qualityWarnings.map(
+        (w) =>
+          `[df.answer] quality warning (${w.code}): ${w.message}` +
+          (w.examples.length > 0 ? `\n[df.answer]   examples: ${w.examples.slice(0, 3).join(", ")}` : ""),
+      );
+      augmentedStderr = `${augmentedStderr}${lines.join("\n")}\n`;
+    }
     const effectiveExitCode =
       phase === "commit" && validation?.accepted !== true ? 1 : exitCode;
 
@@ -200,7 +212,7 @@ export class DiskSnippetRuntime implements SnippetRuntime {
           artifactDir: phaseMetadata.artifactDir,
           source,
           stdout,
-          stderr,
+          stderr: augmentedStderr,
           exitCode: effectiveExitCode,
           trajectory,
           cost: snapshotCost(dispatchCtx.cost),
@@ -236,7 +248,7 @@ export class DiskSnippetRuntime implements SnippetRuntime {
 
     return {
       stdout,
-      stderr,
+      stderr: augmentedStderr,
       exitCode: effectiveExitCode,
       trajectoryId: recorder.id,
       cost: snapshotCost(dispatchCtx.cost),

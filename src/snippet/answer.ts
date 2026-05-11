@@ -1,5 +1,20 @@
 export type AnswerStatus = "answered" | "partial" | "unsupported";
 
+// Soft warning attached to the answer envelope when the recursive
+// value scan finds too many placeholder strings ("Unknown", "None",
+// "null", "N/A", "") or zero numeric fields. Mirrors the
+// LOW_QUALITY_VALUES heuristic SkillCraft uses; doesn't block the
+// answer (the evaluator still scores it), just surfaces a signal the
+// agent can see on rehearsal runs through `pnpm datafetch:run`.
+export type AnswerQualityWarning = {
+  code: "low_quality_output";
+  message: string;
+  totalFields: number;
+  placeholderFields: number;
+  zeroNumericFields: number;
+  examples: string[];
+};
+
 export type AnswerIntentRelation =
   | "same"
   | "derived"
@@ -28,6 +43,7 @@ export type AnswerInput = {
 
 export type AnswerEnvelope = AnswerInput & {
   createdAt: string;
+  qualityWarnings?: AnswerQualityWarning[];
 };
 
 export type AnswerValidation = {
@@ -49,10 +65,124 @@ export type AnswerValidation = {
 
 const ANSWER_ENVELOPE_SYMBOL = Symbol.for("datafetch.answer");
 
+// Strings that almost always indicate the agent's extraction logic
+// missed the field rather than the field genuinely being absent. Ported
+// from SkillCraft's `LOW_QUALITY_VALUES`. Treats the empty string as a
+// placeholder too — a real string answer should never be "".
+const PLACEHOLDER_STRINGS = new Set([
+  "Unknown", "unknown", "UNKNOWN",
+  "None", "none", "NONE",
+  "null", "NULL",
+  "N/A", "n/a", "NA",
+  "",
+]);
+
+type QualityScan = {
+  totalFields: number;
+  placeholderFields: number;
+  zeroNumericFields: number;
+  examples: string[];
+};
+
+function scanQuality(
+  value: unknown,
+  path: string,
+  scan: QualityScan,
+  depth: number,
+  maxDepth: number,
+): void {
+  if (depth > maxDepth) return;
+  if (value === null) {
+    scan.totalFields += 1;
+    scan.placeholderFields += 1;
+    if (scan.examples.length < 5) scan.examples.push(`${path}=null`);
+    return;
+  }
+  if (typeof value === "string") {
+    scan.totalFields += 1;
+    if (PLACEHOLDER_STRINGS.has(value)) {
+      scan.placeholderFields += 1;
+      if (scan.examples.length < 5) scan.examples.push(`${path}=${JSON.stringify(value)}`);
+    }
+    return;
+  }
+  if (typeof value === "number") {
+    scan.totalFields += 1;
+    if (value === 0 && Number.isFinite(value)) {
+      scan.zeroNumericFields += 1;
+      if (scan.examples.length < 5) scan.examples.push(`${path}=0`);
+    }
+    return;
+  }
+  if (typeof value === "boolean") {
+    scan.totalFields += 1;
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      scan.totalFields += 1;
+      scan.placeholderFields += 1;
+      if (scan.examples.length < 5) scan.examples.push(`${path}=[]`);
+      return;
+    }
+    for (let i = 0; i < value.length; i += 1) {
+      scanQuality(value[i], `${path}[${i}]`, scan, depth + 1, maxDepth);
+    }
+    return;
+  }
+  if (typeof value === "object") {
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      scanQuality(child, path ? `${path}.${key}` : key, scan, depth + 1, maxDepth);
+    }
+    return;
+  }
+  // undefined / function / symbol / etc — count as a field but don't classify
+  scan.totalFields += 1;
+}
+
+function checkAnswerQuality(value: unknown): AnswerQualityWarning[] {
+  if (value === undefined) return [];
+  const scan: QualityScan = {
+    totalFields: 0,
+    placeholderFields: 0,
+    zeroNumericFields: 0,
+    examples: [],
+  };
+  scanQuality(value, "value", scan, 0, 6);
+  if (scan.totalFields === 0) return [];
+  const problematic = scan.placeholderFields + scan.zeroNumericFields;
+  const ratio = problematic / scan.totalFields;
+  // Two trip conditions, matching the SkillCraft heuristic:
+  //   1. Over half the fields are problematic.
+  //   2. Almost every field is a placeholder string (extraction
+  //      clearly missed; even one good value isn't enough to disprove).
+  const tripsRatio = ratio > 0.5;
+  const tripsAlmostAllPlaceholders =
+    scan.totalFields > 2 && scan.placeholderFields >= scan.totalFields - 1;
+  if (!tripsRatio && !tripsAlmostAllPlaceholders) return [];
+  return [
+    {
+      code: "low_quality_output",
+      message:
+        `Output has ${scan.placeholderFields} placeholder field(s) ` +
+        `(Unknown / None / null / N/A / "") and ${scan.zeroNumericFields} ` +
+        `zero numeric field(s) out of ${scan.totalFields} total. The agent's ` +
+        `extraction logic likely didn't match the actual data shape — ` +
+        `probe the tool response with \`pnpm datafetch:run\` and fix before committing.`,
+      totalFields: scan.totalFields,
+      placeholderFields: scan.placeholderFields,
+      zeroNumericFields: scan.zeroNumericFields,
+      examples: scan.examples,
+    },
+  ];
+}
+
 export function makeAnswerEnvelope(input: AnswerInput): AnswerEnvelope {
+  const qualityWarnings = checkAnswerQuality(input.value);
   const envelope: AnswerEnvelope = {
     ...input,
     createdAt: new Date().toISOString(),
+    ...(qualityWarnings.length > 0 ? { qualityWarnings } : {}),
   };
   Object.defineProperty(envelope, ANSWER_ENVELOPE_SYMBOL, {
     value: true,
