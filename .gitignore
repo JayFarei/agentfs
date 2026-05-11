@@ -15,3 +15,5 @@ data/
 .agents/
 .claude/
 .opentraces.json
+eval/skillcraft/results/
+monster_compendium.json

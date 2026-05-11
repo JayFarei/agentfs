@@ -1,0 +1,161 @@
+{
+  "generatedAt": "2026-05-10T17:54:34.002Z",
+  "input": "/Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/pilot-6families-e1e2-v4-normalized.jsonl",
+  "rowCount": 12,
+  "arms": {
+    "datafetch-learned": {
+      "count": 12,
+      "passRate": 0.3333333333333333,
+      "avgScore": 31.09166666666667,
+      "avgTokens": 244564.33333333334,
+      "avgEffectiveTokens": 19252.333333333332,
+      "avgCostUsd": null,
+      "avgLatencyMs": 23723.583333333332,
+      "avgToolCalls": 15.166666666666666
+    }
+  },
+  "levels": {
+    "e1": {
+      "count": 6,
+      "passRate": 0.16666666666666666,
+      "avgScore": 24.133333333333336,
+      "avgTokens": 212180,
+      "avgEffectiveTokens": 18537.333333333332,
+      "avgCostUsd": null,
+      "avgLatencyMs": 23167.666666666668,
+      "avgToolCalls": 25.333333333333332
+    },
+    "e2": {
+      "count": 6,
+      "passRate": 0.5,
+      "avgScore": 38.050000000000004,
+      "avgTokens": 276948.6666666667,
+      "avgEffectiveTokens": 19967.333333333332,
+      "avgCostUsd": null,
+      "avgLatencyMs": 24279.5,
+      "avgToolCalls": 5
+    }
+  },
+  "families": {
+    "cat-facts-collector": {
+      "count": 2,
+      "passRate": 0.5,
+      "avgScore": 37.5,
+      "avgTokens": 236752,
+      "avgEffectiveTokens": 17040,
+      "avgCostUsd": null,
+      "avgLatencyMs": 21918.5,
+      "avgToolCalls": 9
+    },
+    "countries-encyclopedia": {
+      "count": 2,
+      "passRate": 0.5,
+      "avgScore": 61.05,
+      "avgTokens": 354183.5,
+      "avgEffectiveTokens": 25095.5,
+      "avgCostUsd": null,
+      "avgLatencyMs": 27205.5,
+      "avgToolCalls": 71.5
+    },
+    "jsonplaceholder-blog-analyzer": {
+      "count": 2,
+      "passRate": 0,
+      "avgScore": 0,
+      "avgTokens": 248892.5,
+      "avgEffectiveTokens": 15804.5,
+      "avgCostUsd": null,
+      "avgLatencyMs": 23311,
+      "avgToolCalls": 1.5
+    },
+    "openmeteo-weather": {
+      "count": 2,
+      "passRate": 0.5,
+      "avgScore": 40,
+      "avgTokens": 249527.5,
+      "avgEffectiveTokens": 21943.5,
+      "avgCostUsd": null,
+      "avgLatencyMs": 19863,
+      "avgToolCalls": 4.5
+    },
+    "university-directory-builder": {
+      "count": 2,
+      "passRate": 0.5,
+      "avgScore": 48,
+      "avgTokens": 224826,
+      "avgEffectiveTokens": 17658,
+      "avgCostUsd": null,
+      "avgLatencyMs": 30168,
+      "avgToolCalls": 4.5
+    },
+    "world-bank-economic-snapshot": {
+      "count": 2,
+      "passRate": 0,
+      "avgScore": 0,
+      "avgTokens": 153204.5,
+      "avgEffectiveTokens": 17972.5,
+      "avgCostUsd": null,
+      "avgLatencyMs": 19875.5,
+      "avgToolCalls": 0
+    }
+  },
+  "pairedContrasts": [
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-base",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    },
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-skill",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    }
+  ]
+}

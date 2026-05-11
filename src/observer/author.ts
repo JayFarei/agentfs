@@ -159,7 +159,15 @@ type GenerateArgs = {
 };
 
 function generatePureSource(args: GenerateArgs): string | null {
-  const { template, trajectory } = args;
+  const { trajectory } = args;
+  const baseTemplate =
+    args.template.name === "rangeTableMetric"
+      ? args.template
+      : bindRowsToPriorRetrieval(args.template);
+  const template =
+    baseTemplate.name === "rangeTableMetric"
+      ? baseTemplate
+      : pruneUnusedTemplateSteps(baseTemplate);
   if (template.steps.length === 0) return null;
 
   // External parameters: those not derived from earlier-call outputs.
@@ -238,6 +246,78 @@ function generatePureSource(args: GenerateArgs): string | null {
     `});`,
     "",
   ].join("\n");
+}
+
+function bindRowsToPriorRetrieval(template: CallTemplate): CallTemplate {
+  const steps = template.steps.map((step) => ({
+    ...step,
+    inputBindings: { ...step.inputBindings },
+  }));
+
+  for (let i = 0; i < steps.length; i += 1) {
+    const step = steps[i]!;
+    const rowsBinding = step.inputBindings["rows"];
+    if (
+      !step.primitive.startsWith("lib.") ||
+      rowsBinding?.kind !== "param" ||
+      rowsBinding.param !== "rows"
+    ) {
+      continue;
+    }
+
+    const retrieval = nearestPriorDbStep(steps, i);
+    if (!retrieval) continue;
+    step.inputBindings["rows"] = { kind: "ref", ref: retrieval.outputName };
+  }
+
+  return {
+    ...template,
+    steps,
+  };
+}
+
+function nearestPriorDbStep(
+  steps: TemplateStep[],
+  beforeIndex: number,
+): TemplateStep | undefined {
+  for (let i = beforeIndex - 1; i >= 0; i -= 1) {
+    const step = steps[i]!;
+    if (step.primitive.startsWith("db.")) return step;
+  }
+  return undefined;
+}
+
+function pruneUnusedTemplateSteps(template: CallTemplate): CallTemplate {
+  const byOutput = new Map(template.steps.map((step) => [step.outputName, step]));
+  const needed = new Set<string>([template.finalOutputBinding]);
+  const queue = [template.finalOutputBinding];
+
+  while (queue.length > 0) {
+    const outputName = queue.pop()!;
+    const step = byOutput.get(outputName);
+    if (!step) continue;
+    for (const binding of Object.values(step.inputBindings)) {
+      if (binding.kind !== "ref") continue;
+      const referencedOutput = binding.ref.split(".")[0];
+      if (!referencedOutput || needed.has(referencedOutput)) continue;
+      needed.add(referencedOutput);
+      queue.push(referencedOutput);
+    }
+  }
+
+  const steps = template.steps.filter((step) => needed.has(step.outputName));
+  const usedParams = new Set<string>();
+  for (const step of steps) {
+    for (const binding of Object.values(step.inputBindings)) {
+      if (binding.kind === "param") usedParams.add(binding.param);
+    }
+  }
+
+  return {
+    ...template,
+    steps,
+    parameters: template.parameters.filter((param) => usedParams.has(param.name)),
+  };
 }
 
 // --- Source helpers --------------------------------------------------------
@@ -395,7 +475,7 @@ function caseCollectionIdent(template: CallTemplate): string | null {
 function renderInputType(params: TemplateParameter[]): string {
   if (params.length === 0) return "Record<string, unknown>";
   const fields = params
-    .map((p) => `${jsonProp(p.name)}: ${jsTypeToTs(p.jsType)}`)
+    .map((p) => `${jsonProp(p.name)}${isOptionalInputParam(p) ? "?" : ""}: ${jsTypeToTs(p.jsType)}`)
     .join("; ");
   return `{ ${fields} }`;
 }
@@ -403,9 +483,16 @@ function renderInputType(params: TemplateParameter[]): string {
 function renderInputSchema(params: TemplateParameter[]): string {
   if (params.length === 0) return "v.object({})";
   const fields = params
-    .map((p) => `${jsonProp(p.name)}: ${jsTypeToValibot(p.jsType)}`)
+    .map((p) => {
+      const schema = jsTypeToValibot(p.jsType);
+      return `${jsonProp(p.name)}: ${isOptionalInputParam(p) ? `v.optional(${schema})` : schema}`;
+    })
     .join(", ");
   return `v.object({ ${fields} })`;
+}
+
+function isOptionalInputParam(param: TemplateParameter): boolean {
+  return param.name === "opts";
 }
 
 function jsTypeToTs(t: TypeLabel): string {

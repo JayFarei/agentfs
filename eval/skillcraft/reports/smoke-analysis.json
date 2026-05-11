@@ -1,0 +1,171 @@
+{
+  "generatedAt": "2026-05-10T16:43:58.598Z",
+  "input": "/Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/smoke-normalized-results.jsonl",
+  "rowCount": 18,
+  "arms": {
+    "datafetch-learned": {
+      "count": 18,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 93091.16666666667,
+      "avgEffectiveTokens": 3548.0555555555557,
+      "avgCostUsd": null,
+      "avgLatencyMs": 15161.388888888889,
+      "avgToolCalls": 0.3333333333333333
+    }
+  },
+  "levels": {
+    "cold": {
+      "count": 6,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 167731,
+      "avgEffectiveTokens": 6344.333333333333,
+      "avgCostUsd": null,
+      "avgLatencyMs": 26460.5,
+      "avgToolCalls": 1
+    },
+    "hard": {
+      "count": 6,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 58150.333333333336,
+      "avgEffectiveTokens": 2278.3333333333335,
+      "avgCostUsd": null,
+      "avgLatencyMs": 8151.833333333333,
+      "avgToolCalls": 0
+    },
+    "warm": {
+      "count": 6,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 53392.166666666664,
+      "avgEffectiveTokens": 2021.5,
+      "avgCostUsd": null,
+      "avgLatencyMs": 10871.833333333334,
+      "avgToolCalls": 0
+    }
+  },
+  "families": {
+    "blog": {
+      "count": 3,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 101766.66666666667,
+      "avgEffectiveTokens": 3249.3333333333335,
+      "avgCostUsd": null,
+      "avgLatencyMs": 13454.666666666666,
+      "avgToolCalls": 0.3333333333333333
+    },
+    "country": {
+      "count": 3,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 92543.66666666667,
+      "avgEffectiveTokens": 3370.3333333333335,
+      "avgCostUsd": null,
+      "avgLatencyMs": 24831.333333333332,
+      "avgToolCalls": 0.3333333333333333
+    },
+    "economic": {
+      "count": 3,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 93060.66666666667,
+      "avgEffectiveTokens": 3375.3333333333335,
+      "avgCostUsd": null,
+      "avgLatencyMs": 12475.666666666666,
+      "avgToolCalls": 0.3333333333333333
+    },
+    "profile": {
+      "count": 3,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 84270.33333333333,
+      "avgEffectiveTokens": 3587.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 10778.666666666666,
+      "avgToolCalls": 0.3333333333333333
+    },
+    "university": {
+      "count": 3,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 103053.66666666667,
+      "avgEffectiveTokens": 3853.6666666666665,
+      "avgCostUsd": null,
+      "avgLatencyMs": 17361,
+      "avgToolCalls": 0.3333333333333333
+    },
+    "weather": {
+      "count": 3,
+      "passRate": 1,
+      "avgScore": 100,
+      "avgTokens": 83852,
+      "avgEffectiveTokens": 3852,
+      "avgCostUsd": null,
+      "avgLatencyMs": 12067,
+      "avgToolCalls": 0.3333333333333333
+    }
+  },
+  "pairedContrasts": [
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-base",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    },
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-skill",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    }
+  ]
+}

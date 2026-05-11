@@ -1,0 +1,407 @@
+{
+  "title": "Datafetch low-reuse trace: vocabulary-builder",
+  "episodes": [
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/e1",
+      "level": "e1",
+      "phase": "train",
+      "officialStatus": "fail",
+      "officialScorePercent": 0,
+      "agentExitCode": 1,
+      "snippetExitCode": 0,
+      "toolCalls": 0,
+      "libFunctionsAvailable": 0,
+      "libFunctionsUsed": 0,
+      "libFunctionsCreated": 0,
+      "reuseRate": 0,
+      "libStatus": {
+        "availableAtStart": [],
+        "functionsAfterAgent": [],
+        "committedNewFunctions": 0,
+        "libCalls": 0,
+        "toolCalls": 0,
+        "reuseRate": 0
+      },
+      "agentEvents": [
+        {
+          "type": "thread.started",
+          "thread_id": "019e1370-c8fb-7160-91a2-abd3ee552cd0"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "error",
+          "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+        },
+        {
+          "type": "turn.failed",
+          "error": {
+            "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+          }
+        }
+      ],
+      "agentPromptPreview": "You are solving one official SkillCraft task inside a Datafetch workspace.\n\nTask: scaled_tasks/vocabulary-builder/e1\n\nRead task.md, AGENTS.md, df.d.ts, and any initial workspace files.\nEdit scripts/answer.ts so it completes the task.\nUse existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.\nWhen creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.\nUse df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.\nThe evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.\nDo not write prose as the answer. The file content is the deliverable.",
+      "taskMarkdownPreview": "# Task: Vocabulary Builder (3 Words \u00d7 3 APIs) - E1\n\nBuild vocabulary cards for **3 English words** using 3 API endpoints per word.\n\n## Objective\n\nFor each of the following **3 words**, collect:\n1. **Lookup**: basic word lookup\n2. **Synonyms**: related words\n3. **Definitions**: all meanings\n\nCreate a **vocabulary profile** with complexity and usage metrics.\n\n## Words to Define\n\n| # | Word | Expected Difficulty |\n|---|------|---------------------|\n| 1 | ephemeral | Advanced |\n| 2 | ubiquitous | Advanced |\n| 3 | pragmatic | Intermediate |\n\n## Required Output\n\nSave results to `vocabulary_cards.json`:\n\n```json\n{\n  \"words\": [\n    {\"word\": \"ephemeral\", \"phonetic\": \"/\u026a\u02c8fem(\u0259)r\u0259l/\", \"meanings\": [], \"synonyms\": [], \"vocabulary_profile\": {\"complexity\": \"complex\", \"difficulty_level\": \"advanced\"}}\n  ],\n  \"summary\": {\"total_words\": 3, \"total_definitions\": 10, \"total_synonyms\": 20},\n  \"analysis_date\": \"2024-01-15\"\n}\n```\n\n## Tools Available\n\n- `local-dictionary_lookup`: Lookup\n- `local-dictionary_synonyms`: Synonyms\n- `local-dictionary_definitions`: Definitions\n\n**File System:** `filesystem-write_file`, `filesystem-read_file`\n**Completion:** `local-claim_done` (REQUIRED)\n\n## Workflow\n\nFor each word (ephemeral, ubiquitous, pragmatic):\n1. `local-dictionary_lookup`\n2. `local-dictionary_synonyms`\n3. `local-dictionary_definitions`\n\n## Complexity Rating\n\n- **Simple**: 1-2 syllables, common usage\n- **Moderate**: 3 syllables, intermediate usage\n- **Complex**: 4+ syllables, advanced usage\n\n## Important\n\n1. Process ALL 3 words completely\n2. Include all parts of speech\n3. Call `local-claim_done` to complete\n",
+      "evaluatorResult": {
+        "exitCode": 1,
+        "elapsedMs": 34.01979199999914,
+        "scoreJson": {
+          "passed": false,
+          "status": "fail",
+          "score": {
+            "achieved": 0,
+            "max": 10,
+            "percent": 0
+          },
+          "items": [
+            {
+              "name": "output_file",
+              "score": 0,
+              "max_score": 10,
+              "status": "fail",
+              "details": "vocabulary_cards.json not found"
+            }
+          ],
+          "errors": [],
+          "warnings": []
+        }
+      }
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/e2",
+      "level": "e2",
+      "phase": "warm",
+      "officialStatus": "fail",
+      "officialScorePercent": 0,
+      "agentExitCode": 1,
+      "snippetExitCode": 0,
+      "toolCalls": 0,
+      "libFunctionsAvailable": 0,
+      "libFunctionsUsed": 0,
+      "libFunctionsCreated": 0,
+      "reuseRate": 0,
+      "libStatus": {
+        "availableAtStart": [],
+        "functionsAfterAgent": [],
+        "committedNewFunctions": 0,
+        "libCalls": 0,
+        "toolCalls": 0,
+        "reuseRate": 0
+      },
+      "agentEvents": [
+        {
+          "type": "thread.started",
+          "thread_id": "019e1370-d2d8-78d0-808f-7480c5940560"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "error",
+          "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+        },
+        {
+          "type": "turn.failed",
+          "error": {
+            "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+          }
+        }
+      ],
+      "agentPromptPreview": "You are solving one official SkillCraft task inside a Datafetch workspace.\n\nTask: scaled_tasks/vocabulary-builder/e2\n\nRead task.md, AGENTS.md, df.d.ts, and any initial workspace files.\nEdit scripts/answer.ts so it completes the task.\nUse existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.\nWhen creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.\nUse df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.\nThe evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.\nDo not write prose as the answer. The file content is the deliverable.",
+      "taskMarkdownPreview": "# Task: Vocabulary Builder (3 Words \u00d7 3 APIs) - E2\n\nBuild vocabulary cards for **3 English words** using 3 API endpoints per word.\n\n## Objective\n\nFor each of the following **3 words**, collect:\n1. **Details**: comprehensive word info\n2. **Synonyms**: related words\n3. **Phonetics**: pronunciation info\n\nCreate a **vocabulary profile** with complexity and usage metrics.\n\n## Words to Define\n\n| # | Word | Expected Difficulty |\n|---|------|---------------------|\n| 1 | ephemeral | Advanced |\n| 2 | ubiquitous | Advanced |\n| 3 | pragmatic | Intermediate |\n\n## Required Output\n\nSave results to `vocabulary_cards.json`:\n\n```json\n{\n  \"words\": [\n    {\"word\": \"ephemeral\", \"phonetic\": \"/\u026a\u02c8fem(\u0259)r\u0259l/\", \"meanings\": [], \"synonyms\": [], \"vocabulary_profile\": {\"complexity\": \"complex\", \"difficulty_level\": \"advanced\"}}\n  ],\n  \"summary\": {\"total_words\": 3, \"total_definitions\": 10, \"total_synonyms\": 20},\n  \"analysis_date\": \"2024-01-15\"\n}\n```\n\n## Tools Available\n\n- `local-dictionary_word_details`: Details\n- `local-dictionary_synonyms`: Synonyms\n- `local-dictionary_phonetics`: Phonetics\n\n**File System:** `filesystem-write_file`, `filesystem-read_file`\n**Completion:** `local-claim_done` (REQUIRED)\n\n## Workflow\n\nFor each word (ephemeral, ubiquitous, pragmatic):\n1. `local-dictionary_word_details`\n2. `local-dictionary_synonyms`\n3. `local-dictionary_phonetics`\n\n## Complexity Rating\n\n- **Simple**: 1-2 syllables, common usage\n- **Moderate**: 3 syllables, intermediate usage\n- **Complex**: 4+ syllables, advanced usage\n\n## Important\n\n1. Process ALL 3 words completely\n2. Include all parts of speech\n3. Call `local-claim_done` to complete\n",
+      "evaluatorResult": {
+        "exitCode": 1,
+        "elapsedMs": 37.179667000000336,
+        "scoreJson": {
+          "passed": false,
+          "status": "fail",
+          "score": {
+            "achieved": 0,
+            "max": 10,
+            "percent": 0
+          },
+          "items": [
+            {
+              "name": "output_file",
+              "score": 0,
+              "max_score": 10,
+              "status": "fail",
+              "details": "vocabulary_cards.json not found"
+            }
+          ],
+          "errors": [],
+          "warnings": []
+        }
+      }
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/e3",
+      "level": "e3",
+      "phase": "warm",
+      "officialStatus": "fail",
+      "officialScorePercent": 0,
+      "agentExitCode": 1,
+      "snippetExitCode": 0,
+      "toolCalls": 0,
+      "libFunctionsAvailable": 0,
+      "libFunctionsUsed": 0,
+      "libFunctionsCreated": 0,
+      "reuseRate": 0,
+      "libStatus": {
+        "availableAtStart": [],
+        "functionsAfterAgent": [],
+        "committedNewFunctions": 0,
+        "libCalls": 0,
+        "toolCalls": 0,
+        "reuseRate": 0
+      },
+      "agentEvents": [
+        {
+          "type": "thread.started",
+          "thread_id": "019e1370-e792-77d2-bb1f-e32021c9e41c"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "error",
+          "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+        },
+        {
+          "type": "turn.failed",
+          "error": {
+            "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+          }
+        }
+      ],
+      "agentPromptPreview": "You are solving one official SkillCraft task inside a Datafetch workspace.\n\nTask: scaled_tasks/vocabulary-builder/e3\n\nRead task.md, AGENTS.md, df.d.ts, and any initial workspace files.\nEdit scripts/answer.ts so it completes the task.\nUse existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.\nWhen creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.\nUse df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.\nThe evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.\nDo not write prose as the answer. The file content is the deliverable.",
+      "taskMarkdownPreview": "# Task: Vocabulary Builder (3 Words \u00d7 3 APIs) - E3\n\nBuild vocabulary cards for **3 English words** using 3 API endpoints per word.\n\n## Objective\n\nFor each of the following **3 words**, collect:\n1. **Lookup**: basic word lookup\n2. **Definitions**: all meanings\n3. **Phonetics**: pronunciation info\n\nCreate a **vocabulary profile** with complexity and usage metrics.\n\n## Words to Define\n\n| # | Word | Expected Difficulty |\n|---|------|---------------------|\n| 1 | ephemeral | Advanced |\n| 2 | ubiquitous | Advanced |\n| 3 | pragmatic | Intermediate |\n\n## Required Output\n\nSave results to `vocabulary_cards.json`:\n\n```json\n{\n  \"words\": [\n    {\"word\": \"ephemeral\", \"phonetic\": \"/\u026a\u02c8fem(\u0259)r\u0259l/\", \"meanings\": [], \"synonyms\": [], \"vocabulary_profile\": {\"complexity\": \"complex\", \"difficulty_level\": \"advanced\"}}\n  ],\n  \"summary\": {\"total_words\": 3, \"total_definitions\": 10, \"total_synonyms\": 20},\n  \"analysis_date\": \"2024-01-15\"\n}\n```\n\n## Tools Available\n\n- `local-dictionary_lookup`: Lookup\n- `local-dictionary_definitions`: Definitions\n- `local-dictionary_phonetics`: Phonetics\n\n**File System:** `filesystem-write_file`, `filesystem-read_file`\n**Completion:** `local-claim_done` (REQUIRED)\n\n## Workflow\n\nFor each word (ephemeral, ubiquitous, pragmatic):\n1. `local-dictionary_lookup`\n2. `local-dictionary_definitions`\n3. `local-dictionary_phonetics`\n\n## Complexity Rating\n\n- **Simple**: 1-2 syllables, common usage\n- **Moderate**: 3 syllables, intermediate usage\n- **Complex**: 4+ syllables, advanced usage\n\n## Important\n\n1. Process ALL 3 words completely\n2. Include all parts of speech\n3. Call `local-claim_done` to complete\n",
+      "evaluatorResult": {
+        "exitCode": 1,
+        "elapsedMs": 35.67874999999913,
+        "scoreJson": {
+          "passed": false,
+          "status": "fail",
+          "score": {
+            "achieved": 0,
+            "max": 10,
+            "percent": 0
+          },
+          "items": [
+            {
+              "name": "output_file",
+              "score": 0,
+              "max_score": 10,
+              "status": "fail",
+              "details": "vocabulary_cards.json not found"
+            }
+          ],
+          "errors": [],
+          "warnings": []
+        }
+      }
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/m1",
+      "level": "m1",
+      "phase": "warm",
+      "officialStatus": "fail",
+      "officialScorePercent": 0,
+      "agentExitCode": 1,
+      "snippetExitCode": 0,
+      "toolCalls": 0,
+      "libFunctionsAvailable": 0,
+      "libFunctionsUsed": 0,
+      "libFunctionsCreated": 0,
+      "reuseRate": 0,
+      "libStatus": {
+        "availableAtStart": [],
+        "functionsAfterAgent": [],
+        "committedNewFunctions": 0,
+        "libCalls": 0,
+        "toolCalls": 0,
+        "reuseRate": 0
+      },
+      "agentEvents": [
+        {
+          "type": "thread.started",
+          "thread_id": "019e1370-f335-7231-a84c-a90daed00d57"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "error",
+          "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+        },
+        {
+          "type": "turn.failed",
+          "error": {
+            "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+          }
+        }
+      ],
+      "agentPromptPreview": "You are solving one official SkillCraft task inside a Datafetch workspace.\n\nTask: scaled_tasks/vocabulary-builder/m1\n\nRead task.md, AGENTS.md, df.d.ts, and any initial workspace files.\nEdit scripts/answer.ts so it completes the task.\nUse existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.\nWhen creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.\nUse df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.\nThe evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.\nDo not write prose as the answer. The file content is the deliverable.",
+      "taskMarkdownPreview": "# Task: Vocabulary Builder (4 Words \u00d7 4 APIs) - M1\n\nBuild vocabulary cards for **4 English words** using 4 API endpoints per word.\n\n## Objective\n\nFor each of the following **4 words**, collect:\n1. **Lookup**: basic word lookup\n2. **Details**: comprehensive word info\n3. **Synonyms**: related words\n4. **Definitions**: all meanings\n\nCreate a **vocabulary profile** with complexity and usage metrics.\n\n## Words to Define\n\n| # | Word | Expected Difficulty |\n|---|------|---------------------|\n| 1 | ephemeral | Advanced |\n| 2 | ubiquitous | Advanced |\n| 3 | pragmatic | Intermediate |\n| 4 | eloquent | Intermediate |\n\n## Required Output\n\nSave results to `vocabulary_cards.json`:\n\n```json\n{\n  \"words\": [\n    {\"word\": \"ephemeral\", \"phonetic\": \"/\u026a\u02c8fem(\u0259)r\u0259l/\", \"meanings\": [], \"synonyms\": [], \"vocabulary_profile\": {\"complexity\": \"complex\", \"difficulty_level\": \"advanced\"}}\n  ],\n  \"summary\": {\"total_words\": 4, \"total_definitions\": 10, \"total_synonyms\": 20},\n  \"analysis_date\": \"2024-01-15\"\n}\n```\n\n## Tools Available\n\n- `local-dictionary_lookup`: Lookup\n- `local-dictionary_word_details`: Details\n- `local-dictionary_synonyms`: Synonyms\n- `local-dictionary_definitions`: Definitions\n\n**File System:** `filesystem-write_file`, `filesystem-read_file`\n**Completion:** `local-claim_done` (REQUIRED)\n\n## Workflow\n\nFor each word (ephemeral, ubiquitous, pragmatic, eloquent):\n1. `local-dictionary_lookup`\n2. `local-dictionary_word_details`\n3. `local-dictionary_synonyms`\n4. `local-dictionary_definitions`\n\n## Complexity Rating\n\n- **Simple**: 1-2 syllables, common usage\n- **Moderate**: 3 syllables, intermediate usage\n- **Complex**: 4+ syllables, advanced usage\n\n## Important\n\n1. Process ALL 4 words completely\n2. Include all parts of speech\n3. Call `local-claim_done` to complete\n",
+      "evaluatorResult": {
+        "exitCode": 1,
+        "elapsedMs": 36.342625000001135,
+        "scoreJson": {
+          "passed": false,
+          "status": "fail",
+          "score": {
+            "achieved": 0,
+            "max": 10,
+            "percent": 0
+          },
+          "items": [
+            {
+              "name": "output_file",
+              "score": 0,
+              "max_score": 10,
+              "status": "fail",
+              "details": "vocabulary_cards.json not found"
+            }
+          ],
+          "errors": [],
+          "warnings": []
+        }
+      }
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/m2",
+      "level": "m2",
+      "phase": "warm",
+      "officialStatus": "fail",
+      "officialScorePercent": 0,
+      "agentExitCode": 1,
+      "snippetExitCode": 0,
+      "toolCalls": 0,
+      "libFunctionsAvailable": 0,
+      "libFunctionsUsed": 0,
+      "libFunctionsCreated": 0,
+      "reuseRate": 0,
+      "libStatus": {
+        "availableAtStart": [],
+        "functionsAfterAgent": [],
+        "committedNewFunctions": 0,
+        "libCalls": 0,
+        "toolCalls": 0,
+        "reuseRate": 0
+      },
+      "agentEvents": [
+        {
+          "type": "thread.started",
+          "thread_id": "019e1371-00aa-7ed1-8505-b2930ebd5099"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "error",
+          "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+        },
+        {
+          "type": "turn.failed",
+          "error": {
+            "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+          }
+        }
+      ],
+      "agentPromptPreview": "You are solving one official SkillCraft task inside a Datafetch workspace.\n\nTask: scaled_tasks/vocabulary-builder/m2\n\nRead task.md, AGENTS.md, df.d.ts, and any initial workspace files.\nEdit scripts/answer.ts so it completes the task.\nUse existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.\nWhen creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.\nUse df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.\nThe evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.\nDo not write prose as the answer. The file content is the deliverable.",
+      "taskMarkdownPreview": "# Task: Vocabulary Builder (4 Words \u00d7 4 APIs) - M2\n\nBuild vocabulary cards for **4 English words** using 4 API endpoints per word.\n\n## Objective\n\nFor each of the following **4 words**, collect:\n1. **Lookup**: basic word lookup\n2. **Synonyms**: related words\n3. **Definitions**: all meanings\n4. **Phonetics**: pronunciation info\n\nCreate a **vocabulary profile** with complexity and usage metrics.\n\n## Words to Define\n\n| # | Word | Expected Difficulty |\n|---|------|---------------------|\n| 1 | ephemeral | Advanced |\n| 2 | ubiquitous | Advanced |\n| 3 | pragmatic | Intermediate |\n| 4 | eloquent | Intermediate |\n\n## Required Output\n\nSave results to `vocabulary_cards.json`:\n\n```json\n{\n  \"words\": [\n    {\"word\": \"ephemeral\", \"phonetic\": \"/\u026a\u02c8fem(\u0259)r\u0259l/\", \"meanings\": [], \"synonyms\": [], \"vocabulary_profile\": {\"complexity\": \"complex\", \"difficulty_level\": \"advanced\"}}\n  ],\n  \"summary\": {\"total_words\": 4, \"total_definitions\": 10, \"total_synonyms\": 20},\n  \"analysis_date\": \"2024-01-15\"\n}\n```\n\n## Tools Available\n\n- `local-dictionary_lookup`: Lookup\n- `local-dictionary_synonyms`: Synonyms\n- `local-dictionary_definitions`: Definitions\n- `local-dictionary_phonetics`: Phonetics\n\n**File System:** `filesystem-write_file`, `filesystem-read_file`\n**Completion:** `local-claim_done` (REQUIRED)\n\n## Workflow\n\nFor each word (ephemeral, ubiquitous, pragmatic, eloquent):\n1. `local-dictionary_lookup`\n2. `local-dictionary_synonyms`\n3. `local-dictionary_definitions`\n4. `local-dictionary_phonetics`\n\n## Complexity Rating\n\n- **Simple**: 1-2 syllables, common usage\n- **Moderate**: 3 syllables, intermediate usage\n- **Complex**: 4+ syllables, advanced usage\n\n## Important\n\n1. Process ALL 4 words completely\n2. Include all parts of speech\n3. Call `local-claim_done` to complete\n",
+      "evaluatorResult": {
+        "exitCode": 1,
+        "elapsedMs": 31.739832999999635,
+        "scoreJson": {
+          "passed": false,
+          "status": "fail",
+          "score": {
+            "achieved": 0,
+            "max": 10,
+            "percent": 0
+          },
+          "items": [
+            {
+              "name": "output_file",
+              "score": 0,
+              "max_score": 10,
+              "status": "fail",
+              "details": "vocabulary_cards.json not found"
+            }
+          ],
+          "errors": [],
+          "warnings": []
+        }
+      }
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/h1",
+      "level": "h1",
+      "phase": "hard",
+      "officialStatus": "fail",
+      "officialScorePercent": 0,
+      "agentExitCode": 1,
+      "snippetExitCode": 0,
+      "toolCalls": 0,
+      "libFunctionsAvailable": 0,
+      "libFunctionsUsed": 0,
+      "libFunctionsCreated": 0,
+      "reuseRate": 0,
+      "libStatus": {
+        "availableAtStart": [],
+        "functionsAfterAgent": [],
+        "committedNewFunctions": 0,
+        "libCalls": 0,
+        "toolCalls": 0,
+        "reuseRate": 0
+      },
+      "agentEvents": [
+        {
+          "type": "thread.started",
+          "thread_id": "019e1371-1696-7681-8a07-02bade07e507"
+        },
+        {
+          "type": "turn.started"
+        },
+        {
+          "type": "error",
+          "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+        },
+        {
+          "type": "turn.failed",
+          "error": {
+            "message": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now, or try again at 10:58 PM."
+          }
+        }
+      ],
+      "agentPromptPreview": "You are solving one official SkillCraft task inside a Datafetch workspace.\n\nTask: scaled_tasks/vocabulary-builder/h1\n\nRead task.md, AGENTS.md, df.d.ts, and any initial workspace files.\nEdit scripts/answer.ts so it completes the task.\nUse existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.\nWhen creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.\nUse df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.\nThe evaluator will run scripts/answer.ts after you finish; do not execute a long benchmark yourself.\nDo not write prose as the answer. The file content is the deliverable.",
+      "taskMarkdownPreview": "# Task: Vocabulary Builder (5 Words \u00d7 5 APIs) - H1\n\nBuild vocabulary cards for **5 English words** using 5 API endpoints per word.\n\n## Objective\n\nFor each of the following **5 words**, collect:\n1. **Lookup**: basic word lookup\n2. **Details**: comprehensive word info\n3. **Synonyms**: related words\n4. **Definitions**: all meanings\n5. **Phonetics**: pronunciation info\n\nCreate a **vocabulary profile** with complexity and usage metrics.\n\n## Words to Define\n\n| # | Word | Expected Difficulty |\n|---|------|---------------------|\n| 1 | ephemeral | Advanced |\n| 2 | ubiquitous | Advanced |\n| 3 | pragmatic | Intermediate |\n| 4 | eloquent | Intermediate |\n| 5 | resilient | Intermediate |\n\n## Required Output\n\nSave results to `vocabulary_cards.json`:\n\n```json\n{\n  \"words\": [\n    {\"word\": \"ephemeral\", \"phonetic\": \"/\u026a\u02c8fem(\u0259)r\u0259l/\", \"meanings\": [], \"synonyms\": [], \"vocabulary_profile\": {\"complexity\": \"complex\", \"difficulty_level\": \"advanced\"}}\n  ],\n  \"summary\": {\"total_words\": 5, \"total_definitions\": 10, \"total_synonyms\": 20},\n  \"analysis_date\": \"2024-01-15\"\n}\n```\n\n## Tools Available\n\n- `local-dictionary_lookup`: Lookup\n- `local-dictionary_word_details`: Details\n- `local-dictionary_synonyms`: Synonyms\n- `local-dictionary_definitions`: Definitions\n- `local-dictionary_phonetics`: Phonetics\n\n**File System:** `filesystem-write_file`, `filesystem-read_file`\n**Completion:** `local-claim_done` (REQUIRED)\n\n## Workflow\n\nFor each word (ephemeral, ubiquitous, pragmatic, eloquent, resilient):\n1. `local-dictionary_lookup`\n2. `local-dictionary_word_details`\n3. `local-dictionary_synonyms`\n4. `local-dictionary_definitions`\n5. `local-dictionary_phonetics`\n\n## Complexity Rating\n\n- **Simple**: 1-2 syllables, common usage\n- **Moderate**: 3 syllables, intermediate usage\n- **Complex**: 4+ syllables, advanced usage\n\n## Important\n\n1. Process ALL 5 words completely\n2. Include all parts of speech\n3. Call `local-claim_done` to complete\n",
+      "evaluatorResult": {
+        "exitCode": 1,
+        "elapsedMs": 35.9931669999969,
+        "scoreJson": {
+          "passed": false,
+          "status": "fail",
+          "score": {
+            "achieved": 0,
+            "max": 10,
+            "percent": 0
+          },
+          "items": [
+            {
+              "name": "output_file",
+              "score": 0,
+              "max_score": 10,
+              "status": "fail",
+              "details": "vocabulary_cards.json not found"
+            }
+          ],
+          "errors": [],
+          "warnings": []
+        }
+      }
+    }
+  ]
+}

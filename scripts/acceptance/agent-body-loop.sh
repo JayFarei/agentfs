@@ -100,6 +100,7 @@ export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
 export ANTHROPIC_KEY="${ANTHROPIC_KEY:-}"
 export DATAFETCH_HOME="$DATAFETCH_HOME"
 export DATAFETCH_SERVER_URL="$DATAFETCH_SERVER_URL"
+export DATAFETCH_SKILL_PATH="$DATAFETCH_SKILL_PATH"
 export PATH="$PATH"
 export SESSION_ID="$SESSION_ID"
 agent_cmd "\$(cat "$promptfile")" > "$outfile" 2>&1
@@ -112,8 +113,11 @@ WRAP
 }
 
 # ---- Step: prompt that REQUIRES an agent({prompt}) body --------------------
-AGENT_BODY_MODEL="${DF_AGENT_BODY_TEST_MODEL:-${DF_LLM_TEST_MODEL:-${DATAFETCH_LLM_MODEL:-${DF_LLM_MODEL:-openai-codex/gpt-5.3-codex-spark}}}}"
-PROMPT='Author a function `summariseFiling` at $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts that takes one finqa case (input: { caseId: string }) and returns { caseId: string, narrative: string }. The body MUST use `body: agent({prompt: "...", model: "'$AGENT_BODY_MODEL'"})` to generate the narrative as a one-paragraph plain-English summary. Write the file via heredoc (`cat > $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts <<EOF ... EOF`). Then call it on one finqa case via `datafetch tsx -e "console.log(JSON.stringify(await df.lib.summariseFiling({caseId: \"<id>\"})))"` (pick any caseId from `await df.db.finqaCases.findExact({}, 1)`). Print the resulting JSON object on a single line at the end of your response.'
+AGENT_BODY_MODEL="${DF_AGENT_BODY_TEST_MODEL:-${DF_TEST_MODEL:-${DF_LLM_TEST_MODEL:-${DATAFETCH_LLM_MODEL:-${DF_LLM_MODEL:-openai-codex/gpt-5.3-codex-spark}}}}}"
+if [[ "$AGENT_BODY_MODEL" != */* ]]; then
+  AGENT_BODY_MODEL="openai-codex/$AGENT_BODY_MODEL"
+fi
+PROMPT='Author a function `summariseFiling` at $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts that takes input { caseId: string } and returns { caseId: string, narrative: string }. The exported `summariseFiling = fn(...)` body MUST be directly `body: agent({prompt: "...", model: "'$AGENT_BODY_MODEL'"})`; do not wrap the agent call in an async/pure body, do not create a nested fn, and do not use the deprecated `llm()` alias. The agent prompt can summarize the caseId itself; this test is specifically proving the top-level agent({prompt}) body dispatch path. Write the file via heredoc (`cat > $DATAFETCH_HOME/lib/test-jay/summariseFiling.ts <<EOF ... EOF`). Then call it via `datafetch tsx -e "console.log(JSON.stringify(await df.lib.summariseFiling({caseId: \"<id>\"})))"` (pick any caseId from `await df.db.finqaCases.findExact({}, 1)`). Print the resulting JSON object on a single line at the end of your response.'
 OUT="$DATAFETCH_HOME/agent-body.out"
 SENTINEL="$DATAFETCH_HOME/agent-body.done"
 
@@ -134,8 +138,9 @@ fi
 # ---- Step: assert the file was authored ------------------------------------
 assert_file_exists "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts" \
   "summariseFiling.ts authored under lib/test-jay/"
-if rg -Uq 'body\s*:\s*agent\s*\(\s*\{[\s\S]*prompt\s*:' "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts" && \
-   ! rg -q 'llm\s*\(' "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts"; then
+if rg -Uq 'export\s+const\s+summariseFiling\s*=\s*fn[\s\S]*body\s*:\s*agent\s*\(\s*\{[\s\S]*prompt\s*:' "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts" && \
+   ! rg -q 'llm\s*\(' "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts" && \
+   ! rg -q 'body\s*:\s*(async|function\b|\([^)]*\)\s*=>)' "$DATAFETCH_HOME/lib/test-jay/summariseFiling.ts"; then
   printf '[PASS] summariseFiling.ts uses agent({prompt}) surface\n'
   PASS_COUNT=$((PASS_COUNT + 1))
 else

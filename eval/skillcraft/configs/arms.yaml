@@ -1,0 +1,22 @@
+arms:
+  - id: skillcraft-base
+    runner: native-skillcraft
+    skillcraft_mode: base
+    primary: true
+  - id: skillcraft-skill
+    runner: native-skillcraft
+    skillcraft_mode: skill
+    primary: true
+  - id: datafetch-learned
+    runner: datafetch
+    primary: true
+    scoring: official-skillcraft-evaluator
+  - id: skillcraft-static-reuse
+    runner: native-skillcraft
+    skillcraft_mode: static-reuse
+    primary: false
+
+primary_contrasts:
+  - datafetch-learned vs skillcraft-base
+  - datafetch-learned vs skillcraft-skill
+

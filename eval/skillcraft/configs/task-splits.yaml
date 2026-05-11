@@ -1,0 +1,23 @@
+levels:
+  cold:
+    - e1
+  warm:
+    - e2
+    - e3
+    - m1
+    - m2
+  hard:
+    - h1
+
+families: all
+
+minimum_representative_run:
+  families: 21
+  tasks: 126
+  repeats: 1
+
+pilot_floor:
+  families: 10
+  tasks: 30
+  note: "A pilot below the full suite estimates effect size only; do not claim significance."
+

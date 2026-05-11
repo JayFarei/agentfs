@@ -1,0 +1,318 @@
+{
+  "title": "Native SkillCraft skill-cache trace: vocabulary-builder/e2",
+  "taskKey": "scaled_tasks/vocabulary-builder/e2",
+  "mode": "skillcraft-skill",
+  "query": "{\"in_turn_steps\": 0, \"turn\": 0, \"timestamp\": \"2026-05-11T06:13:13.183176\", \"type\": \"user_input\", \"content\": \"# Task: Vocabulary Builder (3 Words \u00d7 3 APIs) - E2\\n\\nBuild vocabulary cards for **3 English words** using 3 API endpoints per word.\\n\\n## Objective\\n\\nFor each of the following **3 words**, collect:\\n1. **Details**: comprehensive word info\\n2. **Synonyms**: related words\\n3. **Phonetics**: pronunciation info\\n\\nCreate a **vocabulary profile** with complexity and usage metrics.\\n\\n## Words to Define\\n\\n| # | Word | Expected Difficulty |\\n|---|------|---------------------|\\n| 1 | ephemeral | Advanced |\\n| 2 | ubiquitous | Advanced |\\n| 3 | pragmatic | Intermediate |\\n\\n## Required Output\\n\\nSave results to `vocabulary_cards.json`:\\n\\n```json\\n{\\n  \\\"words\\\": [\\n    {\\\"word\\\": \\\"ephemeral\\\", \\\"phonetic\\\": \\\"/\u026a\u02c8fem(\u0259)r\u0259l/\\\", \\\"meanings\\\": [], \\\"synonyms\\\": [], \\\"vocabulary_profile\\\": {\\\"complexity\\\": \\\"complex\\\", \\\"difficulty_level\\\": \\\"advanced\\\"}}\\n  ],\\n  \\\"summary\\\": {\\\"total_words\\\": 3, \\\"total_definitions\\\": 10, \\\"total_synonyms\\\": 20},\\n  \\\"analysis_date\\\": \\\"2024-01-15\\\"\\n}\\n```\\n\\n## Tools Available\\n\\n- `local-dictionary_word_details`: Details\\n- `local-dictionary_synonyms`: Synonyms\\n- `local-dictionary_phonetics`: Phonetics\\n\\n**File System:** `filesystem-write_file`, `filesystem-read_file`\\n**Completion:** `local-claim_done` (REQUIRED)\\n\\n## Workflow\\n\\nFor each word (ephemeral, ubiquitous, pragmatic):\\n1. `local-dictionary_word_details`\\n2. `local-dictionary_synonyms`\\n3. `local-dictionary_phonetics`\\n\\n## Complexity Rating\\n\\n- **Simple**: 1-2 syllables, common usage\\n- **Moderate**: 3 syllables, intermediate usage\\n- **Complex**: 4+ syllables, advanced usage\\n\\n## Important\\n\\n1. Process ALL 3 words completely\\n2. Include all parts of speech\\n3. Call `local-claim_done` to complete\\n\"}\n{\"in_turn_steps\": 0, \"turn\": 1, \"timestamp\": \"2026-05-11T06:13:33.030783\", \"agent\": \"Assistant\", \"item_type\": \"tool_call_item\", \"raw_content\": {\"arguments\": \"{\\\"skill_name\\\":\\\"build_vocabulary_card\\\",\\\"script_code\\\":\\\"# parameters: word\\\\n# Uses three endpoints: word_details, synonyms, phonetics\\\\n\\\\nwd = call_tool('local-dictionary_word_details', word=word)\\\\nsyn = call_tool('local-dictionary_synonyms', word=word)\\\\npho = call_tool('local-dictionary_phonetics', word=word)\\\\n\\\\n# Normalize meanings/definitions\\\\nmeanings_out = []\\\\nif wd.get('success'):\\\\n    for m in wd.get('meanings', []) or []:\\\\n        pos = m.get('part_of_speech')\\\\n        defs = []",
+  "workspaceFiles": [
+    {
+      "path": "skill_cache.json",
+      "bytes": 4133,
+      "sha1": "8080f8662350"
+    },
+    {
+      "path": "vocabulary_cards.json",
+      "bytes": 4539,
+      "sha1": "ac8692d5f186"
+    },
+    {
+      "path": "words.json",
+      "bytes": 459,
+      "sha1": "16c02c161236"
+    }
+  ],
+  "cacheSnapshots": [
+    {
+      "turn": "start",
+      "availableSkills": []
+    },
+    {
+      "turn": "after local-save_skill",
+      "availableSkills": [
+        "build_vocabulary_card"
+      ]
+    },
+    {
+      "turn": "after three local-execute_skill calls",
+      "availableSkills": [
+        "build_vocabulary_card"
+      ],
+      "executionStats": {
+        "total_executions": 3,
+        "successful_executions": 3,
+        "failed_executions": 0,
+        "last_execution_status": "success",
+        "last_execution_error": null
+      }
+    },
+    {
+      "turn": "finish",
+      "availableSkills": [
+        "build_vocabulary_card"
+      ]
+    }
+  ],
+  "skillCache": {
+    "skills": {
+      "build_vocabulary_card": {
+        "script_code": "# parameters: word\n# Uses three endpoints: word_details, synonyms, phonetics\n\nwd = call_tool('local-dictionary_word_details', word=word)\nsyn = call_tool('local-dictionary_synonyms', word=word)\npho = call_tool('local-dictionary_phonetics', word=word)\n\n# Normalize meanings/definitions\nmeanings_out = []\nif wd.get('success'):\n    for m in wd.get('meanings', []) or []:\n        pos = m.get('part_of_speech')\n        defs = []\n        for d in m.get('definitions', []) or []:\n            defs.append({\n                'definition': d.get('definition'),\n                'example': d.get('example')\n            })\n        meanings_out.append({'part_of_speech': pos, 'definitions': defs})\n\n# Phonetic preference: phonetics primary, else word_details phonetic\nphonetic = None\nif pho.get('success'):\n    phonetic = pho.get('primary_phonetic') or (pho.get('all_phonetics') or [None])[0]\nif not phonetic and wd.get('success'):\n    phonetic = wd.get('phonetic')\n\n# Complexity: prefer API, else infer by syllables estimate\ncomplexity = None\nif wd.get('success'):\n    complexity = wd.get('complexity')\nsyllables = None\nif wd.get('success'):\n    syllables = wd.get('estimated_syllables')\nif not complexity and isinstance(syllables, int):\n    if syllables <= 2:\n        complexity = 'simple'\n    elif syllables == 3:\n        complexity = 'moderate'\n    else:\n        complexity = 'complex'\n\n# Difficulty level mapping\nexpected = {\n    'ephemeral': 'advanced',\n    'ubiquitous': 'advanced',\n    'pragmatic': 'intermediate'\n}\ndifficulty_level = expected.get(word.lower()) or ('advanced' if complexity == 'complex' else 'intermediate' if complexity == 'moderate' else 'beginner')\n\nsynonyms = []\nif syn.get('success'):\n    synonyms = syn.get('synonyms') or []\nelse:\n    # fall back to word_details synonyms if present\n    if wd.get('success'):\n        synonyms = wd.get('synonyms') or []\n\n# Usage metrics\n# - definition_count: count across all meanings\n# - synonym_count: len(synonyms)\n# - has_audio\n# - pronunciation difficulty\n\ndef_count = 0\nfor m in meanings_out:\n    def_count += len(m.get('definitions') or [])\n\nhas_audio = False\npron_difficulty = None\nhas_schwa = None\nhas_stress = None\nif pho.get('success'):\n    has_audio = bool(pho.get('has_audio'))\n    pa = pho.get('pronunciation_analysis') or {}\n    pron_difficulty = pa.get('difficulty')\n    has_schwa = pa.get('has_schwa')\n    has_stress = pa.get('has_stress_marks')\n\nresult = {\n    'word': word,\n    'phonetic': phonetic,\n    'meanings': meanings_out,\n    'synonyms': synonyms,\n    'vocabulary_profile': {\n        'complexity': complexity,\n        'difficulty_level': difficulty_level,\n        'estimated_syllables': syllables,\n        'definition_count': def_count,\n        'synonym_count': len(synonyms),\n        'has_audio': has_audio,\n        'pronunciation_difficulty': pron_difficulty,\n        'has_schwa': has_schwa,\n        'has_stress_marks': has_stress\n    }\n}",
+        "parameters": [
+          "word"
+        ],
+        "description": "Build a normalized vocabulary card for a word using word_details, synonyms, and phonetics endpoints.",
+        "saved_at": 1,
+        "version": 1,
+        "input_schema": "{\"word\":\"str\"}",
+        "output_schema": "{\"word\":\"str\",\"phonetic\":\"str|null\",\"meanings\":[{\"part_of_speech\":\"str\",\"definitions\":[{\"definition\":\"str\",\"example\":\"str|null\"}]}],\"synonyms\":[\"str\"],\"vocabulary_profile\":{\"complexity\":\"str|null\",\"difficulty_level\":\"str\",\"estimated_syllables\":\"int|null\",\"definition_count\":\"int\",\"synonym_count\":\"int\",\"has_audio\":\"bool\",\"pronunciation_difficulty\":\"str|null\",\"has_schwa\":\"bool|null\",\"has_stress_marks\":\"bool|null\"}}",
+        "execution_stats": {
+          "total_executions": 3,
+          "successful_executions": 3,
+          "failed_executions": 0,
+          "last_execution_status": "success",
+          "last_execution_error": null
+        }
+      }
+    },
+    "_iteration_counts": {
+      "build_vocabulary_card": 1
+    }
+  },
+  "actionTrajectory": [
+    {
+      "index": 0,
+      "role": "user",
+      "contentPreview": "# Task: Vocabulary Builder (3 Words \u00d7 3 APIs) - E2\n\nBuild vocabulary cards for **3 English words** using 3 API endpoints per word.\n\n## Objective\n\nFor each of the following **3 words**, collect:\n1. **Details**: comprehensive word info\n2. **Synonyms**: related words\n3. **Phonetics**: pronunciation info\n\nCreate a **vocabulary profile** with complexity and usage metrics.\n\n## Words to Define\n\n| # | Word | Expected Difficulty |\n|---|------|---------------------|\n| 1 | ephemeral | Advanced |\n| 2 | ubiquitous | Advanced |\n| 3 | pragmatic | Intermediate |\n\n## Required Output\n\nSave results to `vocabular"
+    },
+    {
+      "index": 1,
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "name": "local-save_skill",
+          "argumentsPreview": "{\"skill_name\":\"build_vocabulary_card\",\"script_code\":\"# parameters: word\\n# Uses three endpoints: word_details, synonyms, phonetics\\n\\nwd = call_tool('local-dictionary_word_details', word=word)\\nsyn = call_tool('local-dictionary_synonyms', word=word)\\npho = call_tool('local-dictionary_phonetics', word=word)\\n\\n# Normalize meanings/definitions\\nmeanings_out = []\\nif wd.get('success'):\\n    for m in wd.get('meanings', []) or []:\\n        pos = m.get('part_of_speech')\\n        defs = []\\n        for d in m.get('definitions', []) or []:\\n            defs.append({\\n                'definition': d.get('definition'),\\n                'example': d.get('example')\\n            })\\n        meanings_out.append({'part_of_speech': pos, 'definitions': defs})\\n\\n# Phonetic preference: phonetics primary, else word_details phonetic\\nphonetic = None\\nif pho.get('success'):\\n    phonetic = pho.get('primary_phonetic') or (pho.get('all_phonetics') or [None])[0]\\nif not phonetic and wd.get('success'):\\n    phonetic = wd.get('phonetic')\\n\\n# Complexity: prefer API, else infer by syllables estimate\\ncomplexity = None\\nif wd.get('success'):\\n    complexity = wd.get('complexity')\\nsyllables = None\\nif wd.get("
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "role": "tool",
+      "contentPreview": "Skill 'build_vocabulary_card' saved successfully! You can now execute it with execute_skill or get the code with get_skill.",
+      "toolResultPreview": "Skill 'build_vocabulary_card' saved successfully! You can now execute it with execute_skill or get the code with get_skill."
+    },
+    {
+      "index": 3,
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "name": "local-execute_skill",
+          "argumentsPreview": "{\"skill_name\":\"build_vocabulary_card\",\"args\":{\"word\":\"ephemeral\"}}"
+        },
+        {
+          "name": "local-execute_skill",
+          "argumentsPreview": "{\"skill_name\":\"build_vocabulary_card\",\"args\":{\"word\":\"ubiquitous\"}}"
+        },
+        {
+          "name": "local-execute_skill",
+          "argumentsPreview": "{\"skill_name\":\"build_vocabulary_card\",\"args\":{\"word\":\"pragmatic\"}}"
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "role": "tool",
+      "contentPreview": "{'skill_name': 'build_vocabulary_card', 'status': 'success', 'result': {'word': 'ephemeral', 'phonetic': '/\u0259\u02c8f\u025b.m\u0259.\u0279\u0259l/', 'meanings': [{'part_of_speech': 'noun', 'definitions': [{'definition': 'Something which lasts for a short period of time.', 'example': None}]}, {'part_of_speech': 'adjective', 'definitions': [{'definition': 'Lasting for a short period of time.', 'example': None}, {'definition': 'Existing for only one day, as with some flowers, insects, and diseases.', 'example': None}, {'definition': '(of a body of water) Usually dry, but filling with water for brief periods during and afte",
+      "toolResultPreview": "{'skill_name': 'build_vocabulary_card', 'status': 'success', 'result': {'word': 'ephemeral', 'phonetic': '/\u0259\u02c8f\u025b.m\u0259.\u0279\u0259l/', 'meanings': [{'part_of_speech': 'noun', 'definitions': [{'definition': 'Something which lasts for a short period of time.', 'example': None}]}, {'part_of_speech': 'adjective', 'definitions': [{'definition': 'Lasting for a short period of time.', 'example': None}, {'definition': 'Existing for only one day, as with some flowers, insects, and diseases.', 'example': None}, {'definition': '(of a body of water) Usually dry, but filling with water for brief periods during and after precipitation.', 'example': None}]}], 'synonyms': ['transitory', 'momentary', 'temporary', 'fleeting', 'ephemeron', 'short-lived', 'volatile', 'evanescent', 'short'], 'vocabulary_profile': {'complexity': 'moderate', 'difficulty_level': 'advanced', 'estimated_syllables': 4, 'definition_count': 4, 'synonym_count': 9, 'has_audio': False, 'pronunciation_difficulty': 'challenging', 'has_schwa': True, 'has_stress_marks': True}}, 'tools_enabled': True}"
+    },
+    {
+      "index": 5,
+      "role": "tool",
+      "contentPreview": "{'skill_name': 'build_vocabulary_card', 'status': 'success', 'result': {'word': 'ubiquitous', 'phonetic': '/ju\u02d0\u02c8b\u026ak.w\u0259.t\u0259s/', 'meanings': [{'part_of_speech': 'adjective', 'definitions': [{'definition': 'Being everywhere at once: omnipresent.', 'example': 'To Hindus, Jews, Christians, and Muslims, God is ubiquitous.'}, {'definition': 'Appearing to be everywhere at once; being or seeming to be in more than one location at the same time.', 'example': None}, {'definition': 'Widespread; very prevalent.', 'example': None}]}], 'synonyms': ['omnipresent', 'common', 'ever-present', 'pervasive'], 'vocab",
+      "toolResultPreview": "{'skill_name': 'build_vocabulary_card', 'status': 'success', 'result': {'word': 'ubiquitous', 'phonetic': '/ju\u02d0\u02c8b\u026ak.w\u0259.t\u0259s/', 'meanings': [{'part_of_speech': 'adjective', 'definitions': [{'definition': 'Being everywhere at once: omnipresent.', 'example': 'To Hindus, Jews, Christians, and Muslims, God is ubiquitous.'}, {'definition': 'Appearing to be everywhere at once; being or seeming to be in more than one location at the same time.', 'example': None}, {'definition': 'Widespread; very prevalent.', 'example': None}]}], 'synonyms': ['omnipresent', 'common', 'ever-present', 'pervasive'], 'vocabulary_profile': {'complexity': 'moderate', 'difficulty_level': 'advanced', 'estimated_syllables': 4, 'definition_count': 3, 'synonym_count': 4, 'has_audio': False, 'pronunciation_difficulty': 'challenging', 'has_schwa': True, 'has_stress_marks': True}}, 'tools_enabled': True}"
+    },
+    {
+      "index": 6,
+      "role": "tool",
+      "contentPreview": "{'skill_name': 'build_vocabulary_card', 'status': 'success', 'result': {'word': 'pragmatic', 'phonetic': '/p\u0279\u00e6\u0261\u02c8m\u00e6t\u026ak/', 'meanings': [{'part_of_speech': 'noun', 'definitions': [{'definition': 'A man of business.', 'example': None}, {'definition': 'A busybody.', 'example': None}, {'definition': 'A public decree.', 'example': None}]}, {'part_of_speech': 'adjective', 'definitions': [{'definition': 'Practical, concerned with making decisions and actions that are useful in practice, not just theory.', 'example': 'The sturdy furniture in the student lounge was pragmatic, but unattractive.'}, {'defin",
+      "toolResultPreview": "{'skill_name': 'build_vocabulary_card', 'status': 'success', 'result': {'word': 'pragmatic', 'phonetic': '/p\u0279\u00e6\u0261\u02c8m\u00e6t\u026ak/', 'meanings': [{'part_of_speech': 'noun', 'definitions': [{'definition': 'A man of business.', 'example': None}, {'definition': 'A busybody.', 'example': None}, {'definition': 'A public decree.', 'example': None}]}, {'part_of_speech': 'adjective', 'definitions': [{'definition': 'Practical, concerned with making decisions and actions that are useful in practice, not just theory.', 'example': 'The sturdy furniture in the student lounge was pragmatic, but unattractive.'}, {'definition': 'Philosophical; dealing with causes, reasons, and effects, rather than with details and circumstances; said of literature.', 'example': None}, {'definition': 'Interfering in the affairs of others; officious; meddlesome.', 'example': None}]}], 'synonyms': ['down-to-earth', 'realistic', 'functional', 'utilitarian', 'practical'], 'vocabulary_profile': {'complexity': 'moderate', 'difficulty_level': 'intermediate', 'estimated_syllables': 3, 'definition_count': 6, 'synonym_count': 5, 'has_audio': False, 'pronunciation_difficulty': 'moderate', 'has_schwa': False, 'has_stress_marks': True}}, '"
+    },
+    {
+      "index": 7,
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "name": "filesystem-write_file",
+          "argumentsPreview": "{\"path\":\"vocabulary_cards.json\",\"content\":\"{\\n  \\\"words\\\": [\\n    {\\n      \\\"word\\\": \\\"ephemeral\\\",\\n      \\\"phonetic\\\": \\\"/\u0259\u02c8f\u025b.m\u0259.\u0279\u0259l/\\\",\\n      \\\"meanings\\\": [\\n        {\\n          \\\"part_of_speech\\\": \\\"noun\\\",\\n          \\\"definitions\\\": [\\n            {\\n              \\\"definition\\\": \\\"Something which lasts for a short period of time.\\\",\\n              \\\"example\\\": null\\n            }\\n          ]\\n        },\\n        {\\n          \\\"part_of_speech\\\": \\\"adjective\\\",\\n          \\\"definitions\\\": [\\n            {\\n              \\\"definition\\\": \\\"Lasting for a short period of time.\\\",\\n              \\\"example\\\": null\\n            },\\n            {\\n              \\\"definition\\\": \\\"Existing for only one day, as with some flowers, insects, and diseases.\\\",\\n              \\\"example\\\": null\\n            },\\n            {\\n              \\\"definition\\\": \\\"(of a body of water) Usually dry, but filling with water for brief periods during and after precipitation.\\\",\\n              \\\"example\\\": null\\n            }\\n          ]\\n        }\\n      ],\\n      \\\"synonyms\\\": [\\n        \\\"transitory\\\",\\n        \\\"momentary\\\",\\n        \\\"temporary\\\",\\n        \\\"fleeting\\\",\\n        \\\"ephemeron\\\",\\n  "
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "role": "tool",
+      "contentPreview": "{\"type\":\"text\",\"text\":\"Successfully wrote to vocabulary_cards.json\",\"annotations\":null,\"meta\":null}",
+      "toolResultPreview": "{\"type\":\"text\",\"text\":\"Successfully wrote to vocabulary_cards.json\",\"annotations\":null,\"meta\":null}"
+    },
+    {
+      "index": 9,
+      "role": "assistant",
+      "toolCalls": [
+        {
+          "name": "local-claim_done",
+          "argumentsPreview": "{}"
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "role": "tool",
+      "contentPreview": "you have claimed the task is done!",
+      "toolResultPreview": "you have claimed the task is done!"
+    }
+  ],
+  "outputFilePreview": "{\n  \"words\": [\n    {\n      \"word\": \"ephemeral\",\n      \"phonetic\": \"/\u0259\u02c8f\u025b.m\u0259.\u0279\u0259l/\",\n      \"meanings\": [\n        {\n          \"part_of_speech\": \"noun\",\n          \"definitions\": [\n            {\n              \"definition\": \"Something which lasts for a short period of time.\",\n              \"example\": null\n            }\n          ]\n        },\n        {\n          \"part_of_speech\": \"adjective\",\n          \"definitions\": [\n            {\n              \"definition\": \"Lasting for a short period of time.\",\n              \"example\": null\n            },\n            {\n              \"definition\": \"Existing for only one day, as with some flowers, insects, and diseases.\",\n              \"example\": null\n            },\n            {\n              \"definition\": \"(of a body of water) Usually dry, but filling with water for brief periods during and after precipitation.\",\n              \"example\": null\n            }\n          ]\n        }\n      ],\n      \"synonyms\": [\n        \"transitory\",\n        \"momentary\",\n        \"temporary\",\n        \"fleeting\",\n        \"ephemeron\",\n        \"short-lived\",\n        \"volatile\",\n        \"evanescent\",\n        \"short\"\n      ],\n      \"vocabulary_profile\": {\n        \"complexity\": \"moderate\",\n        \"difficulty_level\": \"advanced\",\n        \"estimated_syllables\": 4,\n        \"definition_count\": 4,\n        \"synonym_count\": 9,\n        \"has_audio\": false,\n        \"pronunciation_difficulty\": \"challenging\",\n        \"has_schwa\": true,\n        \"has_stress_marks\": true\n      }\n    },\n    {\n      \"word\": \"ubiquitous\",\n      \"phonetic\": \"/ju\u02d0\u02c8b\u026ak.w\u0259.t\u0259s/\",\n      \"meanings\": [\n        {\n          \"part_of_speech\": \"adjective\",\n          \"definitions\": [\n            {\n              \"definition\": \"Being everywhere at once: omnipresent.\",\n              \"example\": \"To Hindus, Jews, Christians, and Muslims, God is ubiquitous.\"\n            },\n            {\n              \"definition\": \"Appearing to be everywhere at once; being or seeming to be in more than one location at the same time.\",\n              \"example\": null\n            },\n            {\n              \"definition\": \"Widespread; very prevalent.\",\n              \"example\": null\n            }\n          ]\n        }\n      ],\n      \"synonyms\": [\n        \"omnipresent\",\n        \"common\",\n        \"ever-present\",\n        \"pervasive\"\n      ],\n      \"vocabulary_profile\": {\n        \"complexity\": \"moderate\",\n        \"difficulty_level\": \"advanced\",\n        \"estimated_syllables\": 4,\n        \"definition_count\": 3,\n        \"synonym_count\": 4,\n        \"has_audio\": false,\n        \"pronunciation_difficulty\": \"challenging\",\n        \"has_schwa\": true,\n        \"has_stress_marks\": true\n      }\n    },\n    {\n      \"word\": \"pragmatic\",\n      \"phonetic\": \"/p\u0279\u00e6\u0261\u02c8m\u00e6t\u026ak/\",\n      \"meanings\": [\n        {\n          \"part_of_speech\": \"noun\",\n          \"definitions\": [\n            {\n              \"definition\": \"A man of business.\",\n              \"example\": null\n            },\n            {\n              \"definition\": \"A busybody.\",\n              \"example\": null\n            },\n            {\n              \"definition\": \"A public decree.\",\n              \"example\": null\n            }\n          ]\n        },\n        {\n          \"part_of_speech\": \"adjective\",\n          \"definitions\": [\n            {\n              \"definition\": \"Practical, concerned with making decisions and actions that are useful in practice, not just theory.\",\n              \"example\": \"The sturdy furniture in the student lounge was pragmatic, but unattractive.\"\n            },\n            {\n              \"definition\": \"Philosophical; dealing with causes, reasons, and effects, rather than with details and circumstances; said of literature.\",\n              \"example\": null\n            },\n            {\n              \"definition\": \"Interfering in the affairs of others; officious; meddlesome.\",\n              \"example\": null\n            }\n          ]\n        }\n      ],\n      \"synonyms\": [\n        \"down-to-earth\",\n        \"realistic\",\n        \"functional\",\n        \"utilitarian\",\n        \"practical\"\n      ],\n      \"vocabulary_profile\": {\n        \"complexity\": \"moderate\",\n        \"difficulty_level\": \"intermediate\",\n        \"estimated_syllables\": 3,\n        \"definition_count\": 6,\n        \"synonym_count\": 5,\n        \"has_audio\": false,\n        \"pronunciation_difficulty\": \"moderate\",\n        \"has_schwa\": false,\n        \"has_stress_marks\": true\n      }\n    }\n  ],\n  \"summary\": {\n    \"total_words\": 3,\n    \"total_definitions\": 13,\n    \"total_synonyms\": 18\n  },\n  \"analysis_date\": \"2026-05-11\"\n}\n",
+  "evalResult": {
+    "pass": true,
+    "status": "pass",
+    "score": {
+      "achieved": 100.0,
+      "max": 100,
+      "percent": 100.0
+    },
+    "score_percent": 100.0,
+    "items": [
+      {
+        "name": "output_file",
+        "score": 10.0,
+        "max_score": 10,
+        "status": "pass",
+        "details": "Output file found"
+      },
+      {
+        "name": "valid_json",
+        "score": 10.0,
+        "max_score": 10,
+        "status": "pass",
+        "details": "Valid JSON"
+      },
+      {
+        "name": "no_fake_data",
+        "score": 10.0,
+        "max_score": 10,
+        "status": "pass",
+        "details": "No fake data"
+      },
+      {
+        "name": "count",
+        "score": 15.0,
+        "max_score": 15,
+        "status": "pass",
+        "details": "3/3 words"
+      },
+      {
+        "name": "names",
+        "score": 15.0,
+        "max_score": 15,
+        "status": "pass",
+        "details": "3/3 words matched"
+      },
+      {
+        "name": "data",
+        "score": 20.0,
+        "max_score": 20,
+        "status": "pass",
+        "details": "3 valid"
+      },
+      {
+        "name": "completeness",
+        "score": 20.0,
+        "max_score": 20,
+        "status": "pass",
+        "details": "Field completeness"
+      }
+    ],
+    "errors": [],
+    "warnings": [],
+    "details": "Score: 100.0%",
+    "failure": null,
+    "skill_analysis": {
+      "enabled": true,
+      "tool_calls": {
+        "local-save_skill": 1,
+        "local-execute_skill": 3,
+        "local-get_skill": 0,
+        "local-list_skills": 0
+      },
+      "skills": {
+        "build_vocabulary_card": {
+          "created": true,
+          "creation_error": null,
+          "executions": [
+            {
+              "success": true,
+              "error": null
+            },
+            {
+              "success": true,
+              "error": null
+            },
+            {
+              "success": true,
+              "error": null
+            }
+          ],
+          "complexity": {
+            "tool_calls": 3,
+            "loops": 3,
+            "conditionals": 11,
+            "lines_of_code": 74,
+            "complexity_score": 40.8
+          }
+        }
+      },
+      "summary": {
+        "total_skills_created": 1,
+        "skills_created_successfully": 1,
+        "skills_creation_failed": 0,
+        "total_executions": 3,
+        "successful_executions": 3,
+        "failed_executions": 0,
+        "execution_success_rate": 100.0,
+        "avg_complexity_score": 40.8,
+        "avg_tool_calls_per_skill": 3.0,
+        "total_tool_calls_in_skills": 3,
+        "avg_lines_of_code": 74.0
+      }
+    },
+    "task_metrics": {
+      "input_tokens": 50522,
+      "output_tokens": 4910,
+      "total_tokens": 55432,
+      "last_input_tokens": 8083,
+      "total_turns": 5,
+      "total_steps": 12,
+      "llm_requests": 8,
+      "tool_calls": 6,
+      "output_tokens_without_skill_creation_cost": 2946,
+      "skill_creation_output_tokens": 1964,
+      "save_skill_call_count": 1,
+      "cost_usd": 0.0,
+      "cost_source": "estimated"
+    }
+  },
+  "keyStats": {
+    "interaction_turns": 1,
+    "tool_calls": 6,
+    "agent_llm_requests": 8,
+    "total_tokens": 55432,
+    "input_tokens": 50522,
+    "output_tokens": 4910,
+    "last_input_tokens": 8083,
+    "total_in_turn_steps": 12,
+    "skill_creation_output_tokens": 1964,
+    "save_skill_call_count": 1,
+    "output_tokens_without_skill_creation_cost": 2946,
+    "total_turns": 5,
+    "total_messages": 13,
+    "truncations": 0,
+    "user_input_turns": 1,
+    "assistant_turns": 4
+  }
+}

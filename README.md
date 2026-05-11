@@ -231,6 +231,7 @@ local setups.
 
 ```text
 bin/                  CLI binary shim
+docs/                 product, runtime, learning-loop, and eval docs
 skills/datafetch/     installable client-agent skill
 seeds/generic/        provider-neutral seed functions and Flue skills
 seeds/domains/        optional domain/demo seed packs
@@ -253,6 +254,12 @@ src/trajectory/       call-scope and lineage recording
 
 Local generated state stays ignored: `.datafetch/`, `.atlasfs/`,
 `.snippet-cache/`, `artifacts/`, and `dist/`.
+
+## Docs
+
+- [How datafetch works](./docs/how-it-works.md)
+- [How datafetch improves over time](./docs/improvement-loop.md)
+- [Benchmarking the datafetch thesis](./docs/benchmarking.md)
 
 ## Status
 

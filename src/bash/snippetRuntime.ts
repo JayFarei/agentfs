@@ -28,6 +28,14 @@ export type SessionCtx = {
   mountIds: string[];
   baseDir: string;
   trajectoryId?: string;
+  snippetTimeoutMs?: number;
+  skillcraftToolBridge?: {
+    skillcraftDir: string;
+    bundles: string[];
+    runnerPath?: string;
+    python?: string;
+    toolTimeoutMs?: number;
+  };
 };
 
 // --- Runtime interface ------------------------------------------------------

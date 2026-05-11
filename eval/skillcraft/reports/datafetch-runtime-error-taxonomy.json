@@ -1,0 +1,113 @@
+{
+  "counts": {
+    "generated_code_reference_error": 3,
+    "generated_code_type_error": 3,
+    "tool_payload_assumption_error": 3,
+    "bad_or_missing_lib_export": 7,
+    "lib_schema_validation_error": 1,
+    "typescript_transform_failure": 1,
+    "agent_quota_limit_before_answer": 14
+  },
+  "examples": {
+    "generated_code_reference_error": [
+      {
+        "taskKey": "scaled_tasks/countries-encyclopedia/e3",
+        "firstLine": "ReferenceError: major_economies is not defined"
+      },
+      {
+        "taskKey": "scaled_tasks/dnd-campaign-builder/m1",
+        "firstLine": "ReferenceError: ability_bonus_sum is not defined"
+      },
+      {
+        "taskKey": "scaled_tasks/local-dna-analysis/h1",
+        "firstLine": "ReferenceError: transcribeTool is not defined"
+      }
+    ],
+    "generated_code_type_error": [
+      {
+        "taskKey": "scaled_tasks/countries-encyclopedia/m1",
+        "firstLine": "TypeError: allDetails.entries is not a function or its return value is not iterable"
+      },
+      {
+        "taskKey": "scaled_tasks/recipe-cookbook-builder/e2",
+        "firstLine": "TypeError: Cannot read properties of undefined (reading 'toLowerCase')"
+      },
+      {
+        "taskKey": "scaled_tasks/university-directory-builder/e2",
+        "firstLine": "TypeError: Cannot read properties of undefined (reading 'byCountry')"
+      }
+    ],
+    "tool_payload_assumption_error": [
+      {
+        "taskKey": "scaled_tasks/dnd-campaign-builder/m2",
+        "firstLine": "Error: SkillCraft tool local-dnd_get_class_spells failed:"
+      },
+      {
+        "taskKey": "scaled_tasks/dnd-monster-compendium/m1",
+        "firstLine": "Error: Failed monster payload for adult-red-dragon"
+      },
+      {
+        "taskKey": "scaled_tasks/pokeapi-pokedex/e2",
+        "firstLine": "Error: Missing evolution chain id from pokemon species response."
+      }
+    ],
+    "bad_or_missing_lib_export": [
+      {
+        "taskKey": "scaled_tasks/dnd-monster-compendium/e1",
+        "firstLine": "[snippet/library] failed to load /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/full-126-20260510192951/episodes/dnd-monster-compendium/e1/datafetch-home/lib/skillcraft-full/fetchMonsterCompendiumEntry.ts: module does not export a Fn named \"fetchMonsterCompendiumEntry\" (or default Fn)"
+      },
+      {
+        "taskKey": "scaled_tasks/dog-breeds-encyclopedia/m1",
+        "firstLine": "Error: df.lib.fetchBreedEncyclopediaWithSubBreeds: function not found in tenant \"skillcraft-full\" or seed layer"
+      },
+      {
+        "taskKey": "scaled_tasks/gitlab-deep-analysis/h1",
+        "firstLine": "[snippet/library] failed to load /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/full-126-20260510192951/episodes/gitlab-deep-analysis/h1/datafetch-home/lib/skillcraft-full/fetchProjectBundle.ts: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "scaled_tasks/openmeteo-weather/e1",
+        "firstLine": "[snippet/library] failed to load /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/full-126-20260510192951/episodes/openmeteo-weather/e1/datafetch-home/lib/skillcraft-full/fetchCityWeather.ts: module does not export a Fn named \"fetchCityWeather\" (or default Fn)"
+      },
+      {
+        "taskKey": "scaled_tasks/openmeteo-weather/m1",
+        "firstLine": "[snippet/library] failed to load /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/full-126-20260510192951/episodes/openmeteo-weather/m1/datafetch-home/lib/skillcraft-full/fetchCityWeather.ts: Transform failed with 1 error:"
+      },
+      {
+        "taskKey": "scaled_tasks/university-directory-builder/h1",
+        "firstLine": "[snippet/library] failed to load /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/full-126-20260510192951/episodes/university-directory-builder/h1/datafetch-home/lib/skillcraft-full/universityDirectory.ts: module does not export a Fn named \"universityDirectory\" (or default Fn)"
+      },
+      {
+        "taskKey": "scaled_tasks/usgs-earthquake-monitor/e3",
+        "firstLine": "[snippet/library] failed to load /Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/datafetch/full-126-20260510192951/episodes/usgs-earthquake-monitor/e3/datafetch-home/lib/skillcraft-full/analyzeSeismicRegion.ts: module does not export a Fn named \"analyzeSeismicRegion\" (or default Fn)"
+      }
+    ],
+    "lib_schema_validation_error": [
+      {
+        "taskKey": "scaled_tasks/dnd-monster-compendium/h1",
+        "firstLine": "SchemaValidationError: Schema validation failed during input"
+      }
+    ],
+    "typescript_transform_failure": [
+      {
+        "taskKey": "scaled_tasks/jikan-anime-analysis/m1",
+        "firstLine": "TransformError: Transform failed with 1 error:"
+      }
+    ],
+    "agent_quota_limit_before_answer": [
+      "scaled_tasks/usgs-earthquake-monitor/m2",
+      "scaled_tasks/usgs-earthquake-monitor/h1",
+      "scaled_tasks/vocabulary-builder/e1",
+      "scaled_tasks/vocabulary-builder/e2",
+      "scaled_tasks/vocabulary-builder/e3",
+      "scaled_tasks/vocabulary-builder/m1",
+      "scaled_tasks/vocabulary-builder/m2",
+      "scaled_tasks/vocabulary-builder/h1",
+      "scaled_tasks/world-bank-economic-snapshot/e1",
+      "scaled_tasks/world-bank-economic-snapshot/e2",
+      "scaled_tasks/world-bank-economic-snapshot/e3",
+      "scaled_tasks/world-bank-economic-snapshot/m1",
+      "scaled_tasks/world-bank-economic-snapshot/m2",
+      "scaled_tasks/world-bank-economic-snapshot/h1"
+    ]
+  }
+}

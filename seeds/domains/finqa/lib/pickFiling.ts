@@ -156,6 +156,13 @@ function tableLabelScore(question: string, candidate: Filing): number {
   return bestRowScore * 12;
 }
 
+function candidateQuestionScore(question: string, candidate: Filing): number {
+  return (
+    normalizedTokenOverlap(question, candidate.question) * 25 +
+    tokenOverlap(question, candidate.question) * 5
+  );
+}
+
 // --- Factory ---------------------------------------------------------------
 
 export const pickFiling = fn<Input, Filing>({
@@ -217,13 +224,15 @@ export const pickFiling = fn<Input, Filing>({
       throw new Error("pickFiling: no candidate filings to choose from");
     }
     const ranked = candidates
-      .map((candidate) => ({
+      .map((candidate, index) => ({
         candidate,
         score:
           backendSearchScore(candidate) +
+          candidateQuestionScore(question, candidate) +
           tableLabelScore(question, candidate) +
           tokenOverlap(question, candidate.searchableText) +
-          tickerHintScore(question, candidate),
+          tickerHintScore(question, candidate) +
+          (candidates.length - index),
       }))
       .sort((a, b) => b.score - a.score);
     return ranked[0]!.candidate;

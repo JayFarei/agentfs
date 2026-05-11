@@ -28,6 +28,7 @@
 //   - Malformed files (typecheck errors, missing fn export, schema parse
 //     errors at module load) are logged once and skipped, not crashed.
 
+import { createHash } from "node:crypto";
 import { promises as fsp } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -180,6 +181,8 @@ export class DiskLibraryResolver implements LibraryResolver {
     file: string,
     expectedName: string,
   ): Promise<Fn<unknown, unknown> | null> {
+    if (!(await hasExactDirEntry(file))) return null;
+
     let st;
     try {
       st = await fsp.stat(file);
@@ -211,10 +214,16 @@ export class DiskLibraryResolver implements LibraryResolver {
         const repoRoot = await locateRepoRoot();
         const cacheDir = path.join(repoRoot, ".snippet-cache");
         await fsp.mkdir(cacheDir, { recursive: true });
-        const safeBase = file.replace(/[^A-Za-z0-9_.-]+/g, "_");
+        const safeExpected = expectedName
+          .replace(/[^A-Za-z0-9_.-]+/g, "_")
+          .slice(0, 64);
+        const cacheKey = createHash("sha256")
+          .update(file)
+          .digest("hex")
+          .slice(0, 16);
         const cachePath = path.join(
           cacheDir,
-          `${safeBase}.${mtimeMs}.ts`,
+          `${safeExpected}.${cacheKey}.${mtimeMs}.ts`,
         );
         await fsp.writeFile(cachePath, rewritten, "utf8");
         url = pathToFileURL(cachePath).href;
@@ -283,4 +292,13 @@ function isFnCallable(value: unknown): value is Fn<unknown, unknown> {
   if (typeof value !== "function") return false;
   const candidate = value as Fn<unknown, unknown>;
   return candidate.spec !== undefined && typeof candidate.spec === "object";
+}
+
+async function hasExactDirEntry(file: string): Promise<boolean> {
+  try {
+    const entries = await fsp.readdir(path.dirname(file));
+    return entries.includes(path.basename(file));
+  } catch {
+    return false;
+  }
 }

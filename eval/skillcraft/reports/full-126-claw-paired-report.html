@@ -1,0 +1,961 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Datafetch x SkillCraft Full Evaluation</title>
+  <style>
+    :root {
+      --bg: #f7f4ee;
+      --paper: #fffdf8;
+      --surface: #fdf8ef;
+      --ink: #162033;
+      --muted: #5f6775;
+      --line: rgba(22, 32, 51, 0.14);
+      --blue: #1e3a5f;
+      --blue-soft: #dfe8ef;
+      --gold: #c9922c;
+      --gold-soft: #f6e8c8;
+      --sage: #5f7f66;
+      --sage-soft: #e3eddf;
+      --rose: #9f3f46;
+      --rose-soft: #f3dedb;
+      --mono: "SFMono-Regular", "Menlo", "Consolas", monospace;
+      --sans: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+      --serif: "Iowan Old Style", "Palatino", "Georgia", serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(rgba(30, 58, 95, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(30, 58, 95, 0.045) 1px, transparent 1px),
+        radial-gradient(circle at top left, rgba(201, 146, 44, 0.18), transparent 34rem),
+        var(--bg);
+      background-size: 28px 28px, 28px 28px, auto, auto;
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.5;
+    }
+
+    a { color: var(--blue); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 36px;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    nav {
+      position: sticky;
+      top: 24px;
+      align-self: start;
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.78);
+      backdrop-filter: blur(12px);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 18px 45px rgba(22, 32, 51, 0.08);
+    }
+
+    nav .eyebrow {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    nav a {
+      display: block;
+      padding: 9px 0;
+      text-decoration: none;
+      color: var(--ink);
+      border-top: 1px solid rgba(22, 32, 51, 0.08);
+      font-size: 14px;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(255, 253, 248, 0.96), rgba(246, 232, 200, 0.82));
+      border-radius: 8px;
+      padding: 40px;
+      box-shadow: 0 24px 70px rgba(22, 32, 51, 0.10);
+    }
+
+    .label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--blue);
+      background: var(--blue-soft);
+      border: 1px solid rgba(30, 58, 95, 0.18);
+      border-radius: 999px;
+      padding: 7px 10px;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.06;
+      color: var(--ink);
+    }
+
+    h1 {
+      max-width: 900px;
+      margin-top: 18px;
+      font-family: var(--serif);
+      font-size: clamp(44px, 7vw, 86px);
+      font-weight: 600;
+    }
+
+    h2 {
+      font-family: var(--serif);
+      font-size: clamp(30px, 4vw, 46px);
+      margin-bottom: 18px;
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    .lead {
+      max-width: 940px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 20px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 30px;
+    }
+
+    .metric, .card, .callout, .step, .finding {
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.82);
+      border-radius: 8px;
+    }
+
+    .metric {
+      padding: 18px;
+      min-height: 130px;
+    }
+
+    .metric .value {
+      font-family: var(--serif);
+      font-size: 38px;
+      line-height: 1;
+      color: var(--blue);
+    }
+
+    .metric .name {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    section {
+      margin-top: 44px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card, .callout, .step, .finding {
+      padding: 22px;
+    }
+
+    .card p, .step p, .finding p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .kicker {
+      font-family: var(--mono);
+      color: var(--gold);
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .callout {
+      background: linear-gradient(135deg, var(--blue-soft), rgba(255, 253, 248, 0.9));
+      border-color: rgba(30, 58, 95, 0.22);
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .callout strong {
+      color: var(--blue);
+    }
+
+    .verdict {
+      font-family: var(--serif);
+      font-size: 30px;
+      line-height: 1.15;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      box-shadow: 0 14px 34px rgba(22, 32, 51, 0.06);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 760px;
+    }
+
+    th, td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(22, 32, 51, 0.10);
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f5efe3;
+      font-family: var(--mono);
+      color: var(--blue);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); }
+    tr:last-child td { border-bottom: 0; }
+
+    .tag {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-family: var(--mono);
+      font-size: 11px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--muted);
+    }
+
+    .tag.good { color: #25613d; background: var(--sage-soft); border-color: rgba(95, 127, 102, 0.35); }
+    .tag.warn { color: #8a5a0f; background: var(--gold-soft); border-color: rgba(201, 146, 44, 0.35); }
+    .tag.bad { color: #87343a; background: var(--rose-soft); border-color: rgba(159, 63, 70, 0.35); }
+
+    .bars {
+      display: grid;
+      gap: 12px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 155px 1fr 72px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .bar-track {
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(22, 32, 51, 0.09);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--blue);
+    }
+
+    .bar-fill.skill { background: var(--gold); }
+    .bar-fill.df { background: var(--sage); }
+    .bar span { font-size: 13px; color: var(--muted); }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      counter-reset: steps;
+    }
+
+    .step {
+      position: relative;
+      min-height: 190px;
+    }
+
+    .step::before {
+      counter-increment: steps;
+      content: counter(steps);
+      display: inline-grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: white;
+      font-family: var(--mono);
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+
+    .findings {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .finding {
+      display: grid;
+      gap: 10px;
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .source-list code {
+      white-space: normal;
+      background: rgba(22, 32, 51, 0.06);
+      border: 1px solid rgba(22, 32, 51, 0.10);
+      border-radius: 6px;
+      padding: 7px 9px;
+    }
+
+    .mono-box {
+      margin: 12px 0 0;
+      padding: 14px;
+      border: 1px solid rgba(22, 32, 51, 0.12);
+      border-radius: 8px;
+      background: rgba(22, 32, 51, 0.045);
+      color: #263245;
+      font-family: var(--mono);
+      font-size: 12px;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.74);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--blue);
+    }
+
+    .footer {
+      margin: 56px 0 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        display: block;
+        padding: 18px;
+      }
+      nav {
+        position: static;
+        margin-bottom: 18px;
+      }
+      nav a {
+        display: inline-block;
+        margin-right: 14px;
+        border-top: 0;
+      }
+      .hero, .callout {
+        padding: 24px;
+      }
+      .hero-grid, .grid, .grid.two, .steps, .findings, .callout {
+        grid-template-columns: 1fr;
+      }
+      .bar {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav aria-label="Report sections">
+      <div class="eyebrow">Evaluation report</div>
+      <a href="#summary">Executive Summary</a>
+      <a href="#method">Methodology</a>
+      <a href="#results">Results</a>
+      <a href="#interpretation">Interpretation</a>
+      <a href="#skill-cache">Skill Cache</a>
+      <a href="#trace">Trace Appendix</a>
+      <a href="#runtime">Runtime Causes</a>
+      <a href="#improve">Improvement Plan</a>
+      <a href="#reproduce">Reproduction Notes</a>
+    </nav>
+
+    <main>
+      <header class="hero" id="summary">
+        <span class="label">Datafetch x SkillCraft full 126-task run</span>
+        <h1>Cheap learned interfaces, but not enough correctness yet.</h1>
+        <p class="lead">
+          The full paired evaluation is now representative: 126 official
+          SkillCraft scaled tasks, 21 families, native base and native skill
+          baselines through SkillCraft's runner, and Datafetch rows scored by
+          the same official evaluators.
+        </p>
+        <div class="hero-grid">
+          <div class="metric">
+            <div class="value">126</div>
+            <div class="name">Official SkillCraft scaled tasks</div>
+          </div>
+          <div class="metric">
+            <div class="value">378</div>
+            <div class="name">Normalized rows across three arms</div>
+          </div>
+          <div class="metric">
+            <div class="value">5.6%</div>
+            <div class="name">Datafetch token ratio vs native base</div>
+          </div>
+          <div class="metric">
+            <div class="value">71%</div>
+            <div class="name">Datafetch pass rate at score >=70</div>
+          </div>
+        </div>
+      </header>
+
+      <section>
+        <div class="callout">
+          <div>
+            <div class="kicker">Bottom line</div>
+            <div class="verdict">
+              Datafetch won the cost story and lost the correctness story.
+            </div>
+          </div>
+          <p>
+            The current run does <strong>not</strong> validate the full product
+            thesis yet. It does give us a clean hill-climb target: preserve the
+            large token advantage while closing runtime reliability, learned
+            interface generalization, and tool-call reuse gaps.
+          </p>
+        </div>
+      </section>
+
+      <section id="method">
+        <h2>Methodology</h2>
+        <div class="steps">
+          <article class="step">
+            <h3>Official task surface</h3>
+            <p>
+              Indexed the upstream SkillCraft scaled-task suite: 126 task
+              configs, 21 task families, all task docs present, and 126
+              official evaluator scripts.
+            </p>
+          </article>
+          <article class="step">
+            <h3>Three comparable arms</h3>
+            <p>
+              Ran native SkillCraft base, native SkillCraft skill-cache mode,
+              and Datafetch learned-interface mode. Each arm was normalized into
+              one row per task.
+            </p>
+          </article>
+          <article class="step">
+            <h3>Same scoring gate</h3>
+            <p>
+              Datafetch answers were mirrored into SkillCraft task workspaces
+              and scored by the same official evaluator scripts as the native
+              baselines.
+            </p>
+          </article>
+          <article class="step">
+            <h3>Paired analysis</h3>
+            <p>
+              The final report compares matched tasks, reports pass rates,
+              score deltas with confidence intervals, effective token ratios,
+              and tool-call ratios.
+            </p>
+          </article>
+        </div>
+
+        <div class="grid two" style="margin-top:16px">
+          <article class="card">
+            <div class="kicker">Datafetch protocol</div>
+            <h3>Persistent per-family learning</h3>
+            <p>
+              Datafetch used a live adapter over SkillCraft task tools. The
+              harness treats e1 as the training/promotion episode and evaluates
+              e2, e3, m1, m2, and h1 as held-out reuse and generalization
+              episodes through learned df.lib interfaces.
+            </p>
+          </article>
+          <article class="card">
+            <div class="kicker">Native protocol</div>
+            <h3>SkillCraft's own runner</h3>
+            <p>
+              Native base and skill arms ran through SkillCraft/Toolathlon
+              using a local claw-codex OpenAI-compatible endpoint. This
+              preserves SkillCraft's task runner, skill cache behavior, and
+              evaluator pipeline.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="results">
+        <h2>Results</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Arm</th>
+                <th>Rows</th>
+                <th>Pass >=70</th>
+                <th>Status pass >=90</th>
+                <th>Avg score</th>
+                <th>Avg effective tokens</th>
+                <th>Avg tool calls</th>
+                <th>Runtime errors</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="tag warn">Datafetch learned</span></td>
+                <td class="num">126</td>
+                <td class="num">71%</td>
+                <td class="num">62%</td>
+                <td class="num">69.813</td>
+                <td class="num">18,076</td>
+                <td class="num">13.444</td>
+                <td class="num">14%</td>
+              </tr>
+              <tr>
+                <td><span class="tag good">SkillCraft base</span></td>
+                <td class="num">126</td>
+                <td class="num">96%</td>
+                <td class="num">94%</td>
+                <td class="num">93.796</td>
+                <td class="num">520,450</td>
+                <td class="num">17.389</td>
+                <td class="num">0%</td>
+              </tr>
+              <tr>
+                <td><span class="tag good">SkillCraft skill</span></td>
+                <td class="num">126</td>
+                <td class="num">94%</td>
+                <td class="num">93%</td>
+                <td class="num">92.027</td>
+                <td class="num">201,844</td>
+                <td class="num">9.698</td>
+                <td class="num">0%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid two" style="margin-top:16px">
+          <article class="card">
+            <div class="kicker">Correctness</div>
+            <div class="bars" aria-label="Pass rate chart">
+              <div class="bar"><span>SkillCraft base</span><div class="bar-track"><div class="bar-fill" style="width:96%"></div></div><span>96%</span></div>
+              <div class="bar"><span>SkillCraft skill</span><div class="bar-track"><div class="bar-fill skill" style="width:94%"></div></div><span>94%</span></div>
+              <div class="bar"><span>Datafetch</span><div class="bar-track"><div class="bar-fill df" style="width:71%"></div></div><span>71%</span></div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="kicker">Effective token economy</div>
+            <div class="bars" aria-label="Token ratio chart">
+              <div class="bar"><span>SkillCraft base</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span>520k</span></div>
+              <div class="bar"><span>SkillCraft skill</span><div class="bar-track"><div class="bar-fill skill" style="width:38.8%"></div></div><span>202k</span></div>
+              <div class="bar"><span>Datafetch</span><div class="bar-track"><div class="bar-fill df" style="width:3.5%"></div></div><span>18k</span></div>
+            </div>
+          </article>
+        </div>
+
+        <h3 style="margin-top:24px">Paired contrasts</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Contrast</th>
+                <th>Pairs</th>
+                <th>Pass delta</th>
+                <th>Score delta 95% CI</th>
+                <th>Effective token ratio</th>
+                <th>Tool-call ratio</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Datafetch learned vs SkillCraft base</td>
+                <td class="num">126</td>
+                <td class="num">-25%</td>
+                <td class="num">-23.983 [-32.062, -16.764]</td>
+                <td class="num">0.056 [0.046, 0.068]</td>
+                <td class="num">0.775 [0.597, 1.012]</td>
+              </tr>
+              <tr>
+                <td>Datafetch learned vs SkillCraft skill</td>
+                <td class="num">126</td>
+                <td class="num">-23%</td>
+                <td class="num">-22.213 [-30.317, -14.510]</td>
+                <td class="num">0.168 [0.145, 0.191]</td>
+                <td class="num">1.697 [1.201, 2.349]</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="interpretation">
+        <h2>Interpretation</h2>
+        <div class="findings">
+          <article class="finding">
+            <span class="tag good">Strong evidence</span>
+            <h3>The cost mechanism is real</h3>
+            <p>
+              Datafetch effective tokens were 18,076 per task on average,
+              compared with 520,450 for native base and 201,844 for native
+              skill. Even against SkillCraft's own skill-cache mode, Datafetch
+              used about one sixth of the effective tokens.
+            </p>
+          </article>
+          <article class="finding">
+            <span class="tag bad">Blocking gap</span>
+            <h3>Correctness is not non-inferior</h3>
+            <p>
+              A 71% pass rate is not close enough to the native baselines. This
+              rules out a thesis-positive claim today, even though the token
+              result is strong.
+            </p>
+          </article>
+          <article class="finding">
+            <span class="tag warn">Mechanism gap</span>
+            <h3>Reuse is too shallow</h3>
+            <p>
+              Datafetch average reuse rate was 0.171. Several families had
+              low or zero reuse, which means learned interfaces are not yet
+              consistently discovered, trusted, or general enough.
+            </p>
+          </article>
+          <article class="finding">
+            <span class="tag warn">Operational gap</span>
+            <h3>Runtime errors are material</h3>
+            <p>
+              Datafetch had a 14% runtime error rate. Native SkillCraft arms
+              had none after terminal timeout handling. Reliability work should
+              come before deeper optimization.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="skill-cache">
+        <h2>How SkillCraft Skill Cache Works</h2>
+        <div class="grid two">
+          <article class="card">
+            <div class="kicker">Native skill mode</div>
+            <h3>Intra-task reusable Python scripts</h3>
+            <p>
+              SkillCraft's standard `skill` arm gives the agent
+              `local-save_skill` and `local-execute_skill`. The agent saves a
+              Python script into `workspace/skill_cache.json`, then executes it
+              repeatedly with different arguments inside the same task. In this
+              full run, standard skill mode did not use cross-task browsing;
+              it reused scripts within each task episode.
+            </p>
+          </article>
+          <article class="card">
+            <div class="kicker">Execution model</div>
+            <h3>Script plus tool bridge</h3>
+            <p>
+              A saved skill must set a `result` variable. During execution,
+              SkillCraft injects `call_tool`, `json`, `re`, `os`, and the
+              workspace path into the script namespace. `call_tool` lets the
+              script call the same local/API/filesystem tools as the agent, and
+              execution stats are written back into `skill_cache.json`.
+            </p>
+          </article>
+        </div>
+        <details>
+          <summary>Native vocabulary-builder/e2 skill-cache trace</summary>
+          <div class="mono-box">Start: no reusable skills.
+Assistant action: local-save_skill({"skill_name":"build_vocabulary_card", "parameters":["word"], ...})
+Cache snapshot: ["build_vocabulary_card"].
+Assistant action: local-execute_skill x3 for ephemeral, ubiquitous, pragmatic.
+Execution stats: 3 total, 3 successful, 0 failed.
+Filesystem action: filesystem-write_file("vocabulary_cards.json").
+Finish action: local-claim_done().
+Evaluator: pass, score 100%.
+Tool calls: 6. Total tokens: 55,432. Skill creation output tokens: 1,964.</div>
+        </details>
+      </section>
+
+      <section id="trace">
+        <h2>Low-Reuse Trace Appendix</h2>
+        <div class="callout">
+          <div>
+            <div class="kicker">Chosen example</div>
+            <div class="verdict">Vocabulary builder was the clearest low-reuse failure.</div>
+          </div>
+          <p>
+            Native SkillCraft skill mode solved all six vocabulary tasks with
+            high reuse. Datafetch scored 0 across the same family, but the
+            cause was not a bad learned interface: every Datafetch vocabulary
+            episode failed before code generation because the agent hit a
+            GPT-5.3-Codex-Spark usage limit.
+          </p>
+        </div>
+        <div class="table-wrap" style="margin-top:16px">
+          <table>
+            <thead>
+              <tr>
+                <th>Vocabulary task</th>
+                <th>Datafetch start functions</th>
+                <th>Datafetch actions</th>
+                <th>Datafetch outcome</th>
+                <th>Native skill outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">e1</td>
+                <td class="num">0</td>
+                <td>Agent thread started, then quota error before writing `scripts/answer.ts`.</td>
+                <td><span class="tag bad">0%, no output file</span></td>
+                <td><span class="tag good">100%, direct calls</span></td>
+              </tr>
+              <tr>
+                <td class="num">e2</td>
+                <td class="num">0</td>
+                <td>Agent thread started, then quota error before any df.lib or df.tool call.</td>
+                <td><span class="tag bad">0%, no output file</span></td>
+                <td><span class="tag good">100%, save_skill + 3 execute_skill</span></td>
+              </tr>
+              <tr>
+                <td class="num">e3</td>
+                <td class="num">0</td>
+                <td>Same quota failure before answer generation.</td>
+                <td><span class="tag bad">0%, no output file</span></td>
+                <td><span class="tag good">100%</span></td>
+              </tr>
+              <tr>
+                <td class="num">m1</td>
+                <td class="num">0</td>
+                <td>Same quota failure before answer generation.</td>
+                <td><span class="tag bad">0%, no output file</span></td>
+                <td><span class="tag good">100%, 4 execute_skill</span></td>
+              </tr>
+              <tr>
+                <td class="num">m2</td>
+                <td class="num">0</td>
+                <td>Same quota failure before answer generation.</td>
+                <td><span class="tag bad">0%, no output file</span></td>
+                <td><span class="tag good">100%, 4 execute_skill</span></td>
+              </tr>
+              <tr>
+                <td class="num">h1</td>
+                <td class="num">0</td>
+                <td>Same quota failure before answer generation.</td>
+                <td><span class="tag bad">0%, no output file</span></td>
+                <td><span class="tag good">99.2%, 5 execute_skill</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="grid two" style="margin-top:16px">
+          <article class="card">
+            <div class="kicker">Manual inspection artifacts</div>
+            <div class="source-list">
+              <code><a href="skill-cache-vocabulary-e2-inspection.json">skill-cache-vocabulary-e2-inspection.json</a></code>
+              <code><a href="datafetch-vocabulary-family-inspection.json">datafetch-vocabulary-family-inspection.json</a></code>
+              <code><a href="datafetch-runtime-error-taxonomy.json">datafetch-runtime-error-taxonomy.json</a></code>
+            </div>
+          </article>
+          <article class="card">
+            <div class="kicker">What to inspect manually</div>
+            <p>
+              The JSON appendix includes filesystem snapshots, task prompt
+              previews, function availability at each reuse point,
+              skill-cache contents, action trajectories, evaluator outputs, and
+              the agent event stream that caused the Datafetch no-op episodes.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="runtime">
+        <h2>What Caused The Runtime Errors</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Failure class</th>
+                <th>Count</th>
+                <th>Representative cause</th>
+                <th>Fix direction</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Agent quota limit before answer</td>
+                <td class="num">14</td>
+                <td>Agent returned “usage limit” before creating `scripts/answer.ts`; affected vocabulary-builder, world-bank, and two USGS tasks.</td>
+                <td>Retry/resume failed agent episodes with a different model or after limit reset; do not score pre-answer quota errors as interface failures.</td>
+              </tr>
+              <tr>
+                <td>Bad or missing lib export</td>
+                <td class="num">7</td>
+                <td>Helper file existed but did not export a valid Datafetch `fn`, or answer code referenced a helper that never entered the tenant library.</td>
+                <td>Add a lib compile/load gate before evaluation and require export-name matching.</td>
+              </tr>
+              <tr>
+                <td>Generated code reference/type errors</td>
+                <td class="num">6</td>
+                <td>Undefined symbols such as `major_economies`, wrong collection assumptions, or reading properties from undefined.</td>
+                <td>Run answer scripts once under a fast local type/runtime smoke before invoking official evaluator.</td>
+              </tr>
+              <tr>
+                <td>Tool payload assumption errors</td>
+                <td class="num">3</td>
+                <td>Generated code assumed a payload shape that did not exist, such as missing evolution chain IDs or monster payload fields.</td>
+                <td>Promote typed per-tool response guards and schema-normalizing adapters into reusable interfaces.</td>
+              </tr>
+              <tr>
+                <td>Schema/transform errors</td>
+                <td class="num">2</td>
+                <td>One schema validation failure and one TypeScript transform failure.</td>
+                <td>Make lib authoring pass `tsx`/schema validation before accepting promotion.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="improve">
+        <h2>Steps To Improve</h2>
+        <div class="grid">
+          <article class="card">
+            <div class="kicker">1. Stabilize</div>
+            <h3>Turn failures into replay tests</h3>
+            <p>
+              Start with dnd-monster-compendium, vocabulary-builder, and
+              world-bank-economic-snapshot. Convert each official evaluator
+              failure into a replay fixture, then remove runtime error causes
+              before changing interface design.
+            </p>
+          </article>
+          <article class="card">
+            <div class="kicker">2. Generalize</div>
+            <h3>Promote family-level interfaces</h3>
+            <p>
+              Distill around typed task shapes: collect N entities, join M API
+              endpoints, compute summary fields, emit exact evaluator schema.
+              Avoid entity-specific learned functions.
+            </p>
+          </article>
+          <article class="card">
+            <div class="kicker">3. Discover</div>
+            <h3>Make lib-first the default warm path</h3>
+            <p>
+              Improve apropos/man ranking and add a warm-task preflight that
+              proposes matching df.lib functions before primitive search. Track
+              accepted, rejected, and missed suggestions.
+            </p>
+          </article>
+          <article class="card">
+            <div class="kicker">4. Batch</div>
+            <h3>Reduce tool calls below SkillCraft skill</h3>
+            <p>
+              Datafetch used fewer tool calls than base but more than
+              SkillCraft skill. Add batch wrappers and cache-aware interfaces
+              for repeated API collections.
+            </p>
+          </article>
+          <article class="card">
+            <div class="kicker">5. Verify</div>
+            <h3>Use evaluator feedback in the loop</h3>
+            <p>
+              Parse official evaluator item scores and warnings into structured
+              failure classes: missing output file, invalid schema, incomplete
+              entities, wrong calculation, and unsupported output.
+            </p>
+          </article>
+          <article class="card">
+            <div class="kicker">6. Re-run</div>
+            <h3>Hill-climb gates</h3>
+            <p>
+              Next full-run target: Datafetch pass >=90%, hard pass >=80%,
+              runtime errors below 5%, reuse above 0.40, tool calls below
+              SkillCraft skill, and effective tokens below 20% of SkillCraft
+              skill.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="reproduce">
+        <h2>Reproduction Notes</h2>
+        <div class="grid two">
+          <article class="card">
+            <div class="kicker">Final artifacts</div>
+            <div class="source-list">
+              <code>eval/skillcraft/results/datafetch/full-126-20260510192951</code>
+              <code>eval/skillcraft/results/native/claw-full-126-20260510213113/run_20260510_213115</code>
+              <code>eval/skillcraft/results/full-126-claw-paired-normalized.jsonl</code>
+              <code>eval/skillcraft/reports/full-126-claw-paired-analysis.json</code>
+              <code>eval/skillcraft/reports/full-126-claw-paired-report.md</code>
+            </div>
+          </article>
+          <article class="card">
+            <div class="kicker">Verification</div>
+            <p>
+              The final harness check passed, typecheck passed, the full test
+              suite passed with 35 files and 201 tests, and git diff whitespace
+              checks passed. The harness verifier still reports a conservative
+              Datafetch adapter readiness warning, even though the paired
+              results exist.
+            </p>
+          </article>
+        </div>
+        <p class="footer">
+          Generated from the full paired evaluation artifacts on 2026-05-11.
+          This report is intentionally interpretation-first: it is for deciding
+          the next engineering hill-climb, not for claiming a benchmark win.
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,505 @@
+{
+  "generatedAt": "2026-05-10T16:41:53.950Z",
+  "neededLocalTools": [
+    {
+      "name": "claim_done",
+      "count": 126
+    },
+    {
+      "name": "skill_cache",
+      "count": 126
+    },
+    {
+      "name": "dnd_api",
+      "count": 12
+    },
+    {
+      "name": "catfacts_api",
+      "count": 6
+    },
+    {
+      "name": "cocktail_api",
+      "count": 6
+    },
+    {
+      "name": "countries_tools",
+      "count": 6
+    },
+    {
+      "name": "dictionary_api",
+      "count": 6
+    },
+    {
+      "name": "dna_tools",
+      "count": 6
+    },
+    {
+      "name": "dogapi",
+      "count": 6
+    },
+    {
+      "name": "gitlab_api",
+      "count": 6
+    },
+    {
+      "name": "jikan_api",
+      "count": 6
+    },
+    {
+      "name": "jsonplaceholder_api",
+      "count": 6
+    },
+    {
+      "name": "mealdb_api",
+      "count": 6
+    },
+    {
+      "name": "namedemographics_api",
+      "count": 6
+    },
+    {
+      "name": "pokemon_tools",
+      "count": 6
+    },
+    {
+      "name": "randomuser_api",
+      "count": 6
+    },
+    {
+      "name": "rickmorty_api",
+      "count": 6
+    },
+    {
+      "name": "tvmaze_api",
+      "count": 6
+    },
+    {
+      "name": "university_api",
+      "count": 6
+    },
+    {
+      "name": "usgs_earthquake_api",
+      "count": 6
+    },
+    {
+      "name": "weather_tools",
+      "count": 6
+    },
+    {
+      "name": "worldbank_api",
+      "count": 6
+    }
+  ],
+  "neededMcpServers": [
+    {
+      "name": "filesystem",
+      "count": 126
+    }
+  ],
+  "declaredToolsUsed": [
+    {
+      "name": "dnd_get_class",
+      "count": 10
+    },
+    {
+      "name": "dnd_get_equipment_category",
+      "count": 9
+    },
+    {
+      "name": "dnd_get_race",
+      "count": 7
+    },
+    {
+      "name": "dnd_get_spell",
+      "count": 7
+    },
+    {
+      "name": "cocktail_by_ingredient",
+      "count": 6
+    },
+    {
+      "name": "dna_count_nucleotides",
+      "count": 6
+    },
+    {
+      "name": "dnd_get_monster",
+      "count": 6
+    },
+    {
+      "name": "jikan_get_anime_characters",
+      "count": 6
+    },
+    {
+      "name": "jsonplaceholder_get_posts",
+      "count": 6
+    },
+    {
+      "name": "usgs_get_region_stats",
+      "count": 6
+    },
+    {
+      "name": "weather_get_coordinates",
+      "count": 6
+    },
+    {
+      "name": "worldbank_gdp",
+      "count": 6
+    },
+    {
+      "name": "catfacts_breed_coat_family",
+      "count": 5
+    },
+    {
+      "name": "catfacts_breed_facts",
+      "count": 5
+    },
+    {
+      "name": "catfacts_breed_relatives",
+      "count": 5
+    },
+    {
+      "name": "cocktail_by_category",
+      "count": 5
+    },
+    {
+      "name": "countries_get_borders",
+      "count": 5
+    },
+    {
+      "name": "countries_get_details",
+      "count": 5
+    },
+    {
+      "name": "countries_get_region",
+      "count": 5
+    },
+    {
+      "name": "dictionary_definitions",
+      "count": 5
+    },
+    {
+      "name": "dictionary_lookup",
+      "count": 5
+    },
+    {
+      "name": "dictionary_synonyms",
+      "count": 5
+    },
+    {
+      "name": "dna_transcribe_to_mrna",
+      "count": 5
+    },
+    {
+      "name": "dnd_get_class_spells",
+      "count": 5
+    },
+    {
+      "name": "dog_breed_all_sub_breeds",
+      "count": 5
+    },
+    {
+      "name": "dog_breed_images",
+      "count": 5
+    },
+    {
+      "name": "gitlab_get_branches",
+      "count": 5
+    },
+    {
+      "name": "gitlab_get_contributors",
+      "count": 5
+    },
+    {
+      "name": "gitlab_get_project_info",
+      "count": 5
+    },
+    {
+      "name": "jikan_get_anime_details",
+      "count": 5
+    },
+    {
+      "name": "jikan_get_anime_episodes",
+      "count": 5
+    },
+    {
+      "name": "jsonplaceholder_get_user",
+      "count": 5
+    },
+    {
+      "name": "meal_by_area",
+      "count": 5
+    },
+    {
+      "name": "meal_by_category",
+      "count": 5
+    },
+    {
+      "name": "meal_search",
+      "count": 5
+    },
+    {
+      "name": "name_full_demographics",
+      "count": 5
+    },
+    {
+      "name": "name_gender",
+      "count": 5
+    },
+    {
+      "name": "name_nationality",
+      "count": 5
+    },
+    {
+      "name": "pokemon_get_evolution",
+      "count": 5
+    },
+    {
+      "name": "pokemon_get_moves",
+      "count": 5
+    },
+    {
+      "name": "pokemon_get_species",
+      "count": 5
+    },
+    {
+      "name": "randomuser_by_nationality",
+      "count": 5
+    },
+    {
+      "name": "randomuser_get_users",
+      "count": 5
+    },
+    {
+      "name": "randomuser_profile",
+      "count": 5
+    },
+    {
+      "name": "rickmorty_get_character",
+      "count": 5
+    },
+    {
+      "name": "rickmorty_get_character_episodes",
+      "count": 5
+    },
+    {
+      "name": "rickmorty_search_characters",
+      "count": 5
+    },
+    {
+      "name": "tvmaze_get_show_cast",
+      "count": 5
+    },
+    {
+      "name": "tvmaze_get_show_episodes",
+      "count": 5
+    },
+    {
+      "name": "tvmaze_get_show_info",
+      "count": 5
+    },
+    {
+      "name": "university_by_country",
+      "count": 5
+    },
+    {
+      "name": "university_by_name",
+      "count": 5
+    },
+    {
+      "name": "university_details",
+      "count": 5
+    },
+    {
+      "name": "usgs_query_earthquakes",
+      "count": 5
+    },
+    {
+      "name": "weather_get_daily",
+      "count": 5
+    },
+    {
+      "name": "weather_get_hourly",
+      "count": 5
+    },
+    {
+      "name": "worldbank_economic_snapshot",
+      "count": 5
+    },
+    {
+      "name": "worldbank_indicator",
+      "count": 5
+    },
+    {
+      "name": "catfacts_breed_profile",
+      "count": 4
+    },
+    {
+      "name": "cocktail_details",
+      "count": 4
+    },
+    {
+      "name": "cocktail_search",
+      "count": 4
+    },
+    {
+      "name": "countries_get_by_currency",
+      "count": 4
+    },
+    {
+      "name": "dictionary_phonetics",
+      "count": 4
+    },
+    {
+      "name": "dna_find_max_nucleotide",
+      "count": 4
+    },
+    {
+      "name": "dna_is_valid",
+      "count": 4
+    },
+    {
+      "name": "dog_breed_gallery",
+      "count": 4
+    },
+    {
+      "name": "dog_breed_info",
+      "count": 4
+    },
+    {
+      "name": "dog_sub_breed_images",
+      "count": 4
+    },
+    {
+      "name": "gitlab_get_issues",
+      "count": 4
+    },
+    {
+      "name": "jsonplaceholder_get_comments",
+      "count": 4
+    },
+    {
+      "name": "jsonplaceholder_get_todos",
+      "count": 4
+    },
+    {
+      "name": "meal_by_ingredient",
+      "count": 4
+    },
+    {
+      "name": "name_statistics",
+      "count": 4
+    },
+    {
+      "name": "pokemon_get_abilities",
+      "count": 4
+    },
+    {
+      "name": "randomuser_detailed",
+      "count": 4
+    },
+    {
+      "name": "rickmorty_get_location",
+      "count": 4
+    },
+    {
+      "name": "tvmaze_get_show_seasons",
+      "count": 4
+    },
+    {
+      "name": "university_search",
+      "count": 4
+    },
+    {
+      "name": "usgs_get_depth_analysis",
+      "count": 4
+    },
+    {
+      "name": "usgs_get_historical_trends",
+      "count": 4
+    },
+    {
+      "name": "catfacts_breed_encyclopedia",
+      "count": 3
+    },
+    {
+      "name": "cocktail_ingredient_info",
+      "count": 3
+    },
+    {
+      "name": "countries_get_by_language",
+      "count": 3
+    },
+    {
+      "name": "dictionary_word_details",
+      "count": 3
+    },
+    {
+      "name": "dna_translate_to_amino",
+      "count": 3
+    },
+    {
+      "name": "gitlab_get_commits",
+      "count": 3
+    },
+    {
+      "name": "jikan_get_anime_recommendations",
+      "count": 3
+    },
+    {
+      "name": "jikan_get_anime_statistics",
+      "count": 3
+    },
+    {
+      "name": "jsonplaceholder_user_profile",
+      "count": 3
+    },
+    {
+      "name": "meal_details",
+      "count": 3
+    },
+    {
+      "name": "name_age",
+      "count": 3
+    },
+    {
+      "name": "pokemon_get_details",
+      "count": 3
+    },
+    {
+      "name": "randomuser_get_user",
+      "count": 3
+    },
+    {
+      "name": "rickmorty_get_episode",
+      "count": 3
+    },
+    {
+      "name": "tvmaze_get_show_crew",
+      "count": 3
+    },
+    {
+      "name": "university_by_domain",
+      "count": 3
+    },
+    {
+      "name": "usgs_get_tectonic_info",
+      "count": 3
+    },
+    {
+      "name": "weather_get_current",
+      "count": 3
+    },
+    {
+      "name": "weather_get_historical",
+      "count": 3
+    },
+    {
+      "name": "worldbank_country_info",
+      "count": 3
+    },
+    {
+      "name": "worldbank_population",
+      "count": 3
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Datafetch SkillCraft Normalized Result",
+  "type": "object",
+  "required": [
+    "taskKey",
+    "family",
+    "level",
+    "arm",
+    "officialPassed",
+    "officialScorePercent"
+  ],
+  "properties": {
+    "taskKey": { "type": "string" },
+    "family": { "type": "string" },
+    "level": { "type": "string" },
+    "arm": {
+      "type": "string",
+      "enum": [
+        "skillcraft-base",
+        "skillcraft-skill",
+        "skillcraft-static-reuse",
+        "datafetch-learned"
+      ]
+    },
+    "officialPassed": { "type": "boolean" },
+    "officialStatus": { "type": ["string", "null"] },
+    "officialScorePercent": { "type": "number" },
+    "tokens": { "type": ["number", "null"] },
+    "effectiveTokens": { "type": ["number", "null"] },
+    "inputTokens": { "type": ["number", "null"] },
+    "outputTokens": { "type": ["number", "null"] },
+    "costUsd": { "type": ["number", "null"] },
+    "latencyMs": { "type": ["number", "null"] },
+    "llmRequests": { "type": ["number", "null"] },
+    "toolCalls": { "type": ["number", "null"] },
+    "skillSaveCalls": { "type": ["number", "null"] },
+    "skillExecuteCalls": { "type": ["number", "null"] },
+    "learnedInterfaceCalls": { "type": ["number", "null"] },
+    "regressionsPassed": { "type": ["boolean", "null"] },
+    "artifactPath": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}
+

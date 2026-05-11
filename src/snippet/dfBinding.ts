@@ -8,8 +8,9 @@
 //   df.db.<ident>.findSimilar(query, limit?)    -> Promise<unknown[]>
 //   df.db.<ident>.hybrid(query, opts?)          -> Promise<unknown[]>
 //   df.lib.<name>(input)                         -> Promise<Result<unknown>>
-//   df.answer(envelope)                          -> AnswerEnvelope
-//   df.run(asyncFn)                              -> Promise<Result<unknown>>
+//   df.tool.<bundle>[toolName](input)             -> Promise<unknown>
+//   df.answer(envelope)                           -> AnswerEnvelope
+//   df.run(asyncFn)                               -> Promise<Result<unknown>>
 //
 // Every method threads the snippet's shared `DispatchContext` (cost
 // accumulator + active trajectory + tenant/mount/pins). For substrate
@@ -18,7 +19,9 @@
 // records and charges its own cost block, and we then fold the returned
 // Result's tokens/ms back into the snippet-level accumulator.
 
+import { spawn } from "node:child_process";
 import { performance } from "node:perf_hooks";
+import path from "node:path";
 
 import { getMountRuntimeRegistry } from "../adapter/runtime.js";
 import {
@@ -43,6 +46,7 @@ import {
 export type DfBinding = {
   db: Record<string, DbCollectionBinding>;
   lib: Record<string, (input: unknown) => Promise<Result<unknown>>>;
+  tool: Record<string, Record<string, (input: unknown) => Promise<unknown>>>;
   answer(input: AnswerInput): AnswerEnvelope;
   run<T>(fn: () => Promise<T> | T): Promise<Result<T>>;
 };
@@ -175,6 +179,7 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
   return {
     db: dbProxy,
     lib: libProxy,
+    tool: makeToolProxy({ sessionCtx, dispatchCtx }),
     answer(input: AnswerInput): AnswerEnvelope {
       return makeAnswerEnvelope(input);
     },
@@ -213,6 +218,146 @@ export function buildDf(opts: BuildDfOpts): DfBinding {
       });
     },
   };
+}
+
+// --- SkillCraft tool bridge -------------------------------------------------
+
+function makeToolProxy(args: {
+  sessionCtx: SessionCtx;
+  dispatchCtx: DispatchContext;
+}): Record<string, Record<string, (input: unknown) => Promise<unknown>>> {
+  const { sessionCtx, dispatchCtx } = args;
+  const bridge = sessionCtx.skillcraftToolBridge;
+  return new Proxy({} as Record<string, Record<string, (input: unknown) => Promise<unknown>>>, {
+    get(_target, prop): Record<string, (input: unknown) => Promise<unknown>> | undefined {
+      if (typeof prop !== "string") return undefined;
+      if (!bridge) {
+        throw new Error("df.tool: no SkillCraft tool bridge configured for this snippet session");
+      }
+      if (!bridge.bundles.includes(prop)) {
+        throw new Error(
+          `df.tool.${prop}: bundle not configured; available bundles: ${bridge.bundles.join(", ")}`,
+        );
+      }
+      return makeToolBundleProxy({ bundle: prop, sessionCtx, dispatchCtx });
+    },
+  });
+}
+
+function makeToolBundleProxy(args: {
+  bundle: string;
+  sessionCtx: SessionCtx;
+  dispatchCtx: DispatchContext;
+}): Record<string, (input: unknown) => Promise<unknown>> {
+  return new Proxy({} as Record<string, (input: unknown) => Promise<unknown>>, {
+    get(_target, prop): ((input: unknown) => Promise<unknown>) | undefined {
+      if (typeof prop !== "string") return undefined;
+      return async (input: unknown): Promise<unknown> => {
+        const toolName = normalizeToolName(prop);
+        const primitive = `tool.${args.bundle}.${toolName}`;
+        const startedMs = performance.now();
+        const exec = async (): Promise<unknown> => invokeSkillcraftTool({
+          sessionCtx: args.sessionCtx,
+          bundle: args.bundle,
+          toolName,
+          input,
+        });
+        let output: unknown;
+        if (args.dispatchCtx.trajectory) {
+          output = await args.dispatchCtx.trajectory.call(
+            primitive,
+            input,
+            exec,
+            scopeForStack(args.dispatchCtx.callStack ?? []),
+          );
+        } else {
+          output = await exec();
+        }
+        chargeSubstrate(args.dispatchCtx, performance.now() - startedMs);
+        return output;
+      };
+    },
+  });
+}
+
+async function invokeSkillcraftTool(args: {
+  sessionCtx: SessionCtx;
+  bundle: string;
+  toolName: string;
+  input: unknown;
+}): Promise<unknown> {
+  const bridge = args.sessionCtx.skillcraftToolBridge;
+  if (!bridge) throw new Error("SkillCraft tool bridge missing");
+  const runnerPath = bridge.runnerPath ?? path.resolve("eval/skillcraft/scripts/invoke-skillcraft-tool.py");
+  const python = bridge.python ?? process.env["SKILLCRAFT_TOOL_PYTHON"] ?? "python3";
+  const timeoutMs = bridge.toolTimeoutMs ?? Number(process.env["SKILLCRAFT_TOOL_TIMEOUT_MS"] ?? 60_000);
+  const proc = await spawnJson({
+    command: python,
+    argv: [
+      runnerPath,
+      "--skillcraft-dir",
+      bridge.skillcraftDir,
+      "--bundle",
+      args.bundle,
+      "--tool",
+      args.toolName,
+      "--args",
+      JSON.stringify(args.input ?? {}),
+    ],
+    timeoutMs,
+  });
+  if (proc.exitCode !== 0) {
+    throw new Error(`SkillCraft tool ${args.toolName} failed: ${proc.stderr || proc.stdout}`);
+  }
+  const payload = JSON.parse(proc.stdout) as { result?: unknown };
+  return payload.result;
+}
+
+function spawnJson(args: {
+  command: string;
+  argv: string[];
+  timeoutMs?: number;
+}): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    const child = spawn(args.command, args.argv, { stdio: ["ignore", "pipe", "pipe"] });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let timedOut = false;
+    const timer = args.timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          child.kill("SIGTERM");
+          setTimeout(() => {
+            if (!child.killed) child.kill("SIGKILL");
+          }, 2_000).unref();
+        }, args.timeoutMs)
+      : undefined;
+    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.on("error", (error) => {
+      if (timer) clearTimeout(timer);
+      resolve({
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: `${Buffer.concat(stderr).toString("utf8")}${String(error)}`,
+        exitCode: 1,
+      });
+    });
+    child.on("close", (code, signal) => {
+      if (timer) clearTimeout(timer);
+      const stderrText = Buffer.concat(stderr).toString("utf8");
+      resolve({
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: timedOut
+          ? `${stderrText}\n[timed out after ${args.timeoutMs}ms signal=${signal ?? ""}]\n`
+          : stderrText,
+        exitCode: timedOut ? 124 : typeof code === "number" ? code : 1,
+      });
+    });
+  });
+}
+
+function normalizeToolName(prop: string): string {
+  return prop.startsWith("local_") ? prop.replace(/^local_/, "local-") : prop;
 }
 
 // --- Substrate binding helper ----------------------------------------------

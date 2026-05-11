@@ -122,6 +122,7 @@ export class DiskSnippetRuntime implements SnippetRuntime {
       df,
       seq: ++this.seq,
       sourcePath,
+      timeoutMs: sessionCtx.snippetTimeoutMs ?? numberFromEnv("DF_SNIPPET_TIMEOUT_MS"),
     });
 
     recorder.setResult(returnValue);
@@ -259,6 +260,7 @@ type RunArgs = {
   df: DfBinding;
   seq: number;
   sourcePath?: string;
+  timeoutMs?: number;
 };
 
 type RunResp = {
@@ -294,7 +296,7 @@ function wrapSource(source: string): string {
 }
 
 async function runSnippet(args: RunArgs): Promise<RunResp> {
-  const { source, df, seq, sourcePath } = args;
+  const { source, df, seq, sourcePath, timeoutMs } = args;
 
   const sourceDir = sourcePath !== undefined ? path.dirname(sourcePath) : null;
   const runBesideSource = sourceDir !== null && (await dirExists(sourceDir));
@@ -334,6 +336,7 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
       sink.push(`${vals.map(formatArg).join(" ")}\n`);
     };
   const origDf = (globalThis as Record<string, unknown>)["df"];
+  const origCwd = process.cwd();
   (globalThis as Record<string, unknown>)["df"] = df;
   console.log = writeLine(stdout);
   console.info = writeLine(stdout);
@@ -348,7 +351,7 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
       `${pathToFileURL(file).href}?seq=${seq}`
     )) as { __df_done?: Promise<unknown> };
     if (mod.__df_done) {
-      returnValue = await mod.__df_done;
+      returnValue = await withTimeout(mod.__df_done, timeoutMs);
     }
   } catch (err) {
     error = err instanceof Error ? err : new Error(String(err));
@@ -369,6 +372,15 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
     } else {
       (globalThis as Record<string, unknown>)["df"] = origDf;
     }
+    try {
+      process.chdir(origCwd);
+    } catch (err) {
+      stderr.push(
+        `[snippet/runtime] failed to restore cwd ${origCwd}: ${
+          err instanceof Error ? err.message : String(err)
+        }\n`,
+      );
+    }
     // Best-effort cleanup; ignore failures. Source-path execution writes a
     // temp sibling file so relative imports resolve from the script directory.
     if (runBesideSource) {
@@ -385,6 +397,26 @@ async function runSnippet(args: RunArgs): Promise<RunResp> {
     ...(returnValue !== undefined ? { returnValue } : {}),
     ...(error ? { error } : {}),
   };
+}
+
+function numberFromEnv(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
+  if (timeoutMs === undefined || timeoutMs <= 0) return promise;
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<T>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`[snippet/runtime] timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 async function dirExists(dir: string): Promise<boolean> {

@@ -1,0 +1,14 @@
+{
+  "provider": "openrouter",
+  "model": "deepseek-v3.2-exp",
+  "temperature": 0,
+  "top_p": 1,
+  "agent_max_tokens": 8192,
+  "user_max_tokens": 1024,
+  "task_timeout_seconds": 3600,
+  "notes": [
+    "Use the same provider/model/limits for all benchmark arms.",
+    "Record cached and uncached token counts separately when the provider exposes them."
+  ]
+}
+

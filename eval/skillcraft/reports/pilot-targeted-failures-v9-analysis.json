@@ -1,0 +1,226 @@
+{
+  "generatedAt": "2026-05-10T18:26:26.538Z",
+  "input": "/Users/jayfarei/src/tries/2026-05-01-hackathon/eval/skillcraft/results/pilot-targeted-failures-v9-normalized.jsonl",
+  "rowCount": 6,
+  "arms": {
+    "datafetch-learned": {
+      "count": 6,
+      "passRate": 0.5,
+      "statusPassRateGe90": 0.5,
+      "avgScore": 56.25,
+      "avgTokens": 236916.66666666666,
+      "avgEffectiveTokens": 18228.666666666668,
+      "avgCostUsd": null,
+      "avgLatencyMs": 24196.166666666668,
+      "avgToolCalls": 35.5,
+      "avgLearnedInterfaceCalls": 2.5,
+      "avgLearnedInterfacesAvailable": 0.16666666666666666,
+      "avgLearnedInterfacesCreated": 0.5,
+      "avgReuseRate": 0.16115819209039547,
+      "runtimeErrorRate": 0.16666666666666666,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "levels": {
+    "e1": {
+      "count": 3,
+      "passRate": 0.3333333333333333,
+      "statusPassRateGe90": 0.3333333333333333,
+      "avgScore": 45.833333333333336,
+      "avgTokens": 224205,
+      "avgEffectiveTokens": 20429,
+      "avgCostUsd": null,
+      "avgLatencyMs": 26270.666666666668,
+      "avgToolCalls": 61,
+      "avgLearnedInterfaceCalls": 2,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0.3333333333333333,
+      "avgReuseRate": 0.08898305084745763,
+      "runtimeErrorRate": 0.3333333333333333,
+      "officialEvaluatorCoverage": 1
+    },
+    "e2": {
+      "count": 3,
+      "passRate": 0.6666666666666666,
+      "statusPassRateGe90": 0.6666666666666666,
+      "avgScore": 66.66666666666667,
+      "avgTokens": 249628.33333333334,
+      "avgEffectiveTokens": 16028.333333333334,
+      "avgCostUsd": null,
+      "avgLatencyMs": 22121.666666666668,
+      "avgToolCalls": 10,
+      "avgLearnedInterfaceCalls": 3,
+      "avgLearnedInterfacesAvailable": 0.3333333333333333,
+      "avgLearnedInterfacesCreated": 0.6666666666666666,
+      "avgReuseRate": 0.2333333333333333,
+      "runtimeErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "phases": {
+    "train": {
+      "count": 3,
+      "passRate": 0.3333333333333333,
+      "statusPassRateGe90": 0.3333333333333333,
+      "avgScore": 45.833333333333336,
+      "avgTokens": 224205,
+      "avgEffectiveTokens": 20429,
+      "avgCostUsd": null,
+      "avgLatencyMs": 26270.666666666668,
+      "avgToolCalls": 61,
+      "avgLearnedInterfaceCalls": 2,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0.3333333333333333,
+      "avgReuseRate": 0.08898305084745763,
+      "runtimeErrorRate": 0.3333333333333333,
+      "officialEvaluatorCoverage": 1
+    },
+    "warm": {
+      "count": 3,
+      "passRate": 0.6666666666666666,
+      "statusPassRateGe90": 0.6666666666666666,
+      "avgScore": 66.66666666666667,
+      "avgTokens": 249628.33333333334,
+      "avgEffectiveTokens": 16028.333333333334,
+      "avgCostUsd": null,
+      "avgLatencyMs": 22121.666666666668,
+      "avgToolCalls": 10,
+      "avgLearnedInterfaceCalls": 3,
+      "avgLearnedInterfacesAvailable": 0.3333333333333333,
+      "avgLearnedInterfacesCreated": 0.6666666666666666,
+      "avgReuseRate": 0.2333333333333333,
+      "runtimeErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "families": {
+    "countries-encyclopedia": {
+      "count": 2,
+      "passRate": 0.5,
+      "statusPassRateGe90": 0.5,
+      "avgScore": 68.75,
+      "avgTokens": 307343,
+      "avgEffectiveTokens": 20879,
+      "avgCostUsd": null,
+      "avgLatencyMs": 29106,
+      "avgToolCalls": 91.5,
+      "avgLearnedInterfaceCalls": 3,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0.5,
+      "avgReuseRate": 0.13347457627118645,
+      "runtimeErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "jsonplaceholder-blog-analyzer": {
+      "count": 2,
+      "passRate": 0.5,
+      "statusPassRateGe90": 0.5,
+      "avgScore": 50,
+      "avgTokens": 199440,
+      "avgEffectiveTokens": 12624,
+      "avgCostUsd": null,
+      "avgLatencyMs": 18701,
+      "avgToolCalls": 10.5,
+      "avgLearnedInterfaceCalls": 3,
+      "avgLearnedInterfacesAvailable": 0.5,
+      "avgLearnedInterfacesCreated": 0.5,
+      "avgReuseRate": 0.225,
+      "runtimeErrorRate": 0,
+      "officialEvaluatorCoverage": 1
+    },
+    "openmeteo-weather": {
+      "count": 2,
+      "passRate": 0.5,
+      "statusPassRateGe90": 0.5,
+      "avgScore": 50,
+      "avgTokens": 203967,
+      "avgEffectiveTokens": 21183,
+      "avgCostUsd": null,
+      "avgLatencyMs": 24781.5,
+      "avgToolCalls": 4.5,
+      "avgLearnedInterfaceCalls": 1.5,
+      "avgLearnedInterfacesAvailable": 0,
+      "avgLearnedInterfacesCreated": 0.5,
+      "avgReuseRate": 0.125,
+      "runtimeErrorRate": 0.5,
+      "officialEvaluatorCoverage": 1
+    }
+  },
+  "coverage": {
+    "arms": [
+      "datafetch-learned"
+    ],
+    "byArm": {
+      "datafetch-learned": {
+        "rows": 6,
+        "tasks": 6,
+        "officialScoredRows": 6,
+        "runtimeErrorRows": 1
+      }
+    },
+    "pairedTaskCounts": {
+      "datafetch-learned_vs_skillcraft-base": 0,
+      "datafetch-learned_vs_skillcraft-skill": 0
+    }
+  },
+  "pairedContrasts": [
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-base",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    },
+    {
+      "treatmentArm": "datafetch-learned",
+      "controlArm": "skillcraft-skill",
+      "pairedTasks": 0,
+      "passRateDelta": null,
+      "passDiscordance": {
+        "treatmentOnlyPasses": 0,
+        "controlOnlyPasses": 0
+      },
+      "scoreDelta": {
+        "mean": null,
+        "ci95": null
+      },
+      "effectiveTokenRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "latencyRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      },
+      "toolCallRatio": {
+        "count": 0,
+        "mean": null,
+        "ci95": null
+      }
+    }
+  ]
+}

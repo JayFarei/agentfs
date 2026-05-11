@@ -1,0 +1,4158 @@
+{
+  "generatedAt": "2026-05-10T16:41:53.950Z",
+  "summary": {
+    "tasks": 126,
+    "families": 21,
+    "familyCounts": {
+      "cat-facts-collector": 6,
+      "cocktail-menu-generator": 6,
+      "countries-encyclopedia": 6,
+      "dnd-campaign-builder": 6,
+      "dnd-monster-compendium": 6,
+      "dog-breeds-encyclopedia": 6,
+      "gitlab-deep-analysis": 6,
+      "jikan-anime-analysis": 6,
+      "jsonplaceholder-blog-analyzer": 6,
+      "local-dna-analysis": 6,
+      "name-demographics-analyzer": 6,
+      "openmeteo-weather": 6,
+      "pokeapi-pokedex": 6,
+      "random-user-database": 6,
+      "recipe-cookbook-builder": 6,
+      "rickmorty-multiverse-explorer": 6,
+      "tvmaze-series-analyzer": 6,
+      "university-directory-builder": 6,
+      "usgs-earthquake-monitor": 6,
+      "vocabulary-builder": 6,
+      "world-bank-economic-snapshot": 6
+    },
+    "levelCounts": {
+      "e1": 21,
+      "e2": 21,
+      "e3": 21,
+      "h1": 21,
+      "m1": 21,
+      "m2": 21
+    },
+    "missingTaskDocs": 0,
+    "missingEvaluators": 0
+  },
+  "tasks": [
+    {
+      "taskKey": "scaled_tasks/cat-facts-collector/e1",
+      "family": "cat-facts-collector",
+      "level": "e1",
+      "taskName": "cat-facts-collector-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "catfacts_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "catfacts_breed_profile",
+        "catfacts_breed_relatives",
+        "catfacts_breed_coat_family"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cat_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cat-facts-collector/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cat-facts-collector/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cat-facts-collector/e2",
+      "family": "cat-facts-collector",
+      "level": "e2",
+      "taskName": "cat-facts-collector-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "catfacts_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "catfacts_breed_profile",
+        "catfacts_breed_facts",
+        "catfacts_breed_encyclopedia"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cat_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cat-facts-collector/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cat-facts-collector/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cat-facts-collector/e3",
+      "family": "cat-facts-collector",
+      "level": "e3",
+      "taskName": "cat-facts-collector-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "catfacts_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "catfacts_breed_relatives",
+        "catfacts_breed_coat_family",
+        "catfacts_breed_facts"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cat_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cat-facts-collector/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cat-facts-collector/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cat-facts-collector/h1",
+      "family": "cat-facts-collector",
+      "level": "h1",
+      "taskName": "cat-facts-collector-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "catfacts_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "catfacts_breed_profile",
+        "catfacts_breed_relatives",
+        "catfacts_breed_coat_family",
+        "catfacts_breed_facts",
+        "catfacts_breed_encyclopedia"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cat_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cat-facts-collector/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cat-facts-collector/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cat-facts-collector/m1",
+      "family": "cat-facts-collector",
+      "level": "m1",
+      "taskName": "cat-facts-collector-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "catfacts_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "catfacts_breed_profile",
+        "catfacts_breed_relatives",
+        "catfacts_breed_coat_family",
+        "catfacts_breed_facts"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cat_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cat-facts-collector/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cat-facts-collector/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cat-facts-collector/m2",
+      "family": "cat-facts-collector",
+      "level": "m2",
+      "taskName": "cat-facts-collector-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "catfacts_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "catfacts_breed_relatives",
+        "catfacts_breed_coat_family",
+        "catfacts_breed_facts",
+        "catfacts_breed_encyclopedia"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cat_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cat-facts-collector/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cat-facts-collector/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cocktail-menu-generator/e1",
+      "family": "cocktail-menu-generator",
+      "level": "e1",
+      "taskName": "cocktail-menu-generator-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "cocktail_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "cocktail_search",
+        "cocktail_by_ingredient",
+        "cocktail_ingredient_info"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cocktail_menu.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cocktail-menu-generator/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cocktail-menu-generator/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cocktail-menu-generator/e2",
+      "family": "cocktail-menu-generator",
+      "level": "e2",
+      "taskName": "cocktail-menu-generator-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "cocktail_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "cocktail_details",
+        "cocktail_by_ingredient",
+        "cocktail_by_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cocktail_menu.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cocktail-menu-generator/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cocktail-menu-generator/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cocktail-menu-generator/e3",
+      "family": "cocktail-menu-generator",
+      "level": "e3",
+      "taskName": "cocktail-menu-generator-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "cocktail_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "cocktail_search",
+        "cocktail_by_ingredient",
+        "cocktail_by_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cocktail_menu.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cocktail-menu-generator/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cocktail-menu-generator/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cocktail-menu-generator/h1",
+      "family": "cocktail-menu-generator",
+      "level": "h1",
+      "taskName": "cocktail-menu-generator-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "cocktail_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "cocktail_search",
+        "cocktail_details",
+        "cocktail_by_ingredient",
+        "cocktail_ingredient_info",
+        "cocktail_by_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cocktail_menu.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cocktail-menu-generator/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cocktail-menu-generator/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cocktail-menu-generator/m1",
+      "family": "cocktail-menu-generator",
+      "level": "m1",
+      "taskName": "cocktail-menu-generator-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "cocktail_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "cocktail_search",
+        "cocktail_details",
+        "cocktail_by_ingredient",
+        "cocktail_by_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cocktail_menu.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cocktail-menu-generator/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cocktail-menu-generator/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/cocktail-menu-generator/m2",
+      "family": "cocktail-menu-generator",
+      "level": "m2",
+      "taskName": "cocktail-menu-generator-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "cocktail_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "cocktail_details",
+        "cocktail_by_ingredient",
+        "cocktail_ingredient_info",
+        "cocktail_by_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "cocktail_menu.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/cocktail-menu-generator/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/cocktail-menu-generator/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/countries-encyclopedia/e1",
+      "family": "countries-encyclopedia",
+      "level": "e1",
+      "taskName": "countries-encyclopedia-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "countries_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "countries_get_region",
+        "countries_get_details",
+        "countries_get_borders"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "countries_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/countries-encyclopedia/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/countries-encyclopedia/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/countries-encyclopedia/e2",
+      "family": "countries-encyclopedia",
+      "level": "e2",
+      "taskName": "countries-encyclopedia-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "countries_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "countries_get_region",
+        "countries_get_by_currency",
+        "countries_get_by_language"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "countries_economic_linguistic.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/countries-encyclopedia/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/countries-encyclopedia/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/countries-encyclopedia/e3",
+      "family": "countries-encyclopedia",
+      "level": "e3",
+      "taskName": "countries-encyclopedia-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "countries_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "countries_get_details",
+        "countries_get_borders",
+        "countries_get_by_currency"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "country_profiles.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/countries-encyclopedia/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/countries-encyclopedia/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/countries-encyclopedia/h1",
+      "family": "countries-encyclopedia",
+      "level": "h1",
+      "taskName": "countries-encyclopedia-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "countries_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "countries_get_region",
+        "countries_get_details",
+        "countries_get_borders",
+        "countries_get_by_currency",
+        "countries_get_by_language"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "countries_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/countries-encyclopedia/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/countries-encyclopedia/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/countries-encyclopedia/m1",
+      "family": "countries-encyclopedia",
+      "level": "m1",
+      "taskName": "countries-encyclopedia-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "countries_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "countries_get_region",
+        "countries_get_details",
+        "countries_get_borders",
+        "countries_get_by_currency"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "countries_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/countries-encyclopedia/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/countries-encyclopedia/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/countries-encyclopedia/m2",
+      "family": "countries-encyclopedia",
+      "level": "m2",
+      "taskName": "countries-encyclopedia-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "countries_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "countries_get_region",
+        "countries_get_details",
+        "countries_get_borders",
+        "countries_get_by_language"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "countries_encyclopedia_linguistic.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/countries-encyclopedia/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/countries-encyclopedia/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-campaign-builder/e1",
+      "family": "dnd-campaign-builder",
+      "level": "e1",
+      "taskName": "dnd-campaign-builder-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_class",
+        "dnd_get_race",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dnd_character_templates.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-campaign-builder/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-campaign-builder/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-campaign-builder/e2",
+      "family": "dnd-campaign-builder",
+      "level": "e2",
+      "taskName": "dnd-campaign-builder-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_class",
+        "dnd_get_class_spells",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dnd_character_templates.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-campaign-builder/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-campaign-builder/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-campaign-builder/e3",
+      "family": "dnd-campaign-builder",
+      "level": "e3",
+      "taskName": "dnd-campaign-builder-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_race",
+        "dnd_get_class_spells",
+        "dnd_get_spell"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dnd_character_templates.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-campaign-builder/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-campaign-builder/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-campaign-builder/h1",
+      "family": "dnd-campaign-builder",
+      "level": "h1",
+      "taskName": "dnd-campaign-builder-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_class",
+        "dnd_get_race",
+        "dnd_get_class_spells",
+        "dnd_get_equipment_category",
+        "dnd_get_spell"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dnd_character_templates.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-campaign-builder/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-campaign-builder/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-campaign-builder/m1",
+      "family": "dnd-campaign-builder",
+      "level": "m1",
+      "taskName": "dnd-campaign-builder-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_class",
+        "dnd_get_race",
+        "dnd_get_class_spells",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dnd_character_templates.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-campaign-builder/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-campaign-builder/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-campaign-builder/m2",
+      "family": "dnd-campaign-builder",
+      "level": "m2",
+      "taskName": "dnd-campaign-builder-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_class",
+        "dnd_get_race",
+        "dnd_get_class_spells",
+        "dnd_get_spell"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dnd_character_templates.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-campaign-builder/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-campaign-builder/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-monster-compendium/e1",
+      "family": "dnd-monster-compendium",
+      "level": "e1",
+      "taskName": "dnd-monster-compendium-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_monster",
+        "dnd_get_spell",
+        "dnd_get_class"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "monster_compendium.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-monster-compendium/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-monster-compendium/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-monster-compendium/e2",
+      "family": "dnd-monster-compendium",
+      "level": "e2",
+      "taskName": "dnd-monster-compendium-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_monster",
+        "dnd_get_class",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "monster_compendium.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-monster-compendium/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-monster-compendium/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-monster-compendium/e3",
+      "family": "dnd-monster-compendium",
+      "level": "e3",
+      "taskName": "dnd-monster-compendium-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_monster",
+        "dnd_get_spell",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "monster_compendium.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-monster-compendium/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-monster-compendium/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-monster-compendium/h1",
+      "family": "dnd-monster-compendium",
+      "level": "h1",
+      "taskName": "dnd-monster-compendium-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_monster",
+        "dnd_get_spell",
+        "dnd_get_class",
+        "dnd_get_race",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "monster_compendium.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-monster-compendium/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-monster-compendium/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-monster-compendium/m1",
+      "family": "dnd-monster-compendium",
+      "level": "m1",
+      "taskName": "dnd-monster-compendium-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_monster",
+        "dnd_get_spell",
+        "dnd_get_class",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "monster_compendium.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-monster-compendium/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-monster-compendium/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dnd-monster-compendium/m2",
+      "family": "dnd-monster-compendium",
+      "level": "m2",
+      "taskName": "dnd-monster-compendium-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dnd_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dnd_get_monster",
+        "dnd_get_class",
+        "dnd_get_race",
+        "dnd_get_equipment_category"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "monster_compendium.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dnd-monster-compendium/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dnd-monster-compendium/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dog-breeds-encyclopedia/e1",
+      "family": "dog-breeds-encyclopedia",
+      "level": "e1",
+      "taskName": "dog-breeds-encyclopedia-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dogapi",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dog_breed_info",
+        "dog_breed_images",
+        "dog_breed_all_sub_breeds"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dog_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dog-breeds-encyclopedia/e2",
+      "family": "dog-breeds-encyclopedia",
+      "level": "e2",
+      "taskName": "dog-breeds-encyclopedia-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dogapi",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dog_breed_images",
+        "dog_sub_breed_images",
+        "dog_breed_gallery"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dog_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dog-breeds-encyclopedia/e3",
+      "family": "dog-breeds-encyclopedia",
+      "level": "e3",
+      "taskName": "dog-breeds-encyclopedia-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dogapi",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dog_breed_info",
+        "dog_breed_all_sub_breeds",
+        "dog_breed_gallery"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dog_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dog-breeds-encyclopedia/h1",
+      "family": "dog-breeds-encyclopedia",
+      "level": "h1",
+      "taskName": "dog-breeds-encyclopedia-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dogapi",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dog_breed_info",
+        "dog_breed_images",
+        "dog_sub_breed_images",
+        "dog_breed_all_sub_breeds",
+        "dog_breed_gallery"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dog_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dog-breeds-encyclopedia/m1",
+      "family": "dog-breeds-encyclopedia",
+      "level": "m1",
+      "taskName": "dog-breeds-encyclopedia-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dogapi",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dog_breed_info",
+        "dog_breed_images",
+        "dog_sub_breed_images",
+        "dog_breed_all_sub_breeds"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dog_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/dog-breeds-encyclopedia/m2",
+      "family": "dog-breeds-encyclopedia",
+      "level": "m2",
+      "taskName": "dog-breeds-encyclopedia-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dogapi",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dog_breed_images",
+        "dog_sub_breed_images",
+        "dog_breed_all_sub_breeds",
+        "dog_breed_gallery"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dog_encyclopedia.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/dog-breeds-encyclopedia/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/gitlab-deep-analysis/e1",
+      "family": "gitlab-deep-analysis",
+      "level": "e1",
+      "taskName": "gitlab-deep-analysis-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "gitlab_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "gitlab_get_project_info",
+        "gitlab_get_contributors",
+        "gitlab_get_issues"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "gitlab_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/gitlab-deep-analysis/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/gitlab-deep-analysis/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/gitlab-deep-analysis/e2",
+      "family": "gitlab-deep-analysis",
+      "level": "e2",
+      "taskName": "gitlab-deep-analysis-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "gitlab_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "gitlab_get_project_info",
+        "gitlab_get_branches",
+        "gitlab_get_issues"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "gitlab_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/gitlab-deep-analysis/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/gitlab-deep-analysis/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/gitlab-deep-analysis/e3",
+      "family": "gitlab-deep-analysis",
+      "level": "e3",
+      "taskName": "gitlab-deep-analysis-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "gitlab_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "gitlab_get_contributors",
+        "gitlab_get_commits",
+        "gitlab_get_branches"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "gitlab_activity.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/gitlab-deep-analysis/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/gitlab-deep-analysis/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/gitlab-deep-analysis/h1",
+      "family": "gitlab-deep-analysis",
+      "level": "h1",
+      "taskName": "gitlab-deep-analysis-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "gitlab_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "gitlab_get_project_info",
+        "gitlab_get_contributors",
+        "gitlab_get_commits",
+        "gitlab_get_branches",
+        "gitlab_get_issues"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "gitlab_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/gitlab-deep-analysis/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/gitlab-deep-analysis/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/gitlab-deep-analysis/m1",
+      "family": "gitlab-deep-analysis",
+      "level": "m1",
+      "taskName": "gitlab-deep-analysis-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "gitlab_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "gitlab_get_project_info",
+        "gitlab_get_contributors",
+        "gitlab_get_commits",
+        "gitlab_get_branches"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "gitlab_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/gitlab-deep-analysis/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/gitlab-deep-analysis/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/gitlab-deep-analysis/m2",
+      "family": "gitlab-deep-analysis",
+      "level": "m2",
+      "taskName": "gitlab-deep-analysis-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "gitlab_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "gitlab_get_project_info",
+        "gitlab_get_contributors",
+        "gitlab_get_branches",
+        "gitlab_get_issues"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "gitlab_comprehensive.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/gitlab-deep-analysis/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/gitlab-deep-analysis/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jikan-anime-analysis/e1",
+      "family": "jikan-anime-analysis",
+      "level": "e1",
+      "taskName": "jikan-anime-analysis-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jikan_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jikan_get_anime_details",
+        "jikan_get_anime_characters",
+        "jikan_get_anime_statistics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "anime_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jikan-anime-analysis/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jikan-anime-analysis/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jikan-anime-analysis/e2",
+      "family": "jikan-anime-analysis",
+      "level": "e2",
+      "taskName": "jikan-anime-analysis-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jikan_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jikan_get_anime_details",
+        "jikan_get_anime_characters",
+        "jikan_get_anime_episodes"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "anime_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jikan-anime-analysis/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jikan-anime-analysis/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jikan-anime-analysis/e3",
+      "family": "jikan-anime-analysis",
+      "level": "e3",
+      "taskName": "jikan-anime-analysis-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jikan_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jikan_get_anime_characters",
+        "jikan_get_anime_episodes",
+        "jikan_get_anime_recommendations"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "anime_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jikan-anime-analysis/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jikan-anime-analysis/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jikan-anime-analysis/h1",
+      "family": "jikan-anime-analysis",
+      "level": "h1",
+      "taskName": "jikan-anime-analysis-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jikan_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jikan_get_anime_details",
+        "jikan_get_anime_characters",
+        "jikan_get_anime_episodes",
+        "jikan_get_anime_recommendations",
+        "jikan_get_anime_statistics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "anime_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jikan-anime-analysis/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jikan-anime-analysis/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jikan-anime-analysis/m1",
+      "family": "jikan-anime-analysis",
+      "level": "m1",
+      "taskName": "jikan-anime-analysis-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jikan_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jikan_get_anime_details",
+        "jikan_get_anime_characters",
+        "jikan_get_anime_episodes",
+        "jikan_get_anime_statistics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "anime_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jikan-anime-analysis/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jikan-anime-analysis/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jikan-anime-analysis/m2",
+      "family": "jikan-anime-analysis",
+      "level": "m2",
+      "taskName": "jikan-anime-analysis-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jikan_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jikan_get_anime_details",
+        "jikan_get_anime_characters",
+        "jikan_get_anime_episodes",
+        "jikan_get_anime_recommendations"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "anime_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jikan-anime-analysis/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jikan-anime-analysis/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jsonplaceholder-blog-analyzer/e1",
+      "family": "jsonplaceholder-blog-analyzer",
+      "level": "e1",
+      "taskName": "jsonplaceholder-blog-analyzer-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jsonplaceholder_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jsonplaceholder_get_user",
+        "jsonplaceholder_get_posts",
+        "jsonplaceholder_user_profile"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "blog_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jsonplaceholder-blog-analyzer/e2",
+      "family": "jsonplaceholder-blog-analyzer",
+      "level": "e2",
+      "taskName": "jsonplaceholder-blog-analyzer-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jsonplaceholder_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jsonplaceholder_get_user",
+        "jsonplaceholder_get_posts",
+        "jsonplaceholder_get_comments"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "blog_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jsonplaceholder-blog-analyzer/e3",
+      "family": "jsonplaceholder-blog-analyzer",
+      "level": "e3",
+      "taskName": "jsonplaceholder-blog-analyzer-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jsonplaceholder_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jsonplaceholder_get_posts",
+        "jsonplaceholder_get_todos",
+        "jsonplaceholder_get_comments"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "blog_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jsonplaceholder-blog-analyzer/h1",
+      "family": "jsonplaceholder-blog-analyzer",
+      "level": "h1",
+      "taskName": "jsonplaceholder-blog-analyzer-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jsonplaceholder_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jsonplaceholder_get_user",
+        "jsonplaceholder_get_posts",
+        "jsonplaceholder_get_todos",
+        "jsonplaceholder_get_comments",
+        "jsonplaceholder_user_profile"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "blog_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jsonplaceholder-blog-analyzer/m1",
+      "family": "jsonplaceholder-blog-analyzer",
+      "level": "m1",
+      "taskName": "jsonplaceholder-blog-analyzer-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jsonplaceholder_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jsonplaceholder_get_user",
+        "jsonplaceholder_get_posts",
+        "jsonplaceholder_get_todos",
+        "jsonplaceholder_user_profile"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "blog_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/jsonplaceholder-blog-analyzer/m2",
+      "family": "jsonplaceholder-blog-analyzer",
+      "level": "m2",
+      "taskName": "jsonplaceholder-blog-analyzer-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "jsonplaceholder_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "jsonplaceholder_get_user",
+        "jsonplaceholder_get_posts",
+        "jsonplaceholder_get_todos",
+        "jsonplaceholder_get_comments"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "blog_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/jsonplaceholder-blog-analyzer/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/local-dna-analysis/e1",
+      "family": "local-dna-analysis",
+      "level": "e1",
+      "taskName": "local-dna-analysis-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dna_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dna_is_valid",
+        "dna_count_nucleotides",
+        "dna_find_max_nucleotide"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dna_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/local-dna-analysis/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/local-dna-analysis/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/local-dna-analysis/e2",
+      "family": "local-dna-analysis",
+      "level": "e2",
+      "taskName": "local-dna-analysis-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dna_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dna_is_valid",
+        "dna_count_nucleotides",
+        "dna_transcribe_to_mrna"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dna_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/local-dna-analysis/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/local-dna-analysis/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/local-dna-analysis/e3",
+      "family": "local-dna-analysis",
+      "level": "e3",
+      "taskName": "local-dna-analysis-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dna_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dna_count_nucleotides",
+        "dna_transcribe_to_mrna",
+        "dna_translate_to_amino"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dna_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/local-dna-analysis/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/local-dna-analysis/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/local-dna-analysis/h1",
+      "family": "local-dna-analysis",
+      "level": "h1",
+      "taskName": "local-dna-analysis-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dna_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dna_is_valid",
+        "dna_count_nucleotides",
+        "dna_find_max_nucleotide",
+        "dna_transcribe_to_mrna",
+        "dna_translate_to_amino"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dna_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/local-dna-analysis/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/local-dna-analysis/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/local-dna-analysis/m1",
+      "family": "local-dna-analysis",
+      "level": "m1",
+      "taskName": "local-dna-analysis-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dna_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dna_is_valid",
+        "dna_count_nucleotides",
+        "dna_find_max_nucleotide",
+        "dna_transcribe_to_mrna"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dna_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/local-dna-analysis/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/local-dna-analysis/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/local-dna-analysis/m2",
+      "family": "local-dna-analysis",
+      "level": "m2",
+      "taskName": "local-dna-analysis-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dna_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dna_count_nucleotides",
+        "dna_find_max_nucleotide",
+        "dna_transcribe_to_mrna",
+        "dna_translate_to_amino"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "dna_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/local-dna-analysis/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/local-dna-analysis/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/name-demographics-analyzer/e1",
+      "family": "name-demographics-analyzer",
+      "level": "e1",
+      "taskName": "name-demographics-analyzer-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "namedemographics_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "name_gender",
+        "name_nationality",
+        "name_full_demographics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "name_demographics.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/name-demographics-analyzer/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/name-demographics-analyzer/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/name-demographics-analyzer/e2",
+      "family": "name-demographics-analyzer",
+      "level": "e2",
+      "taskName": "name-demographics-analyzer-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "namedemographics_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "name_gender",
+        "name_full_demographics",
+        "name_statistics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "name_demographics.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/name-demographics-analyzer/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/name-demographics-analyzer/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/name-demographics-analyzer/e3",
+      "family": "name-demographics-analyzer",
+      "level": "e3",
+      "taskName": "name-demographics-analyzer-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "namedemographics_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "name_age",
+        "name_nationality",
+        "name_statistics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "name_demographics.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/name-demographics-analyzer/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/name-demographics-analyzer/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/name-demographics-analyzer/h1",
+      "family": "name-demographics-analyzer",
+      "level": "h1",
+      "taskName": "name-demographics-analyzer-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "namedemographics_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "name_gender",
+        "name_age",
+        "name_nationality",
+        "name_full_demographics",
+        "name_statistics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "name_demographics.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/name-demographics-analyzer/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/name-demographics-analyzer/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/name-demographics-analyzer/m1",
+      "family": "name-demographics-analyzer",
+      "level": "m1",
+      "taskName": "name-demographics-analyzer-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "namedemographics_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "name_gender",
+        "name_age",
+        "name_nationality",
+        "name_full_demographics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "name_demographics.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/name-demographics-analyzer/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/name-demographics-analyzer/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/name-demographics-analyzer/m2",
+      "family": "name-demographics-analyzer",
+      "level": "m2",
+      "taskName": "name-demographics-analyzer-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "namedemographics_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "name_gender",
+        "name_nationality",
+        "name_full_demographics",
+        "name_statistics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "name_demographics.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/name-demographics-analyzer/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/name-demographics-analyzer/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/openmeteo-weather/e1",
+      "family": "openmeteo-weather",
+      "level": "e1",
+      "taskName": "openmeteo-weather-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "weather_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "weather_get_coordinates",
+        "weather_get_current",
+        "weather_get_hourly"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "weather_report.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/openmeteo-weather/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/openmeteo-weather/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/openmeteo-weather/e2",
+      "family": "openmeteo-weather",
+      "level": "e2",
+      "taskName": "openmeteo-weather-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "weather_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "weather_get_coordinates",
+        "weather_get_hourly",
+        "weather_get_daily"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "weather_report.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/openmeteo-weather/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/openmeteo-weather/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/openmeteo-weather/e3",
+      "family": "openmeteo-weather",
+      "level": "e3",
+      "taskName": "openmeteo-weather-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "weather_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "weather_get_coordinates",
+        "weather_get_daily",
+        "weather_get_historical"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "weather_report.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/openmeteo-weather/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/openmeteo-weather/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/openmeteo-weather/h1",
+      "family": "openmeteo-weather",
+      "level": "h1",
+      "taskName": "openmeteo-weather-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "weather_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "weather_get_coordinates",
+        "weather_get_current",
+        "weather_get_hourly",
+        "weather_get_daily",
+        "weather_get_historical"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "weather_report.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/openmeteo-weather/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/openmeteo-weather/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/openmeteo-weather/m1",
+      "family": "openmeteo-weather",
+      "level": "m1",
+      "taskName": "openmeteo-weather-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "weather_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "weather_get_coordinates",
+        "weather_get_current",
+        "weather_get_hourly",
+        "weather_get_daily"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "weather_report.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/openmeteo-weather/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/openmeteo-weather/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/openmeteo-weather/m2",
+      "family": "openmeteo-weather",
+      "level": "m2",
+      "taskName": "openmeteo-weather-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "weather_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "weather_get_coordinates",
+        "weather_get_hourly",
+        "weather_get_daily",
+        "weather_get_historical"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "weather_report.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/openmeteo-weather/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/openmeteo-weather/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/pokeapi-pokedex/e1",
+      "family": "pokeapi-pokedex",
+      "level": "e1",
+      "taskName": "pokeapi-pokedex-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "pokemon_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "pokemon_get_details",
+        "pokemon_get_moves",
+        "pokemon_get_abilities"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "pokedex_entries.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/pokeapi-pokedex/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/pokeapi-pokedex/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/pokeapi-pokedex/e2",
+      "family": "pokeapi-pokedex",
+      "level": "e2",
+      "taskName": "pokeapi-pokedex-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "pokemon_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "pokemon_get_species",
+        "pokemon_get_evolution",
+        "pokemon_get_moves"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "pokedex_entries.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/pokeapi-pokedex/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/pokeapi-pokedex/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/pokeapi-pokedex/e3",
+      "family": "pokeapi-pokedex",
+      "level": "e3",
+      "taskName": "pokeapi-pokedex-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "pokemon_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "pokemon_get_species",
+        "pokemon_get_evolution",
+        "pokemon_get_abilities"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "pokedex_entries.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/pokeapi-pokedex/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/pokeapi-pokedex/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/pokeapi-pokedex/h1",
+      "family": "pokeapi-pokedex",
+      "level": "h1",
+      "taskName": "pokeapi-pokedex-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "pokemon_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "pokemon_get_details",
+        "pokemon_get_species",
+        "pokemon_get_evolution",
+        "pokemon_get_moves",
+        "pokemon_get_abilities"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "pokedex_entries.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/pokeapi-pokedex/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/pokeapi-pokedex/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/pokeapi-pokedex/m1",
+      "family": "pokeapi-pokedex",
+      "level": "m1",
+      "taskName": "pokeapi-pokedex-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "pokemon_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "pokemon_get_details",
+        "pokemon_get_species",
+        "pokemon_get_evolution",
+        "pokemon_get_moves"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "pokedex_entries.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/pokeapi-pokedex/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/pokeapi-pokedex/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/pokeapi-pokedex/m2",
+      "family": "pokeapi-pokedex",
+      "level": "m2",
+      "taskName": "pokeapi-pokedex-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "pokemon_tools",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "pokemon_get_species",
+        "pokemon_get_evolution",
+        "pokemon_get_moves",
+        "pokemon_get_abilities"
+      ],
+      "hasInitialWorkspace": false,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "pokedex_entries.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/pokeapi-pokedex/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/pokeapi-pokedex/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/random-user-database/e1",
+      "family": "random-user-database",
+      "level": "e1",
+      "taskName": "random-user-database-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "randomuser_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "randomuser_by_nationality",
+        "randomuser_get_user",
+        "randomuser_profile"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "user_database.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/random-user-database/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/random-user-database/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/random-user-database/e2",
+      "family": "random-user-database",
+      "level": "e2",
+      "taskName": "random-user-database-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "randomuser_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "randomuser_by_nationality",
+        "randomuser_get_users",
+        "randomuser_detailed"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "user_database.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/random-user-database/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/random-user-database/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/random-user-database/e3",
+      "family": "random-user-database",
+      "level": "e3",
+      "taskName": "random-user-database-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "randomuser_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "randomuser_get_users",
+        "randomuser_profile",
+        "randomuser_detailed"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "user_database.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/random-user-database/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/random-user-database/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/random-user-database/h1",
+      "family": "random-user-database",
+      "level": "h1",
+      "taskName": "random-user-database-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "randomuser_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "randomuser_by_nationality",
+        "randomuser_get_users",
+        "randomuser_get_user",
+        "randomuser_profile",
+        "randomuser_detailed"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "user_database.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/random-user-database/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/random-user-database/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/random-user-database/m1",
+      "family": "random-user-database",
+      "level": "m1",
+      "taskName": "random-user-database-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "randomuser_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "randomuser_by_nationality",
+        "randomuser_get_users",
+        "randomuser_get_user",
+        "randomuser_profile"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "user_database.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/random-user-database/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/random-user-database/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/random-user-database/m2",
+      "family": "random-user-database",
+      "level": "m2",
+      "taskName": "random-user-database-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "randomuser_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "randomuser_by_nationality",
+        "randomuser_get_users",
+        "randomuser_profile",
+        "randomuser_detailed"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "user_database.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/random-user-database/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/random-user-database/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/recipe-cookbook-builder/e1",
+      "family": "recipe-cookbook-builder",
+      "level": "e1",
+      "taskName": "recipe-cookbook-builder-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "mealdb_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "meal_search",
+        "meal_by_category",
+        "meal_by_area"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "recipe_cookbook.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/recipe-cookbook-builder/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/recipe-cookbook-builder/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/recipe-cookbook-builder/e2",
+      "family": "recipe-cookbook-builder",
+      "level": "e2",
+      "taskName": "recipe-cookbook-builder-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "mealdb_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "meal_search",
+        "meal_by_category",
+        "meal_by_ingredient"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "recipe_cookbook.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/recipe-cookbook-builder/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/recipe-cookbook-builder/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/recipe-cookbook-builder/e3",
+      "family": "recipe-cookbook-builder",
+      "level": "e3",
+      "taskName": "recipe-cookbook-builder-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "mealdb_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "meal_details",
+        "meal_by_area",
+        "meal_by_ingredient"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "recipe_cookbook.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/recipe-cookbook-builder/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/recipe-cookbook-builder/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/recipe-cookbook-builder/h1",
+      "family": "recipe-cookbook-builder",
+      "level": "h1",
+      "taskName": "recipe-cookbook-builder-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "mealdb_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "meal_search",
+        "meal_details",
+        "meal_by_category",
+        "meal_by_area",
+        "meal_by_ingredient"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "recipe_cookbook.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/recipe-cookbook-builder/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/recipe-cookbook-builder/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/recipe-cookbook-builder/m1",
+      "family": "recipe-cookbook-builder",
+      "level": "m1",
+      "taskName": "recipe-cookbook-builder-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "mealdb_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "meal_search",
+        "meal_details",
+        "meal_by_category",
+        "meal_by_area"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "recipe_cookbook.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/recipe-cookbook-builder/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/recipe-cookbook-builder/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/recipe-cookbook-builder/m2",
+      "family": "recipe-cookbook-builder",
+      "level": "m2",
+      "taskName": "recipe-cookbook-builder-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "mealdb_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "meal_search",
+        "meal_by_category",
+        "meal_by_area",
+        "meal_by_ingredient"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "recipe_cookbook.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/recipe-cookbook-builder/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/recipe-cookbook-builder/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/rickmorty-multiverse-explorer/e1",
+      "family": "rickmorty-multiverse-explorer",
+      "level": "e1",
+      "taskName": "rickmorty-multiverse-explorer-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "rickmorty_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "rickmorty_get_character",
+        "rickmorty_get_location",
+        "rickmorty_search_characters"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "rickmorty_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/rickmorty-multiverse-explorer/e2",
+      "family": "rickmorty-multiverse-explorer",
+      "level": "e2",
+      "taskName": "rickmorty-multiverse-explorer-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "rickmorty_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "rickmorty_get_character",
+        "rickmorty_search_characters",
+        "rickmorty_get_character_episodes"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "rickmorty_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/rickmorty-multiverse-explorer/e3",
+      "family": "rickmorty-multiverse-explorer",
+      "level": "e3",
+      "taskName": "rickmorty-multiverse-explorer-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "rickmorty_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "rickmorty_get_location",
+        "rickmorty_get_episode",
+        "rickmorty_get_character_episodes"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "rickmorty_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/rickmorty-multiverse-explorer/h1",
+      "family": "rickmorty-multiverse-explorer",
+      "level": "h1",
+      "taskName": "rickmorty-multiverse-explorer-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "rickmorty_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "rickmorty_get_character",
+        "rickmorty_get_location",
+        "rickmorty_get_episode",
+        "rickmorty_search_characters",
+        "rickmorty_get_character_episodes"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "rickmorty_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/rickmorty-multiverse-explorer/m1",
+      "family": "rickmorty-multiverse-explorer",
+      "level": "m1",
+      "taskName": "rickmorty-multiverse-explorer-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "rickmorty_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "rickmorty_get_character",
+        "rickmorty_get_location",
+        "rickmorty_search_characters",
+        "rickmorty_get_character_episodes"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "rickmorty_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/rickmorty-multiverse-explorer/m2",
+      "family": "rickmorty-multiverse-explorer",
+      "level": "m2",
+      "taskName": "rickmorty-multiverse-explorer-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "rickmorty_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "rickmorty_get_character",
+        "rickmorty_get_episode",
+        "rickmorty_search_characters",
+        "rickmorty_get_character_episodes"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "rickmorty_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/rickmorty-multiverse-explorer/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/tvmaze-series-analyzer/e1",
+      "family": "tvmaze-series-analyzer",
+      "level": "e1",
+      "taskName": "tvmaze-series-analyzer-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "tvmaze_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "tvmaze_get_show_info",
+        "tvmaze_get_show_episodes",
+        "tvmaze_get_show_seasons"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "tv_series_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/tvmaze-series-analyzer/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/tvmaze-series-analyzer/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/tvmaze-series-analyzer/e2",
+      "family": "tvmaze-series-analyzer",
+      "level": "e2",
+      "taskName": "tvmaze-series-analyzer-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "tvmaze_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "tvmaze_get_show_info",
+        "tvmaze_get_show_episodes",
+        "tvmaze_get_show_cast"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "tv_series_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/tvmaze-series-analyzer/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/tvmaze-series-analyzer/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/tvmaze-series-analyzer/e3",
+      "family": "tvmaze-series-analyzer",
+      "level": "e3",
+      "taskName": "tvmaze-series-analyzer-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "tvmaze_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "tvmaze_get_show_seasons",
+        "tvmaze_get_show_cast",
+        "tvmaze_get_show_crew"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "tv_series_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/tvmaze-series-analyzer/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/tvmaze-series-analyzer/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/tvmaze-series-analyzer/h1",
+      "family": "tvmaze-series-analyzer",
+      "level": "h1",
+      "taskName": "tvmaze-series-analyzer-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "tvmaze_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "tvmaze_get_show_info",
+        "tvmaze_get_show_episodes",
+        "tvmaze_get_show_seasons",
+        "tvmaze_get_show_cast",
+        "tvmaze_get_show_crew"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "tv_series_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/tvmaze-series-analyzer/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/tvmaze-series-analyzer/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/tvmaze-series-analyzer/m1",
+      "family": "tvmaze-series-analyzer",
+      "level": "m1",
+      "taskName": "tvmaze-series-analyzer-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "tvmaze_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "tvmaze_get_show_info",
+        "tvmaze_get_show_episodes",
+        "tvmaze_get_show_seasons",
+        "tvmaze_get_show_cast"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "tv_series_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/tvmaze-series-analyzer/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/tvmaze-series-analyzer/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/tvmaze-series-analyzer/m2",
+      "family": "tvmaze-series-analyzer",
+      "level": "m2",
+      "taskName": "tvmaze-series-analyzer-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "tvmaze_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "tvmaze_get_show_info",
+        "tvmaze_get_show_episodes",
+        "tvmaze_get_show_cast",
+        "tvmaze_get_show_crew"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "tv_series_analysis.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/tvmaze-series-analyzer/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/tvmaze-series-analyzer/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/university-directory-builder/e1",
+      "family": "university-directory-builder",
+      "level": "e1",
+      "taskName": "university-directory-builder-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "university_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "university_by_country",
+        "university_details",
+        "university_by_domain"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "university_directory.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/university-directory-builder/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/university-directory-builder/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/university-directory-builder/e2",
+      "family": "university-directory-builder",
+      "level": "e2",
+      "taskName": "university-directory-builder-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "university_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "university_by_country",
+        "university_by_name",
+        "university_search"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "university_directory.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/university-directory-builder/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/university-directory-builder/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/university-directory-builder/e3",
+      "family": "university-directory-builder",
+      "level": "e3",
+      "taskName": "university-directory-builder-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "university_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "university_by_name",
+        "university_search",
+        "university_details"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "university_directory.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/university-directory-builder/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/university-directory-builder/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/university-directory-builder/h1",
+      "family": "university-directory-builder",
+      "level": "h1",
+      "taskName": "university-directory-builder-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "university_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "university_by_country",
+        "university_by_name",
+        "university_search",
+        "university_details",
+        "university_by_domain"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "university_directory.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/university-directory-builder/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/university-directory-builder/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/university-directory-builder/m1",
+      "family": "university-directory-builder",
+      "level": "m1",
+      "taskName": "university-directory-builder-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "university_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "university_by_country",
+        "university_by_name",
+        "university_details",
+        "university_by_domain"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "university_directory.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/university-directory-builder/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/university-directory-builder/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/university-directory-builder/m2",
+      "family": "university-directory-builder",
+      "level": "m2",
+      "taskName": "university-directory-builder-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "university_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "university_by_country",
+        "university_by_name",
+        "university_search",
+        "university_details"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "university_directory.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/university-directory-builder/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/university-directory-builder/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/usgs-earthquake-monitor/e1",
+      "family": "usgs-earthquake-monitor",
+      "level": "e1",
+      "taskName": "usgs-earthquake-monitor-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "usgs_earthquake_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "usgs_query_earthquakes",
+        "usgs_get_region_stats",
+        "usgs_get_depth_analysis"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "earthquake_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/usgs-earthquake-monitor/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/usgs-earthquake-monitor/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/usgs-earthquake-monitor/e2",
+      "family": "usgs-earthquake-monitor",
+      "level": "e2",
+      "taskName": "usgs-earthquake-monitor-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "usgs_earthquake_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "usgs_query_earthquakes",
+        "usgs_get_region_stats",
+        "usgs_get_historical_trends"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "earthquake_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/usgs-earthquake-monitor/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/usgs-earthquake-monitor/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/usgs-earthquake-monitor/e3",
+      "family": "usgs-earthquake-monitor",
+      "level": "e3",
+      "taskName": "usgs-earthquake-monitor-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "usgs_earthquake_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "usgs_get_region_stats",
+        "usgs_get_historical_trends",
+        "usgs_get_tectonic_info"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "earthquake_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/usgs-earthquake-monitor/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/usgs-earthquake-monitor/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/usgs-earthquake-monitor/h1",
+      "family": "usgs-earthquake-monitor",
+      "level": "h1",
+      "taskName": "usgs-earthquake-monitor-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "usgs_earthquake_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "usgs_query_earthquakes",
+        "usgs_get_region_stats",
+        "usgs_get_historical_trends",
+        "usgs_get_depth_analysis",
+        "usgs_get_tectonic_info"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "earthquake_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/usgs-earthquake-monitor/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/usgs-earthquake-monitor/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/usgs-earthquake-monitor/m1",
+      "family": "usgs-earthquake-monitor",
+      "level": "m1",
+      "taskName": "usgs-earthquake-monitor-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "usgs_earthquake_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "usgs_query_earthquakes",
+        "usgs_get_region_stats",
+        "usgs_get_historical_trends",
+        "usgs_get_depth_analysis"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "earthquake_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/usgs-earthquake-monitor/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/usgs-earthquake-monitor/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/usgs-earthquake-monitor/m2",
+      "family": "usgs-earthquake-monitor",
+      "level": "m2",
+      "taskName": "usgs-earthquake-monitor-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "usgs_earthquake_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "usgs_query_earthquakes",
+        "usgs_get_region_stats",
+        "usgs_get_depth_analysis",
+        "usgs_get_tectonic_info"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "earthquake_analysis_results.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/usgs-earthquake-monitor/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/usgs-earthquake-monitor/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/e1",
+      "family": "vocabulary-builder",
+      "level": "e1",
+      "taskName": "vocabulary-builder-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dictionary_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dictionary_lookup",
+        "dictionary_synonyms",
+        "dictionary_definitions"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "vocabulary_cards.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/vocabulary-builder/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/vocabulary-builder/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/e2",
+      "family": "vocabulary-builder",
+      "level": "e2",
+      "taskName": "vocabulary-builder-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dictionary_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dictionary_word_details",
+        "dictionary_synonyms",
+        "dictionary_phonetics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "vocabulary_cards.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/vocabulary-builder/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/vocabulary-builder/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/e3",
+      "family": "vocabulary-builder",
+      "level": "e3",
+      "taskName": "vocabulary-builder-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dictionary_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dictionary_lookup",
+        "dictionary_definitions",
+        "dictionary_phonetics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "vocabulary_cards.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/vocabulary-builder/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/vocabulary-builder/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/h1",
+      "family": "vocabulary-builder",
+      "level": "h1",
+      "taskName": "vocabulary-builder-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dictionary_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dictionary_lookup",
+        "dictionary_word_details",
+        "dictionary_synonyms",
+        "dictionary_definitions",
+        "dictionary_phonetics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "vocabulary_cards.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/vocabulary-builder/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/vocabulary-builder/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/m1",
+      "family": "vocabulary-builder",
+      "level": "m1",
+      "taskName": "vocabulary-builder-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dictionary_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dictionary_lookup",
+        "dictionary_word_details",
+        "dictionary_synonyms",
+        "dictionary_definitions"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "vocabulary_cards.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/vocabulary-builder/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/vocabulary-builder/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/vocabulary-builder/m2",
+      "family": "vocabulary-builder",
+      "level": "m2",
+      "taskName": "vocabulary-builder-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "dictionary_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "dictionary_lookup",
+        "dictionary_synonyms",
+        "dictionary_definitions",
+        "dictionary_phonetics"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "vocabulary_cards.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/vocabulary-builder/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/vocabulary-builder/m2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/world-bank-economic-snapshot/e1",
+      "family": "world-bank-economic-snapshot",
+      "level": "e1",
+      "taskName": "world-bank-economic-snapshot-e1",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "worldbank_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "worldbank_economic_snapshot",
+        "worldbank_gdp",
+        "worldbank_country_info"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "economic_snapshot.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/world-bank-economic-snapshot/e1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/world-bank-economic-snapshot/e1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/world-bank-economic-snapshot/e2",
+      "family": "world-bank-economic-snapshot",
+      "level": "e2",
+      "taskName": "world-bank-economic-snapshot-e2",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "worldbank_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "worldbank_economic_snapshot",
+        "worldbank_gdp",
+        "worldbank_indicator"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "economic_snapshot.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/world-bank-economic-snapshot/e2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/world-bank-economic-snapshot/e2/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/world-bank-economic-snapshot/e3",
+      "family": "world-bank-economic-snapshot",
+      "level": "e3",
+      "taskName": "world-bank-economic-snapshot-e3",
+      "difficulty": "easy",
+      "estimatedApiCalls": 9,
+      "subtaskCount": 3,
+      "callsPerSubtask": 3,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "worldbank_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "worldbank_gdp",
+        "worldbank_indicator",
+        "worldbank_population"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "economic_snapshot.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/world-bank-economic-snapshot/e3/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/world-bank-economic-snapshot/e3/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/world-bank-economic-snapshot/h1",
+      "family": "world-bank-economic-snapshot",
+      "level": "h1",
+      "taskName": "world-bank-economic-snapshot-h1",
+      "difficulty": "hard",
+      "estimatedApiCalls": 25,
+      "subtaskCount": 5,
+      "callsPerSubtask": 5,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "worldbank_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "worldbank_economic_snapshot",
+        "worldbank_gdp",
+        "worldbank_country_info",
+        "worldbank_indicator",
+        "worldbank_population"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "economic_snapshot.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/world-bank-economic-snapshot/h1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/world-bank-economic-snapshot/h1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/world-bank-economic-snapshot/m1",
+      "family": "world-bank-economic-snapshot",
+      "level": "m1",
+      "taskName": "world-bank-economic-snapshot-m1",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "worldbank_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "worldbank_economic_snapshot",
+        "worldbank_gdp",
+        "worldbank_country_info",
+        "worldbank_indicator"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "economic_snapshot.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/world-bank-economic-snapshot/m1/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/world-bank-economic-snapshot/m1/evaluation/main.py"
+    },
+    {
+      "taskKey": "scaled_tasks/world-bank-economic-snapshot/m2",
+      "family": "world-bank-economic-snapshot",
+      "level": "m2",
+      "taskName": "world-bank-economic-snapshot-m2",
+      "difficulty": "medium",
+      "estimatedApiCalls": 16,
+      "subtaskCount": 4,
+      "callsPerSubtask": 4,
+      "neededMcpServers": [
+        "filesystem"
+      ],
+      "neededLocalTools": [
+        "worldbank_api",
+        "skill_cache",
+        "claim_done"
+      ],
+      "toolsUsed": [
+        "worldbank_economic_snapshot",
+        "worldbank_gdp",
+        "worldbank_indicator",
+        "worldbank_population"
+      ],
+      "hasInitialWorkspace": true,
+      "hasGroundtruthWorkspace": false,
+      "hasTaskDoc": true,
+      "hasEvaluator": true,
+      "expectedOutputFiles": [
+        "economic_snapshot.json"
+      ],
+      "taskConfigPath": "tasks/scaled_tasks/world-bank-economic-snapshot/m2/task_config.json",
+      "evaluatorPath": "tasks/scaled_tasks/world-bank-economic-snapshot/m2/evaluation/main.py"
+    }
+  ]
+}
