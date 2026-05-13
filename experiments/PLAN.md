@@ -1,10 +1,130 @@
-# Plan: prove the learning loop fires on SkillCraft
+# Plan: close the 7-of-7 gap on the SkillCraft full-126
 
 > Living document. Update when direction shifts. Companion files:
 > [EXPERIMENTS.md](./EXPERIMENTS.md) (curated results) and
 > [EXPERIMENT_NOTES.md](./EXPERIMENT_NOTES.md) (chronological scratchpad).
+> See [STATUS.md](./STATUS.md) for the achievements + remaining work
+> snapshot at the start of this iteration cycle.
 
-## Goal
+## Goal 3 (current): close the 7-of-7 gap
+
+Goal 2's iterations established that the substrate's learning loop
+fires end-to-end on the new harness (`src/eval/skillcraftFullDatafetch.ts`)
+with codex as the agent, but the seven thresholds are not met
+simultaneously because:
+
+- **Codex burns 10-20× more tokens per episode than Claude** (60-130k
+  vs 3-8k). With codex, `avgEffectiveTokens ≤ 8,000` is unreachable.
+- **Claude with the iter5 wiring ignores the new primitives** in
+  favour of its trained `df.tool` fan-out pattern. The seed and the
+  `df.db.records` mount are visible in df.d.ts, but the agent doesn't
+  reach for them.
+- **The observer crystallises one helper per family** (shape-hash
+  dedup catches similar trajectories), so `avgLearnedInterfacesAvailable ≥ 2.0`
+  on warm is structurally unreachable today.
+
+Goal 3 closes those three gaps so the same 7-of-7 condition becomes
+achievable in a single Claude-driven full-126 run.
+
+### Substrate changes required
+
+The valid levers in the cadence rules already cover what's needed:
+*observer gate*, *snippet runtime*, *prompt template*, *df.lib discovery
+surface*, *quality-gated df.answer*. No new lever surface.
+
+**Lever 1 — Claude uses the new primitives.** Commit-phase validator in
+the snippet runtime: when `df.db.records` is mounted for this episode,
+require that `scripts/answer.ts`'s trajectory contain at least one
+`df.lib.*` call OR at least one `df.db.records.*` call. If neither
+is present, return `df.answer({status: "unsupported"})` with a reason
+explaining the substrate-rooted path was not used. The validator only
+gates commit-phase artefacts (the final answer.ts), not probe runs;
+the agent can probe freely. Risk: lower pass rate while the agent
+adjusts. Mitigation: gate-only-on-mounted-records (so non-SkillCraft
+tenants are unaffected).
+
+Implementation:
+- `src/snippet/runtime.ts` adds a `requireSubstrateRootedChain`
+  session-context flag.
+- `src/eval/skillcraftFullDatafetch.ts` sets the flag when
+  `mountedRuntime` is non-null.
+- The runtime, after the snippet's commit-phase trajectory is recorded,
+  checks the call sequence. If neither `db.*` nor `lib.*` appears,
+  it rewrites the snippet's answer envelope to `status: "unsupported"`
+  with `reason: "substrate-rooted chain absent"`.
+
+Expected delta: Claude's first scripts/answer.ts goes through the
+validator, gets a structured nudge, the agent re-probes and writes
+a chain that satisfies the validator. Pass rate dips on the first
+pass and recovers; reuse-rate climbs because every committed
+trajectory now has at least one substrate-rooted call.
+
+**Lever 2 — Multiple helpers per family.** Two complementary moves:
+
+(a) *Sub-graph extractor in the observer*. Today
+`src/observer/template.ts` extracts the whole-trajectory shape. A
+trajectory like `db.records.findExact -> tool.A -> tool.B -> tool.C -> lib.sc_per_entity`
+gets compressed to one shape-hash, one helper. Extend the extractor
+to also propose sub-graphs whose entry is a `db.*` call and whose
+boundary is the first `lib.*` or `tool.*` call that consumes the
+db output. For SkillCraft-shaped trajectories this would yield (i)
+a helper that wraps `db.records.findExact -> sc_per_entity` and (ii)
+a helper that wraps the per-entity fan-out alone.
+
+(b) *Multi-shape seed pattern* (lower-leverage, simpler). Ship two
+seeds, not one: `sc_per_entity` (fan-out, already done) and
+`sc_aggregate_one` (single-entity helper). Trajectories that use both
+present two distinct shape-hashes to the observer.
+
+Pick (a) first; (b) is the fallback if sub-graph extraction proves
+too noisy.
+
+**Lever 3 — Discovery surface ranking.** Today `df.d.ts` lists
+helpers in mtime order. Re-rank by `(maturity, success_count, recency)`
+descending: validated-typescript first, then candidate-typescript
+with high success counts, then the seed. Add a one-line `intent`
+comment per helper above its declaration. The agent's eye lands on
+the most useful helpers first.
+
+Lever: `src/sdk/schemaRender.ts` (the `df.d.ts` renderer) reads the
+hook registry's success stats.
+
+Expected delta: warm-tier `helpersUsed/helpersAvailable` ratio climbs.
+
+### Pass conditions (unchanged from Goal 2)
+
+All seven must hold simultaneously on the latest full-126:
+
+- `arms["datafetch-learned"].passRate` ≥ 0.92
+- `arms["datafetch-learned"].avgEffectiveTokens` ≤ 8,000
+- `arms["datafetch-learned"].runtimeErrorRate` ≤ 0.05
+- `arms["datafetch-learned"].avgLearnedInterfacesAvailable` averaged
+  over the warm tier (n=84) ≥ **2.0**
+- `arms["datafetch-learned"].avgReuseRate` averaged over the warm
+  tier ≥ **0.30**
+- Warm-tier average effective tokens ≤ 70% of train-tier average
+- Quarantine rate (episodes with `hook_quarantined` stderr) ≤ 0.03
+
+Stop conditions: all seven hold simultaneously, OR 8 accepted iterations,
+OR 24 hours elapsed.
+
+### Iteration plan
+
+| iter | hypothesis | lever |
+|---|---|---|
+| 9 | commit-phase substrate-rooted validator nudges Claude to use df.lib | snippet runtime |
+| 10 | sub-graph extractor lifts warm helpers-available from 1 → 2+ | observer template |
+| 11 | df.d.ts re-rank lifts warm reuse-rate above 0.30 | df.lib discovery |
+| 12 | smoke-replay gate cuts quarantine rate | hook registry |
+| 13 | full-126 dry run, identify any remaining gaps | none (measurement) |
+| 14-16 | targeted fix per remaining-gap finding | matches gap |
+
+After each iter: probe → validate → (full-126 if probe+validate clear
+the gate) → commit headline row to `docs/hook-registry-experiment.md`.
+
+---
+
+## Goal 2 (preceding, partial completion)
 
 Reach the iter4 pass rate (≥ 92% pass ≥ 70 on the full SkillCraft
 126-task surface) on a single, sequentially-ordered, lib-cache-enabled
@@ -321,7 +441,7 @@ Before declaring the goal met, surface in the same turn:
 | [PLAN.md](./PLAN.md) | living plan, updated when direction shifts |
 | [EXPERIMENTS.md](./EXPERIMENTS.md) | curated experiments with hypothesis, change, result, lessons |
 | [EXPERIMENT_NOTES.md](./EXPERIMENT_NOTES.md) | chronological scratchpad, real-time thoughts |
-| [hook-registry-experiment.md](./hook-registry-experiment.md) | the committed headline-row table per iteration |
+| [../docs/hook-registry-experiment.md](../docs/hook-registry-experiment.md) | the committed headline-row table per iteration |
 
 EXPERIMENTS.md is the most important of the three. Every experiment,
 successful or not, gets an entry. The entry is what the next iteration
