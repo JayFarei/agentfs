@@ -26,8 +26,22 @@ import {
 } from "../sdk/adapter.js";
 
 export interface EvalRecord {
+  // The raw entity identifier. Tool-callable: when an agent does
+  // `entities.map(e => e.id)` and passes the list to a per-entity tool,
+  // the tool receives the expected identifier (e.g. "Siamese", 169,
+  // "the-office"). Iter15: previously this was "<family>:<entity>"
+  // which caused agents to silently pass family-prefixed strings to
+  // tools that didn't recognise them; the prefix now lives on
+  // `recordKey` for cross-family uniqueness without polluting the
+  // tool-callable slot.
   id: string;
+  // Stable cross-family-unique record key. Use this when you need to
+  // dedupe across families or correlate a record across runs; do NOT
+  // pass it as a tool argument.
+  recordKey: string;
   family: string;
+  // Duplicate of `id`; kept for backwards compatibility with answer.ts
+  // scripts and learned helpers that already reference `entity`.
   entity: string;
   label: string;
   attributes: Record<string, string | number | boolean>;
@@ -210,7 +224,8 @@ function normaliseEntity(
       }
     }
     return {
-      id: `${family}:${entity}`,
+      id: entity,
+      recordKey: `${family}:${entity}`,
       family,
       entity,
       label,
@@ -220,7 +235,8 @@ function normaliseEntity(
   if (typeof item === "string" || typeof item === "number") {
     const entity = String(item);
     return {
-      id: `${family}:${entity}`,
+      id: entity,
+      recordKey: `${family}:${entity}`,
       family,
       entity,
       label: entity,

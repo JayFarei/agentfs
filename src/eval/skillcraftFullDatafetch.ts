@@ -1061,7 +1061,11 @@ function renderLiveDfDts(
   const dbBlock = recordsMounted
     ? `  db: {
     records: {
-      findExact(filter: Record<string, unknown>, limit?: number): Promise<Array<{ id: string; family: string; entity: string; label: string; attributes: Record<string, string | number | boolean> }>>;
+      // record.id is the raw, tool-callable entity identifier (e.g.
+      // "Siamese", 169, "the-office"); pass it directly to per-entity
+      // tools. record.recordKey is "<family>:<entity>" for cross-family
+      // uniqueness; do NOT pass recordKey as a tool argument.
+      findExact(filter: Record<string, unknown>, limit?: number): Promise<Array<{ id: string; recordKey: string; family: string; entity: string; label: string; attributes: Record<string, string | number | boolean> }>>;
       search(query: string, opts?: { limit?: number }): Promise<any[]>;
       findSimilar(query: string, limit?: number): Promise<any[]>;
       hybrid(query: string, opts?: { limit?: number }): Promise<any[]>;
@@ -1354,7 +1358,7 @@ function renderLivePrompt(task: SkillCraftTask): string {
     "",
     "Read task.md, AGENTS.md, df.d.ts, and any initial workspace files.",
     "Edit scripts/answer.ts so it completes the task.",
-    "When df.d.ts declares df.db.records, the entities for this task are mounted as a substrate-rooted record store. Call `const entities = await df.db.records.findExact({}, 999)` first to get the entity list; each record carries `id`, `entity`, `label`, and an `attributes` map. Then use `df.lib.per_entity({ entityIds, toolBundle, toolNames, paramName, extraInput? })` to fan out the required per-entity tool calls. The seed unwraps as `(await df.lib.per_entity({...})).value` and returns `[{ entityId, tools: { <toolName>: <response> } }, ...]`.",
+    "When df.d.ts declares df.db.records, the entities for this task are mounted as a substrate-rooted record store. Call `const entities = await df.db.records.findExact({}, 999)` first to get the entity list; each record carries `id` (the raw tool-callable identifier — e.g. \"Siamese\", 169, \"the-office\"), `recordKey` (the cross-family-unique key, NOT a tool argument), `entity` (same as `id`), `label`, and an `attributes` map. Then use `df.lib.per_entity({ entityIds, toolBundle, toolNames, paramName, extraInput? })` to fan out the required per-entity tool calls. Pass `entities.map(e => e.id)` (or `entities.map(e => e.attributes[<field>])` if the tool needs a specific attribute) as `entityIds` — never pass `e.recordKey` which carries a `<family>:` prefix tools don't recognise. The seed unwraps as `(await df.lib.per_entity({...})).value` and returns `[{ entityId, tools: { <toolName>: <response> } }, ...]`.",
     "REQUIRED when df.d.ts declares df.db.records: scripts/answer.ts MUST reach the answer through at least one df.db.* call AND/OR at least one df.lib.* call. A scripts/answer.ts that only fan-outs with raw df.tool.* will be auto-rewritten to `{status: \"unsupported\", reason: \"substrate-rooted chain absent\"}` and scored 0. Probes (scripts/probe.ts) are free to use any df.* surface; only the final scripts/answer.ts is gated.",
     "If a learned helper (anything other than `per_entity`) is listed in df.d.ts under df.lib, prefer it over recomposing the chain. Call it the same way: `const r = (await df.lib.<name>({...})).value`.",
     "Use existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.",
