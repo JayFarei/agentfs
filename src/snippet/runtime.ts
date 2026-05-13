@@ -45,7 +45,9 @@ import type {
 import { buildDf, type DfBinding } from "./dfBinding.js";
 import {
   isAnswerEnvelope,
+  makeAnswerEnvelope,
   validateAnswerEnvelope,
+  type AnswerEnvelope,
   type AnswerValidation,
 } from "./answer.js";
 
@@ -125,13 +127,45 @@ export class DiskSnippetRuntime implements SnippetRuntime {
       timeoutMs: sessionCtx.snippetTimeoutMs ?? numberFromEnv("DF_SNIPPET_TIMEOUT_MS"),
     });
 
-    recorder.setResult(returnValue);
+    // Substrate-rooted chain gate. When the caller asks (the eval sets
+    // this when a tenant mount is present), the recorded trajectory must
+    // contain at least one db.* or lib.* primitive. If neither appears and
+    // the snippet otherwise succeeded, rewrite the answer envelope to
+    // `status: "unsupported"` so the observer sees a clean "did not use
+    // the substrate" signal and the eval treats the episode as failed.
+    let substrateChainRewriteApplied = false;
+    let effectiveReturnValue: unknown = returnValue;
+    if (
+      sessionCtx.requireSubstrateRootedChain === true &&
+      error === undefined
+    ) {
+      const hasSubstrateCall = recorder.snapshot.calls.some(
+        (c) =>
+          c.primitive.startsWith("db.") || c.primitive.startsWith("lib."),
+      );
+      if (!hasSubstrateCall) {
+        const rewritten: AnswerEnvelope = makeAnswerEnvelope({
+          status: "unsupported",
+          reason:
+            "substrate-rooted chain absent: trajectory contained neither df.db.* nor df.lib.* calls. " +
+            "When df.db.records is mounted for this episode, scripts/answer.ts must reach the answer through " +
+            "df.db.records.* (entity lookup) and/or df.lib.<helper> (substrate-crystallised or seed helper); " +
+            "pure df.tool.* fan-out without a substrate-rooted entry point is rejected.",
+        });
+        effectiveReturnValue = rewritten;
+        substrateChainRewriteApplied = true;
+      }
+    }
 
-    const answer = isAnswerEnvelope(returnValue) ? returnValue : undefined;
+    recorder.setResult(effectiveReturnValue);
+
+    const answer = isAnswerEnvelope(effectiveReturnValue)
+      ? (effectiveReturnValue as AnswerEnvelope)
+      : undefined;
     const validation =
       phase === "commit"
         ? validateAnswerEnvelope({
-            value: returnValue,
+            value: effectiveReturnValue,
             lineageCallCount: recorder.snapshot.calls.length,
           })
         : undefined;
@@ -149,8 +183,14 @@ export class DiskSnippetRuntime implements SnippetRuntime {
       );
       augmentedStderr = `${augmentedStderr}${lines.join("\n")}\n`;
     }
-    const effectiveExitCode =
-      phase === "commit" && validation?.accepted !== true ? 1 : exitCode;
+    if (substrateChainRewriteApplied && answer !== undefined) {
+      augmentedStderr = `${augmentedStderr}[snippet/runtime] substrate-rooted chain gate fired: ${answer.reason}\n`;
+    }
+    const effectiveExitCode = substrateChainRewriteApplied
+      ? 1
+      : phase === "commit" && validation?.accepted !== true
+        ? 1
+        : exitCode;
 
     // 3. Persist trajectory.
     //    Mode classification (PRD §8.1, D-010):

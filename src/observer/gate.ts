@@ -49,10 +49,28 @@ export type ShouldCrystalliseArgs = {
   // `existing.shapeHashes` so we don't re-learn the same shape.
   shapeHash: string;
   existing: LibrarySnapshot;
+  // When true, this candidate is a sub-graph slice of the trajectory
+  // rather than the whole trajectory. Goal-3 iter 10: sub-graphs let us
+  // crystallise additional helpers (e.g. a "lookup + first consumer"
+  // wrapper, or a "post-lookup fan-out" wrapper) per trajectory, lifting
+  // `avgLearnedInterfacesAvailable` above 1. The relaxation: a sub-graph
+  // does not require a db.* entry with downstream lib.* + data-flow;
+  // instead it requires two distinct primitives in the slice (which is
+  // already enforced for the whole-trajectory case) and the rest of the
+  // safety checks (no error, mode in novel/interpreted, shape-hash dedup).
+  subGraph?: boolean;
+  // The contiguous call slice this sub-graph candidate is built from.
+  // When undefined (whole-trajectory case), the gate uses
+  // `trajectory.calls`. This is purely informational for the slice-aware
+  // distinct-primitive count; the gate treats the slice the same way it
+  // treats the whole.
+  callsSlice?: ReadonlyArray<TrajectoryRecord["calls"][number]>;
 };
 
 export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
   const { trajectory, shapeHash, existing } = args;
+  const slice = args.callsSlice ?? trajectory.calls;
+  const isSubGraph = args.subGraph === true;
 
   // 1. Phase-aware execution: legacy trajectories had no phase field, so
   //    keep them eligible. Once a run declares a phase, only committed
@@ -84,18 +102,34 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     };
   }
 
-  // 2. >= 2 distinct primitive calls.
-  if (trajectory.calls.length < 2) {
+  // 2. >= 2 distinct primitive calls in the slice (or, for sub-graphs of
+  //    the fan-out kind, >= 2 calls of the same primitive — pure fan-out
+  //    where the agent loops the same tool over N entities is a valid
+  //    crystallisation target).
+  if (slice.length < 2) {
     return {
       ok: false,
-      reason: `trajectory has ${trajectory.calls.length} call(s); need at least 2`,
+      reason: `slice has ${slice.length} call(s); need at least 2`,
     };
   }
-  const distinctPrimitives = new Set(trajectory.calls.map((c) => c.primitive));
-  if (distinctPrimitives.size < 2) {
+  const distinctPrimitives = new Set(slice.map((c) => c.primitive));
+  if (distinctPrimitives.size < 2 && !isSubGraph) {
     return {
       ok: false,
       reason: `trajectory has ${distinctPrimitives.size} distinct primitive(s); need at least 2`,
+    };
+  }
+  if (
+    isSubGraph &&
+    distinctPrimitives.size < 2 &&
+    slice.length < 3
+  ) {
+    // Pure fan-out sub-graphs need at least 3 calls of the same primitive
+    // to be considered a reusable pattern (otherwise a one-shot pair of
+    // identical calls is too thin a signal).
+    return {
+      ok: false,
+      reason: `sub-graph slice has ${slice.length} call(s) of one primitive; fan-out crystallisation needs >= 3`,
     };
   }
 
@@ -145,37 +179,87 @@ export function shouldCrystallise(args: ShouldCrystalliseArgs): GateOutcome {
     };
   }
 
-  // 5. db.* call producing a list; at least one lib.* call after it whose
-  //    input cites the prior call's output (loose data-flow heuristic).
-  const firstDbIdx = trajectory.calls.findIndex((c) =>
-    c.primitive.startsWith("db."),
-  );
-  if (firstDbIdx === -1) {
-    return {
-      ok: false,
-      reason: "no db.* call present; observer requires a substrate-rooted chain",
-    };
-  }
-  if (!Array.isArray(trajectory.calls[firstDbIdx]?.output)) {
-    return {
-      ok: false,
-      reason: `first db.* call (#${firstDbIdx}) did not return a list`,
-    };
-  }
-  const downstreamLib = trajectory.calls.slice(firstDbIdx + 1).find((c) =>
-    c.primitive.startsWith("lib."),
-  );
-  if (!downstreamLib) {
-    return {
-      ok: false,
-      reason: "no lib.* call after the first db.* call",
-    };
-  }
-  if (!consumesEarlierOutput(trajectory.calls, firstDbIdx)) {
-    return {
-      ok: false,
-      reason: "no downstream call appears to consume the substrate output (data-flow check failed)",
-    };
+  // 5. Substrate-rooted chain check.
+  //    Whole-trajectory case (default): a db.* call producing a list, with
+  //    at least one downstream lib.* whose input consumes the db output.
+  //    Sub-graph case (Goal-3 iter 10): the slice need not be db-rooted;
+  //    if it has a db.* call AND a downstream consumer, we keep the
+  //    data-flow check; otherwise we accept fan-out shapes (multiple
+  //    calls of the same primitive with a shared parameter pattern).
+  const firstDbIdx = slice.findIndex((c) => c.primitive.startsWith("db."));
+  if (isSubGraph) {
+    if (firstDbIdx !== -1) {
+      if (!Array.isArray(slice[firstDbIdx]?.output)) {
+        return {
+          ok: false,
+          reason: `sub-graph first db.* call (#${firstDbIdx}) did not return a list`,
+        };
+      }
+      if (!consumesEarlierOutput(slice, firstDbIdx)) {
+        return {
+          ok: false,
+          reason: "sub-graph data-flow check failed: no downstream call consumes the db.* output",
+        };
+      }
+    } else {
+      // Pure fan-out sub-graph: every call is lib.* or tool.*. Require at
+      // least 3 calls AND at least one primitive that repeats — this is
+      // the structural marker of a reusable per-entity workflow.
+      const allSubstrate = slice.every(
+        (c) => c.primitive.startsWith("lib.") || c.primitive.startsWith("tool."),
+      );
+      if (!allSubstrate) {
+        return {
+          ok: false,
+          reason: "sub-graph is not substrate-rooted (no db.* and contains non-lib/tool calls)",
+        };
+      }
+      if (slice.length < 3) {
+        return {
+          ok: false,
+          reason: `pure-fan-out sub-graph has ${slice.length} call(s); need >= 3`,
+        };
+      }
+      const counts = new Map<string, number>();
+      for (const c of slice) {
+        counts.set(c.primitive, (counts.get(c.primitive) ?? 0) + 1);
+      }
+      const hasRepeat = Array.from(counts.values()).some((n) => n >= 2);
+      if (!hasRepeat) {
+        return {
+          ok: false,
+          reason: "pure-fan-out sub-graph has no repeated primitive (no fan-out structure)",
+        };
+      }
+    }
+  } else {
+    if (firstDbIdx === -1) {
+      return {
+        ok: false,
+        reason: "no db.* call present; observer requires a substrate-rooted chain",
+      };
+    }
+    if (!Array.isArray(slice[firstDbIdx]?.output)) {
+      return {
+        ok: false,
+        reason: `first db.* call (#${firstDbIdx}) did not return a list`,
+      };
+    }
+    const downstreamLib = slice.slice(firstDbIdx + 1).find((c) =>
+      c.primitive.startsWith("lib."),
+    );
+    if (!downstreamLib) {
+      return {
+        ok: false,
+        reason: "no lib.* call after the first db.* call",
+      };
+    }
+    if (!consumesEarlierOutput(slice, firstDbIdx)) {
+      return {
+        ok: false,
+        reason: "no downstream call appears to consume the substrate output (data-flow check failed)",
+      };
+    }
   }
 
   // 6. Shape-hash de-dup. The existing snapshot is built from the on-disk
@@ -229,7 +313,7 @@ function looksLikeErrorOutput(output: unknown): boolean {
 // downstream input looking for any object/array whose JSON encoding
 // matches any sub-tree of the upstream output.
 function consumesEarlierOutput(
-  calls: TrajectoryRecord["calls"],
+  calls: ReadonlyArray<TrajectoryRecord["calls"][number]>,
   firstDbIdx: number,
 ): boolean {
   const upstream = calls[firstDbIdx]?.output;

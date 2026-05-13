@@ -111,17 +111,28 @@ export function extractTemplate(trajectory: TrajectoryRecord): CallTemplate {
   if (trajectory.calls.length === 0) {
     throw new Error("extractTemplate: trajectory has no calls");
   }
+  return extractTemplateFromCalls(trajectory.calls, trajectory);
+}
 
+// Extract a template from a slice of trajectory calls. The slice must be
+// non-empty. When `topicSuffix` is supplied, the topic is decorated with
+// the suffix and the helper name's final segment matches the suffix — this
+// keeps sibling sub-graph helpers from one trajectory from colliding on
+// the same `<tenantId>/<name>.ts` path.
+export function extractTemplateFromCalls(
+  calls: ReadonlyArray<PrimitiveCallRecord>,
+  trajectory: TrajectoryRecord,
+  topicSuffix?: string,
+): CallTemplate {
+  if (calls.length === 0) {
+    throw new Error("extractTemplateFromCalls: empty calls slice");
+  }
   const params: TemplateParameter[] = [];
   const steps: TemplateStep[] = [];
-  // Track outputs by step index so later steps' `derivedFromCallIndex`
-  // detection works.
   const outputs = new Map<number, unknown>();
-  // Literal-value -> param name dedup. Lets two different field names
-  // carrying the same value across calls collapse onto one param.
   const literalDedup = new Map<string, string>();
 
-  trajectory.calls.forEach((call, idx) => {
+  calls.forEach((call, idx) => {
     outputs.set(idx, call.output);
     const outputName = `out${idx}`;
     const callShape = inferCallShape(call);
@@ -142,17 +153,231 @@ export function extractTemplate(trajectory: TrajectoryRecord): CallTemplate {
 
   const finalOutputBinding = steps[steps.length - 1]!.outputName;
   const shapeHash = shapeHashHex(canonicalShape(steps));
-  const topic = pickTopic(trajectory);
-  const name = semanticName(topic);
+  const baseTopic =
+    topicSuffix !== undefined
+      ? `${pickTopicForCalls(trajectory, calls)}_${topicSuffix}`
+      : pickTopicForCalls(trajectory, calls);
+  const name = semanticName(baseTopic);
 
   return {
     parameters: params,
     steps,
     finalOutputBinding,
     name,
-    topic,
+    topic: baseTopic,
     shapeHash,
   };
+}
+
+// Sub-graph candidate proposal. Returns 0+ additional templates extracted
+// from contiguous slices of the trajectory in addition to the whole.
+//
+// Goal-3 iter 10: today the observer crystallises one helper per trajectory
+// (via `extractTemplate`). For SkillCraft-shaped trajectories where the
+// agent's snippet did `db.records.findExact -> [tool.A, tool.B, ...] -> lib.<seed>`,
+// the whole-trajectory shape collapses to a single shape-hash and a single
+// authored helper. To lift `avgLearnedInterfacesAvailable` above 1, we also
+// propose:
+//
+//   - A "lookup + first consumer" sub-graph: from the first db.* call to the
+//     first downstream lib.* / tool.* that consumes its output. Reusable as
+//     "fetch entities + the first transform you apply to them".
+//   - A "post-lookup fan-out" sub-graph: the contiguous tail of lib.*/tool.*
+//     calls after the db lookup. Reusable as "given a list of entities, do
+//     the fan-out work alone, no need to re-lookup".
+//
+// Sub-graphs whose shape collapses onto the whole-trajectory shape (e.g.
+// when the trajectory is exactly two calls) are filtered by the shape-hash
+// dedup in the gate, so this function is safe to over-propose.
+export function extractSubGraphTemplates(
+  trajectory: TrajectoryRecord,
+): CallTemplate[] {
+  const calls = trajectory.calls;
+  if (calls.length < 3) return [];
+
+  const firstDbIdx = calls.findIndex((c) => c.primitive.startsWith("db."));
+  if (firstDbIdx < 0) return [];
+  const dbCall = calls[firstDbIdx]!;
+  const dbOutput = dbCall.output;
+  if (!isStructuredValue(dbOutput) && !Array.isArray(dbOutput)) return [];
+
+  // The boundary is the FIRST subsequent lib.* or tool.* call whose input
+  // references the db.* output. The reference check uses a signature-based
+  // heuristic (same as gate.ts's `consumesEarlierOutput`) so that downstream
+  // calls picking out a single entity id from the db output (e.g.
+  // `{ id: 7 }` flowing from `[{ id: 7 }, ...]`) are recognised as
+  // consumers, not just deep-equal whole-output references.
+  const upstreamSignatures = collectOutputSignatures(dbOutput);
+  let consumerIdx = -1;
+  if (upstreamSignatures.length > 0) {
+    for (let i = firstDbIdx + 1; i < calls.length; i += 1) {
+      const c = calls[i]!;
+      if (
+        !c.primitive.startsWith("lib.") &&
+        !c.primitive.startsWith("tool.")
+      ) {
+        continue;
+      }
+      const downstreamJson = safeJsonString(c.input);
+      if (downstreamJson === null) continue;
+      if (upstreamSignatures.some((sig) => downstreamJson.includes(sig))) {
+        consumerIdx = i;
+        break;
+      }
+    }
+  }
+  if (consumerIdx < 0) return [];
+
+  const candidates: CallTemplate[] = [];
+  const wholeShape = shapeHashHex(canonicalShape(
+    extractTemplateFromCalls(calls, trajectory).steps,
+  ));
+
+  // Sub-graph A: [db .. first consumer] inclusive. Skip when it equals the
+  // whole trajectory or is too short to be a meaningful pattern. The
+  // ≥ 3-call minimum keeps the demo's 4-call FinQA trajectory from
+  // spawning a noisy `[db, firstHelper]` 2-call sibling while still
+  // letting longer SkillCraft fan-out trajectories produce a useful
+  // sub-graph helper.
+  if (consumerIdx < calls.length - 1) {
+    const slice = calls.slice(firstDbIdx, consumerIdx + 1);
+    if (slice.length >= 3) {
+      const template = extractTemplateFromCalls(slice, trajectory, "lookup_consumer");
+      if (template.shapeHash !== wholeShape) candidates.push(template);
+    }
+  }
+
+  // Sub-graph B: [first consumer .. end]. Skip when it equals the whole
+  // trajectory or has < 3 calls. The gate's pure-fan-out check additionally
+  // requires a repeated primitive — three distinct lib.* / tool.* calls
+  // with no repeat are NOT a reusable pattern.
+  if (consumerIdx > firstDbIdx) {
+    const slice = calls.slice(consumerIdx);
+    if (slice.length >= 3) {
+      const template = extractTemplateFromCalls(slice, trajectory, "fanout");
+      if (template.shapeHash !== wholeShape) candidates.push(template);
+    }
+  }
+
+  return candidates;
+}
+
+// Returns the whole-trajectory template followed by any sub-graph
+// templates the observer should consider. Each candidate is independently
+// run through the gate; the order matches a "whole, then narrower slices"
+// preference so that when the gate accepts the whole, the sub-graphs add
+// breadth without changing the headline crystallisation behaviour for
+// existing trajectory shapes.
+export function extractCandidateTemplates(
+  trajectory: TrajectoryRecord,
+): CallTemplate[] {
+  if (trajectory.calls.length === 0) return [];
+  const whole = extractTemplate(trajectory);
+  const subs = extractSubGraphTemplates(trajectory);
+  const seenHashes = new Set<string>([whole.shapeHash]);
+  const out: CallTemplate[] = [whole];
+  for (const sub of subs) {
+    if (seenHashes.has(sub.shapeHash)) continue;
+    seenHashes.add(sub.shapeHash);
+    out.push(sub);
+  }
+  return out;
+}
+
+function safeJsonString(value: unknown): string | null {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
+// Collect distinctive signatures from a db.* call output. The same shape
+// as gate.ts's `pickSignatures`, kept in this file to avoid cross-module
+// coupling. Used to decide whether a downstream call's input references
+// any record in the upstream result set.
+function collectOutputSignatures(output: unknown): string[] {
+  if (!Array.isArray(output) || output.length === 0) return [];
+  const signatures: string[] = [];
+  const seen = new Set<string>();
+  const addSignature = (raw: string): void => {
+    if (!seen.has(raw)) {
+      seen.add(raw);
+      signatures.push(raw);
+    }
+  };
+  for (const item of output) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      if (typeof item === "string" && item.length >= 3) {
+        addSignature(JSON.stringify(item));
+      } else if (typeof item === "number" && Number.isFinite(item)) {
+        const s = String(item);
+        if (s.length >= 1) {
+          addSignature(s);
+          addSignature(JSON.stringify(s));
+        }
+      }
+      if (signatures.length >= 64) return signatures;
+      continue;
+    }
+    const rec = item as Record<string, unknown>;
+    for (const value of Object.values(rec)) {
+      if (typeof value === "string" && value.length >= 4) {
+        addSignature(JSON.stringify(value));
+      } else if (typeof value === "number" && Number.isFinite(value)) {
+        const s = String(value);
+        if (s.length >= 1) {
+          addSignature(s);
+          addSignature(JSON.stringify(s));
+        }
+      } else if (value && typeof value === "object" && !Array.isArray(value)) {
+        for (const inner of Object.values(value as Record<string, unknown>)) {
+          if (typeof inner === "string" && inner.length >= 4) {
+            addSignature(JSON.stringify(inner));
+          } else if (typeof inner === "number" && Number.isFinite(inner)) {
+            const s = String(inner);
+            if (s.length >= 1) {
+              addSignature(s);
+              addSignature(JSON.stringify(s));
+            }
+          }
+        }
+      }
+      if (signatures.length >= 64) return signatures;
+    }
+  }
+  return signatures;
+}
+
+function pickTopicForCalls(
+  trajectory: TrajectoryRecord,
+  calls: ReadonlyArray<PrimitiveCallRecord>,
+): string {
+  // Reuse the trajectory-level topic picker but bias toward primitives
+  // that are present in this specific slice. If the slice has no lib.*
+  // call, the topic falls back to the first call's primitive slug.
+  const primitives = new Set(calls.map((c) => c.primitive));
+  const fakeTrajectory: TrajectoryRecord = {
+    ...trajectory,
+    calls: calls.slice() as TrajectoryRecord["calls"],
+  };
+  if (
+    !primitives.has("lib.executeTableMath") &&
+    !primitives.has("lib.inferTableMathPlan") &&
+    !primitives.has("lib.locateFigure") &&
+    !primitives.has("lib.pickFiling")
+  ) {
+    const firstLib = calls.find((c) => c.primitive.startsWith("lib."));
+    if (firstLib) {
+      return sanitizeSlug(firstLib.primitive.slice("lib.".length));
+    }
+    const firstTool = calls.find((c) => c.primitive.startsWith("tool."));
+    if (firstTool) {
+      return sanitizeSlug(firstTool.primitive.replace(/^tool\./, "").replace(/\./g, "_"));
+    }
+    return sanitizeSlug(trajectory.question || "snippet");
+  }
+  return pickTopic(fakeTrajectory);
 }
 
 // --- bindInputs ------------------------------------------------------------

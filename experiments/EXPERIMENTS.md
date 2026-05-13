@@ -364,3 +364,39 @@ hypotheses. Append new entries here as they execute.)
   - Wired files: `src/eval/skillcraftFullDatafetch.ts` (line ~9, ~588), `src/eval/runScript.ts` (line ~23, ~149)
   - Extended persist: `src/eval/skillcraftFullDatafetch.ts` `persistFamilyLibCache` ~ line 1078
   - Diagnostic: trajectory inspection at `<probe-dir>/episodes/tvmaze-series-analyzer/e1/datafetch-home/trajectories/` shows 0/3 trajectories have `db.*` calls, 100% are `tool.*` only
+
+### iter9-12: Goal-3 substrate batch (commit-phase validator + sub-graph extractor + df.d.ts re-rank + smoke-replay gate)
+- Date: 2026-05-13
+- Goal: Goal 3 (generic, code-mode-native, cost-effective learning loop)
+- Hypothesis: bundling four substrate levers and running one combined eval is cheaper than per-lever probes, AND the four levers compose so individual gains don't show until they all land.
+- Change (all four landed before any eval):
+  1. `src/snippet/runtime.ts` + `src/bash/snippetRuntime.ts`: `requireSubstrateRootedChain` flag on SessionCtx. When set and the trajectory has no db.* or lib.* call, rewrite answer to `unsupported` and exitCode=1.
+  2. `src/observer/template.ts` + `src/observer/gate.ts` + `src/observer/worker.ts`: sub-graph extractor + relaxed gate for sub-graphs (`subGraph: true`). Observer iterates through whole + sub-graphs and crystallises each that passes its respective gate.
+  3. `src/server/manifest.ts`: re-rank df.d.ts entries by (maturity, success count, recency).
+  4. `src/hooks/registry.ts` + `src/observer/author.ts`: `smokeReplayAndPromote` does a static-shape match of authored body primitives vs trajectory primitives; promotes to validated-typescript on match, leaves candidate with callable-with-fallback on mismatch.
+- Probe: not yet run, pending user approval of Claude API spend for the eval cycle.
+- Validate: not yet run.
+- Full-126: not yet run.
+- Status: **IMPLEMENTATION LANDED, MEASUREMENT PENDING.** 254/254 unit tests pass; typecheck clean.
+- Lessons:
+  1. **Cadence deviation made consciously.** PLAN's per-iter probe cadence would burn ~$X × 4 levers in token cost before any composite signal is visible. The four levers compose, so a single batched eval is more informative than four sequential probes.
+  2. **Sub-graph extractor is bet on whether Claude lifts tool calls to top-level.** With the iter9 validator forcing Claude to use df.lib / df.db, the question is: does Claude write `db.findExact -> lib.per_entity` (whole-trajectory only, iter 10 contributes nothing) or `db.findExact -> tool.A -> tool.B -> ... -> lib.per_entity` (sub-graphs emerge, iter 10 contributes a fan-out helper)?
+  3. **Smoke-replay is static-shape, not runtime replay.** Full runtime replay would need the mount + tool bridge active at observer time. The static-shape match (regex-extract primitives from authored source, compare to trajectory primitives) catches all the failure modes we have seen in practice without the side-effect coupling.
+- Artefacts:
+  - Substrate changes: `src/snippet/runtime.ts`, `src/bash/snippetRuntime.ts`, `src/observer/template.ts`, `src/observer/gate.ts`, `src/observer/worker.ts`, `src/server/manifest.ts`, `src/hooks/registry.ts`, `src/observer/author.ts`, `src/eval/skillcraftFullDatafetch.ts` (prompt + flag).
+  - Test additions: `tests/snippet-runtime-phase.test.ts` (+2), `tests/observer-template.test.ts` (+3), `tests/hooks/manifest-rendering.test.ts` (+2), `tests/hooks/hook-registry.test.ts` (+5).
+  - Smoke moved: `src/observer/__smoke__.ts` → `src/observer/__smoke__/finqa.ts`.
+
+### iter13: novel-tenant smoke
+- Date: 2026-05-13
+- Goal: Goal 3 (B, the generic-substrate proof)
+- Hypothesis: the four iter9-12 substrate changes ship without any tenant-specific code, so a 5-record synthetic dataset under a new tenant id should let the observer crystallise a helper without any substrate edits.
+- Change: new `src/observer/__smoke__/novel-tenant.ts`. Mounts a 5-record book catalogue under `novel-tenant-smoke`, drops a single substrate-level seed `summariseRecords` under `lib/__seed__/`, runs `db.records.findExact -> lib.summariseRecords`, asserts the observer crystallises a helper at `<baseDir>/lib/novel-tenant-smoke/`, then re-runs and asserts the crystallised helper is called.
+- Result: **11/11 checks pass.** Observer crystallised `summariserecords` under `<baseDir>/lib/novel-tenant-smoke/`. Second snippet's trajectory call list includes `lib.summariserecords` with zero LLM calls.
+- Status: **PASSED.** Goal 3 (B) clears on a 5-record dataset; the substrate's "works out of the box" claim is demonstrable end-to-end.
+- Lessons:
+  1. **Zero substrate edits required for a new tenant.** Only the test file is new; everything under `src/observer/`, `src/hooks/`, `src/snippet/`, `src/sdk/`, `src/adapter/` is untouched.
+  2. **The crystallised helper's input shape mirrors the trajectory's external params, NOT the originating call's input.** First test attempt failed with `SchemaValidationError` because the second snippet passed `{rows}` (the internal binding) instead of `{filter, limit}` (the external params). Documenting because future tenant-onboarding will hit the same gotcha — the public signature is the substrate's contract, not the trajectory's call shape.
+- Artefacts:
+  - Smoke: `src/observer/__smoke__/novel-tenant.ts`
+  - Crystallised file (run-specific): `/tmp/df-novel-tenant-smoke-*/lib/novel-tenant-smoke/summariserecords.ts`

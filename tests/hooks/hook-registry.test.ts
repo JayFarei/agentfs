@@ -12,7 +12,10 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { HookRegistry } from "../../src/hooks/registry.js";
+import {
+  HookRegistry,
+  extractAuthoredPrimitives,
+} from "../../src/hooks/registry.js";
 import { listManifests, readManifest } from "../../src/hooks/manifest.js";
 import { DiskLibraryResolver } from "../../src/snippet/library.js";
 
@@ -298,5 +301,126 @@ describe("HookRegistry persistence", () => {
     const persisted = await readManifest(baseDir, tenant, "throws");
     expect(persisted?.callability).toBe("quarantined");
     expect(persisted?.quarantine?.reason).toBe("type_error");
+  });
+});
+
+describe("extractAuthoredPrimitives", () => {
+  it("collects db.*, lib.*, and tool.* calls in source order", () => {
+    const src = [
+      'const rows = await df.db.cases.findSimilar("q", 5);',
+      'const filing = (await df.lib.pickFiling({ rows })).value;',
+      'const out = await df.tool.tvmaze_api["local-tvmaze_get_show_info"]({ show_id: 1 });',
+      'const more = await df.tool.tvmaze_api.local_tvmaze_get_show_cast({ show_id: 1 });',
+    ].join("\n");
+    expect(extractAuthoredPrimitives(src)).toEqual([
+      "db.cases.findSimilar",
+      "lib.pickFiling",
+      "tool.tvmaze_api.local-tvmaze_get_show_info",
+      "tool.tvmaze_api.local_tvmaze_get_show_cast",
+    ]);
+  });
+
+  it("ignores df.* calls inside comments", () => {
+    const src = [
+      "// const rows = await df.db.cases.findSimilar(\"x\", 1);",
+      "/* await df.lib.shouldBeIgnored({}); */",
+      'const real = await df.lib.actual({});',
+    ].join("\n");
+    expect(extractAuthoredPrimitives(src)).toEqual(["lib.actual"]);
+  });
+});
+
+describe("smokeReplayAndPromote", () => {
+  let baseDir: string;
+  const tenant = "tenant-x";
+  beforeEach(async () => {
+    baseDir = await mkdtemp(path.join(os.tmpdir(), "df-hooks-smoke-"));
+    await mkdir(path.join(baseDir, "lib", tenant), { recursive: true });
+  });
+  afterEach(async () => {
+    delete process.env["DATAFETCH_INTERFACE_MODE"];
+    await rm(baseDir, { recursive: true, force: true });
+  });
+
+  it("promotes a candidate to validated-typescript when the body's primitives match the trajectory", async () => {
+    const source = [
+      'import { fn } from "@datafetch/sdk";',
+      'import * as v from "valibot";',
+      "declare const df: any;",
+      "export const matches = fn({",
+      '  intent: "matches",',
+      "  examples: [],",
+      "  input: v.object({}),",
+      "  output: v.unknown(),",
+      "  body: async () => {",
+      '    const rows = await df.db.cases.findSimilar("q", 1);',
+      '    return (await df.lib.pickFiling({ rows })).value;',
+      "  },",
+      "});",
+      "",
+    ].join("\n");
+    const filePath = path.join(baseDir, "lib", tenant, "matches.ts");
+    await writeFile(filePath, source, "utf8");
+
+    process.env["DATAFETCH_INTERFACE_MODE"] = "hooks-draft";
+    const resolver = new DiskLibraryResolver({ baseDir });
+    const registry = new HookRegistry({ baseDir, resolver, mode: "hooks-draft" });
+    await registry.validateImplementation({
+      tenantId: tenant,
+      name: "matches",
+      filePath,
+      implementationKind: "typescript",
+    });
+    const out = await registry.smokeReplayAndPromote({
+      tenantId: tenant,
+      name: "matches",
+      filePath,
+      expectedPrimitives: ["db.cases.findSimilar", "lib.pickFiling"],
+    });
+    expect(out.matched).toBe(true);
+    expect(out.manifest?.maturity).toBe("validated-typescript");
+    expect(out.manifest?.callability).toBe("callable");
+    expect(out.manifest?.stats.replaysPassed).toBe(1);
+  });
+
+  it("leaves the candidate at callable-with-fallback when the primitive sequence diverges", async () => {
+    const source = [
+      'import { fn } from "@datafetch/sdk";',
+      'import * as v from "valibot";',
+      "declare const df: any;",
+      "export const diverges = fn({",
+      '  intent: "diverges",',
+      "  examples: [],",
+      "  input: v.object({}),",
+      "  output: v.unknown(),",
+      "  body: async () => {",
+      "    // Only the db call; forgot the lib.* call the trajectory had.",
+      '    return await df.db.cases.findSimilar("q", 1);',
+      "  },",
+      "});",
+      "",
+    ].join("\n");
+    const filePath = path.join(baseDir, "lib", tenant, "diverges.ts");
+    await writeFile(filePath, source, "utf8");
+
+    process.env["DATAFETCH_INTERFACE_MODE"] = "hooks-draft";
+    const resolver = new DiskLibraryResolver({ baseDir });
+    const registry = new HookRegistry({ baseDir, resolver, mode: "hooks-draft" });
+    await registry.validateImplementation({
+      tenantId: tenant,
+      name: "diverges",
+      filePath,
+      implementationKind: "typescript",
+    });
+    const out = await registry.smokeReplayAndPromote({
+      tenantId: tenant,
+      name: "diverges",
+      filePath,
+      expectedPrimitives: ["db.cases.findSimilar", "lib.pickFiling"],
+    });
+    expect(out.matched).toBe(false);
+    expect(out.manifest?.maturity).toBe("candidate-typescript");
+    expect(out.manifest?.callability).toBe("callable-with-fallback");
+    expect(out.manifest?.stats.replaysFailed).toBe(1);
   });
 });

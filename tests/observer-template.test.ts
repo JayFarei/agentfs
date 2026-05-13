@@ -5,6 +5,8 @@ import path from "node:path";
 
 import type { TrajectoryRecord } from "../src/sdk/index.js";
 import {
+  extractCandidateTemplates,
+  extractSubGraphTemplates,
   extractTemplate,
   readLibrarySnapshot,
 } from "../src/observer/template.js";
@@ -376,5 +378,87 @@ describe("readLibrarySnapshot", () => {
     const snap = await readLibrarySnapshot({ baseDir, tenantId: "acme" });
     expect(Array.from(snap.shapeHashes)).toEqual(["deadbeef"]);
     expect(Array.from(snap.learnedNames)).toEqual(["crystal"]);
+  });
+});
+
+describe("extractSubGraphTemplates", () => {
+  it("returns no sub-graphs for a trajectory shorter than 3 calls", () => {
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: {}, output: [{ id: 1 }], startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "lib.perEntity", input: { ids: [1] }, output: { value: [] }, startedAt: ISO, durationMs: 1 },
+    ]);
+    expect(extractSubGraphTemplates(traj)).toEqual([]);
+  });
+
+  it("returns no sub-graphs when there is no db.* call", () => {
+    const traj = buildTrajectory([
+      { index: 0, primitive: "tool.api.A", input: {}, output: { ok: 1 }, startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.api.B", input: {}, output: { ok: 2 }, startedAt: ISO, durationMs: 1 },
+      { index: 2, primitive: "tool.api.C", input: {}, output: { ok: 3 }, startedAt: ISO, durationMs: 1 },
+    ]);
+    expect(extractSubGraphTemplates(traj)).toEqual([]);
+  });
+
+  it("emits a fan-out sub-graph when the agent loops one tool over several entities after a db lookup", () => {
+    const records = [{ id: 7 }, { id: 8 }, { id: 9 }];
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: { filter: {} }, output: records, startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.api.getDetails", input: { id: 7 }, output: { name: "a" }, startedAt: ISO, durationMs: 1 },
+      { index: 2, primitive: "tool.api.getDetails", input: { id: 8 }, output: { name: "b" }, startedAt: ISO, durationMs: 1 },
+      { index: 3, primitive: "tool.api.getDetails", input: { id: 9 }, output: { name: "c" }, startedAt: ISO, durationMs: 1 },
+    ]);
+    const subs = extractSubGraphTemplates(traj);
+    // Whole trajectory is `[db, tool, tool, tool]` (4 calls). Sub-graph A
+    // [db, tool#1] is only 2 calls so it is dropped (below the 3-call
+    // minimum). Sub-graph B [tool#1, tool#2, tool#3] is 3 calls of the
+    // same primitive, with a repeated primitive, so it should be emitted.
+    expect(subs.length).toBeGreaterThanOrEqual(1);
+    const fanout = subs.find((t) => t.topic.endsWith("fanout"));
+    expect(fanout).toBeDefined();
+    expect(fanout!.steps).toHaveLength(3);
+    expect(fanout!.steps.every((s) => s.primitive === "tool.api.getDetails")).toBe(true);
+  });
+
+  it("fan-out sub-graph template's body emits tool.* bracket-notation calls and is not pruned", async () => {
+    // Goal-3 iter 10 regression: the author returned null for fan-out
+    // sub-graphs because (1) renderStepExpression handled only db.* and
+    // lib.* primitives, and (2) pruneUnusedTemplateSteps collapsed the
+    // 9 independent tool calls to one. Both bugs surface as
+    // `{kind: "skipped", reason: "pure-composition path could not emit source"}`
+    // from authorFunction. This test exercises generatePureSource via
+    // the template through the resolver to lock in both fixes.
+    const records = [{ id: 7 }, { id: 8 }, { id: 9 }];
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: { filter: {}, limit: 999 }, output: records, startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.api.local-getInfo", input: { id: 7 }, output: { info: 7 }, startedAt: ISO, durationMs: 1 },
+      { index: 2, primitive: "tool.api.local-getRelated", input: { id: 7 }, output: { related: 7 }, startedAt: ISO, durationMs: 1 },
+      { index: 3, primitive: "tool.api.local-getInfo", input: { id: 8 }, output: { info: 8 }, startedAt: ISO, durationMs: 1 },
+      { index: 4, primitive: "tool.api.local-getRelated", input: { id: 8 }, output: { related: 8 }, startedAt: ISO, durationMs: 1 },
+      { index: 5, primitive: "tool.api.local-getInfo", input: { id: 9 }, output: { info: 9 }, startedAt: ISO, durationMs: 1 },
+      { index: 6, primitive: "tool.api.local-getRelated", input: { id: 9 }, output: { related: 9 }, startedAt: ISO, durationMs: 1 },
+    ]);
+    const subs = extractSubGraphTemplates(traj);
+    const fanout = subs.find((t) => t.topic.endsWith("fanout"));
+    expect(fanout).toBeDefined();
+    expect(fanout!.steps).toHaveLength(6);
+    expect(fanout!.steps.every((s) => s.primitive.startsWith("tool."))).toBe(true);
+    // Single shared param `id` since all 6 calls bind `id` to the same param.
+    expect(fanout!.parameters.map((p) => p.name)).toEqual(["id"]);
+  });
+
+  it("extractCandidateTemplates returns the whole template followed by sub-graphs", () => {
+    const records = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: { filter: {} }, output: records, startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.api.getDetails", input: { id: 1 }, output: { name: "x" }, startedAt: ISO, durationMs: 1 },
+      { index: 2, primitive: "tool.api.getDetails", input: { id: 2 }, output: { name: "y" }, startedAt: ISO, durationMs: 1 },
+      { index: 3, primitive: "tool.api.getDetails", input: { id: 3 }, output: { name: "z" }, startedAt: ISO, durationMs: 1 },
+    ]);
+    const candidates = extractCandidateTemplates(traj);
+    expect(candidates.length).toBeGreaterThanOrEqual(2);
+    expect(candidates[0]!.steps).toHaveLength(4);
+    // All candidates have distinct shape hashes.
+    const hashes = new Set(candidates.map((c) => c.shapeHash));
+    expect(hashes.size).toBe(candidates.length);
   });
 });

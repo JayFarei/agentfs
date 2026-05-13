@@ -172,6 +172,21 @@ export async function authorFunction(
       trajectoryId: trajectory.id,
       shapeHash: template.shapeHash,
     });
+    // Goal-3 iter 12: static-shape smoke replay. Promotes the manifest
+    // to validated-typescript when the authored body's primitive call
+    // sequence matches what the template prescribes; otherwise stays at
+    // candidate-typescript with callable-with-fallback (the structured
+    // warning lives in stats.replaysFailed).
+    try {
+      await registry.smokeReplayAndPromote({
+        tenantId,
+        name: template.name,
+        filePath: file,
+        expectedPrimitives: template.steps.map((s) => s.primitive),
+      });
+    } catch {
+      // best-effort; promotion is hygiene, not correctness.
+    }
   }
 
   // Refresh the typed API manifest and workspace memory so the newly learned
@@ -205,8 +220,17 @@ function generatePureSource(args: GenerateArgs): string | null {
     args.template.name === "rangeTableMetric"
       ? args.template
       : bindRowsToPriorRetrieval(args.template);
+  // Goal-3 iter 10: sub-graph templates (topic suffix `_fanout` or
+  // `_lookup_consumer`) represent agent-intent patterns where steps are
+  // INDEPENDENT calls the agent ran for side-effect, not a pure functional
+  // composition. Pruning unreferenced steps would collapse a 9-call
+  // fan-out into a 1-call wrapper, defeating the point. Detect those
+  // shapes and skip pruning.
+  const isSubGraph =
+    baseTemplate.topic.endsWith("_fanout") ||
+    baseTemplate.topic.endsWith("_lookup_consumer");
   const template =
-    baseTemplate.name === "rangeTableMetric"
+    baseTemplate.name === "rangeTableMetric" || isSubGraph
       ? baseTemplate
       : pruneUnusedTemplateSteps(baseTemplate);
   if (template.steps.length === 0) return null;
@@ -590,7 +614,27 @@ function renderStepExpression(
 ): string | null {
   const isLib = step.primitive.startsWith("lib.");
   const isDb = step.primitive.startsWith("db.");
-  if (!isLib && !isDb) return null;
+  const isTool = step.primitive.startsWith("tool.");
+  if (!isLib && !isDb && !isTool) return null;
+
+  if (isTool) {
+    // Goal-3 iter 10: sub-graph extractor emits pure tool.* fan-out
+    // templates. Render as `await df.tool.<bundle>["<toolName>"](input)`;
+    // tool names often contain hyphens (e.g. "local-tvmaze_get_show_info")
+    // so bracket notation is required.
+    const rest = step.primitive.slice("tool.".length);
+    const dot = rest.indexOf(".");
+    if (dot < 0) return null;
+    const bundle = rest.slice(0, dot);
+    const toolName = rest.slice(dot + 1);
+    if (bundle.length === 0 || toolName.length === 0) return null;
+    const obj = renderBindingObject(step.inputBindings, externalParams);
+    if (obj === null) return null;
+    const safeBundle = /^[A-Za-z_$][\w$]*$/.test(bundle)
+      ? `df.tool.${bundle}`
+      : `df.tool[${JSON.stringify(bundle)}]`;
+    return `await ${safeBundle}[${JSON.stringify(toolName)}](${obj})`;
+  }
 
   if (isDb) {
     const [, ident, method] = step.primitive.split(".");

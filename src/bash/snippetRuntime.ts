@@ -29,6 +29,16 @@ export type SessionCtx = {
   baseDir: string;
   trajectoryId?: string;
   snippetTimeoutMs?: number;
+  // When true, the snippet runtime enforces that the recorded trajectory
+  // contains at least one df.db.* or df.lib.* call. If neither appears and
+  // the snippet otherwise succeeded, the answer envelope is rewritten to
+  // `{status: "unsupported", reason: "substrate-rooted chain absent"}` and
+  // the snippet's exit code is forced to 1. Callers (typically the eval)
+  // set this when a tenant mount is present so the agent must reach the
+  // answer through the substrate's primitives rather than bare df.tool.*
+  // fan-out. Probe-style runs leave the flag unset so the agent can probe
+  // freely.
+  requireSubstrateRootedChain?: boolean;
   skillcraftToolBridge?: {
     skillcraftDir: string;
     bundles: string[];

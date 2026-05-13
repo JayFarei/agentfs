@@ -78,8 +78,10 @@ async function renderManifest(opts: RegenerateManifestOpts): Promise<string> {
   // visible via apropos as diagnostics, but the typed manifest hides
   // them so the agent never sees a callable signature it can't use.
   let callableNames: Set<string> | null = null;
+  let manifestIndex: Map<string, VfsHookManifest> = new Map();
   if (hooksEnabled()) {
     const manifests = await listManifests(baseDir, tenantId);
+    manifestIndex = new Map(manifests.map((m: VfsHookManifest) => [m.name, m]));
     callableNames = new Set(
       manifests
         .filter((m: VfsHookManifest) =>
@@ -99,11 +101,23 @@ async function renderManifest(opts: RegenerateManifestOpts): Promise<string> {
       const head = await readFrontmatterHead(
         path.join(baseDir, "lib", tenantId, `${e.name}.ts`),
       );
-      return { name: e.name, spec: e.spec, description: head.description, isTool: head.isTool };
+      return {
+        name: e.name,
+        spec: e.spec,
+        description: head.description,
+        isTool: head.isTool,
+        manifest: manifestIndex.get(e.name) ?? null,
+      };
     }),
   );
-  const tools = annotated.filter((e) => e.isTool);
-  const primitives = annotated.filter((e) => !e.isTool);
+  // Goal-3 iter 11: re-rank by (maturity, success_count, recency).
+  // The previous ordering was resolver.list() order (effectively mtime),
+  // which buried high-confidence helpers under fresher candidates the
+  // observer just authored. After re-rank, validated-typescript hooks
+  // surface first; among candidates, the ones with the most prior
+  // successes come first; ties break on `updatedAt` recency then name.
+  const tools = annotated.filter((e) => e.isTool).sort(rankManifestEntry);
+  const primitives = annotated.filter((e) => !e.isTool).sort(rankManifestEntry);
 
   // Mount sources. Each registered mount exposes one `db.<ident>` per
   // collection it holds. The manifest references the synthesised typed
@@ -203,7 +217,39 @@ type ManifestEntry = {
   spec: FnSpec<unknown, unknown>;
   description: string | null;
   isTool: boolean;
+  manifest: VfsHookManifest | null;
 };
+
+// Lower number sorts first.
+function maturityPriority(maturity: VfsHookManifest["maturity"] | null): number {
+  switch (maturity) {
+    case "validated-typescript":
+      return 0;
+    case "provider-native":
+      return 1;
+    case "candidate-typescript":
+      return 2;
+    case "draft-agentic":
+      return 3;
+    case "observed":
+      return 4;
+    default:
+      return 5;
+  }
+}
+
+function rankManifestEntry(a: ManifestEntry, b: ManifestEntry): number {
+  const ap = maturityPriority(a.manifest?.maturity ?? null);
+  const bp = maturityPriority(b.manifest?.maturity ?? null);
+  if (ap !== bp) return ap - bp;
+  const as = a.manifest?.stats.successes ?? 0;
+  const bs = b.manifest?.stats.successes ?? 0;
+  if (as !== bs) return bs - as;
+  const aUpdated = a.manifest?.origin.updatedAt ?? "";
+  const bUpdated = b.manifest?.origin.updatedAt ?? "";
+  if (aUpdated !== bUpdated) return aUpdated > bUpdated ? -1 : 1;
+  return a.name.localeCompare(b.name);
+}
 
 async function safeList(
   resolver: DiskLibraryResolver,

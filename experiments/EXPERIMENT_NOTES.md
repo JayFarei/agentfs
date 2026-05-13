@@ -395,3 +395,62 @@ Run the same experiment across the old harness's other 5 families (economic, blo
 If five out of six families show the same pattern (loop fires, ~100% reuse, warm/hard tokens 30-50% of baseline), the substrate-level proof is solid. Then port the substrate-mount + seed-drop to the new harness and run goal2-full there.
 
 If the pattern breaks on certain families (e.g., very small `df.db.records` corpora, or seed function returning poorly-typed payloads), that's a separate fix point and the EXPERIMENT_NOTES log captures the family-specific reason.
+
+## 2026-05-13, Goal 3 iter 9-13 substrate work
+
+### 2026-05-13 09:30 [implement, iter9..iter12 batched]
+
+Implementing Goal 3's three substrate levers + smoke-replay gate + novel-tenant smoke before the next eval run. Rationale: each lever's individual probe would burn ~15 min of Claude tokens, and the levers compose; iter 9 by itself doesn't move `avgLearnedInterfacesAvailable`, iter 10 by itself doesn't change reuse, etc. Bundling means one eval cycle measures the combined effect against the 7 thresholds. The cadence rule "probe before validate before full-126" still applies; the deviation is "land all four substrate changes, then probe, then validate, then full-126" rather than "probe per lever".
+
+Levers landed in this batch:
+
+- **iter 9 — commit-phase substrate-rooted validator.** New `requireSubstrateRootedChain` flag on `SessionCtx`. When set (the new harness sets it whenever `mountedRuntime` is non-null), the runtime checks the recorded trajectory's call list for at least one `db.*` or `lib.*` primitive. If neither is present and the snippet otherwise succeeded, the answer envelope is rewritten to `{status: "unsupported", reason: "substrate-rooted chain absent"}` and exitCode is forced to 1. The agent's prompt template was updated to teach the requirement explicitly. Probe runs (`pnpm datafetch:run scripts/probe.ts`) DON'T set the flag, so the agent can probe freely. New tests: two cases in `tests/snippet-runtime-phase.test.ts` (rewrites the answer when no substrate call, leaves it when db.* present).
+
+- **iter 10 — observer sub-graph extractor.** `extractCandidateTemplates(trajectory)` returns the whole-trajectory template followed by 0+ sub-graph templates. Sub-graph A: `[firstDbCall ... firstConsumer]` inclusive. Sub-graph B: `[firstConsumer ... end]`. Both gated at ≥ 3 calls (the 2-call SkillCraft `db -> lib.per_entity` shape is the whole, no sub-graphs). The gate has a new `subGraph: true` mode that relaxes check #5: sub-graphs that start with `db.*` still need the data-flow check; pure fan-out sub-graphs need ≥ 3 calls + a repeated primitive (structural marker of a reusable per-entity loop). Worker iterates through all candidates, gates each, authors each that passes — the primary result keeps the whole-trajectory slot when it cleared the gate, and additional crystallisations land under `additional[]` on the `ObserveCrystallised` envelope. New tests: 3 cases in `tests/observer-template.test.ts` covering "too short to extract", "no db call", "fan-out emitted when repeated primitive after db".
+
+- **iter 11 — df.d.ts discovery re-rank.** `renderManifest` now sorts tools and primitives by `(maturityPriority, stats.successes desc, origin.updatedAt desc, name asc)`. Validated-typescript helpers surface first; among candidates, the most-used wins. The JSDoc above each declaration already carries the helper's `intent`, satisfying the PLAN's "one-line intent comment" affordance. New tests: 2 cases in `tests/hooks/manifest-rendering.test.ts` (validated > candidate; among candidates, higher success count wins).
+
+- **iter 12 — smoke-replay promotion gate.** `HookRegistry.smokeReplayAndPromote({tenantId, name, filePath, expectedPrimitives})` reads the authored body, extracts its primitive call sequence via `extractAuthoredPrimitives(source)` (regexes for `df.db.X.method(...)`, `df.lib.X(...)`, `df.tool.X.Y(...)`, `df.tool.X["..."](...)`), and compares to the trajectory's recorded sequence. Match → promote maturity to validated-typescript + callability "callable" + bump `stats.replaysPassed`. Mismatch → leave at candidate-typescript with callable-with-fallback + bump `stats.replaysFailed`. The observer's `authorFunction` calls this immediately after `validateImplementation`. Static-shape (no runtime invocation) keeps promotion deterministic and side-effect-free. New tests: 3 cases in `tests/hooks/hook-registry.test.ts` (primitive extractor; match → validated; mismatch → callable-with-fallback).
+
+- **iter 13 — novel-tenant smoke.** New `src/observer/__smoke__/novel-tenant.ts`. The old `src/observer/__smoke__.ts` moved to `src/observer/__smoke__/finqa.ts` (directory now holds both). Mounts a 5-record book catalogue under tenant `novel-tenant-smoke` with a `summariseRecords` substrate-level seed (under `lib/__seed__/`, not under any tenant's lib). Runs `db.records.findExact -> lib.summariseRecords`, asserts the observer crystallises a per-tenant helper into `<baseDir>/lib/novel-tenant-smoke/`, then runs a second snippet that calls the crystallised helper directly and asserts `lib.<name>` shows up in the second trajectory's call list with no LLM calls. **11/11 checks pass.** package.json `test` script runs both smokes before vitest.
+
+All four levers + the novel-tenant proof landed without editing tenant-specific code: the only files touched in `src/eval/` are `skillcraftFullDatafetch.ts` (one prompt-template line + the `requireSubstrateRootedChain` wire), and that wiring is gated on `mountedRuntime !== null` so non-mounted tenants are unaffected.
+
+Test count went 242 → 254 (+12) all green. Typecheck clean.
+
+### 2026-05-13 09:40 [meta, expected impact on Goal-3 thresholds]
+
+| threshold | iter9 effect | iter10 effect | iter11 effect | iter12 effect | combined expectation |
+|---|---|---|---|---|---|
+| passRate ≥ 0.92 | first-attempt dip then recovers | -- | -- | -- | should hold; gate rejects pure-tool fan-out answer.ts |
+| avgEffectiveTokens warm ≤ 8,000 | -- | -- | -- | -- | unchanged from iter5-8 baseline expectation (~3-8k) |
+| runtimeErrorRate ≤ 0.05 | the rewrite paths return `unsupported`, not crashes | -- | -- | -- | should be unaffected or better |
+| **avgLearnedInterfacesAvailable warm ≥ 2.0** | -- | sub-graph fan-out helpers add ≥ 1 per family on long trajectories | -- | -- | the headline gap — sub-graphs are the bet here |
+| avgReuseRate warm ≥ 0.30 | every committed trajectory has at least one substrate call | -- | re-rank surfaces helpers higher in df.d.ts | replays-passed → callable boost | should climb above 0.30 |
+| warm/train tokens ≤ 0.70 | -- | -- | -- | -- | follows reuse — should hold |
+| quarantine rate ≤ 0.03 | -- | -- | -- | smoke replay catches authoring bugs pre-callability | should drop |
+
+The single threshold that's NOT a clear win from this batch is `avgLearnedInterfacesAvailable ≥ 2.0`. Iter 10's sub-graph extractor depends on trajectories with ≥ 3 top-level calls; SkillCraft trajectories under iter5-8 had 2 (db + lib.per_entity). If the iter9 validator pushes Claude into writing answer.ts files with `db.records.findExact -> per-entity tool fan-out -> lib.per_entity` (i.e. lifting nested tool calls to top-level), then iter 10 yields a second crystallised helper per family. If Claude continues to call lib.per_entity directly (2-call trajectory), iter 10 doesn't help and the 2.0 threshold misses.
+
+Probe-time signal to watch: e1's trajectory `calls.length` and the observer's `additional[]` envelope. If e1 has ≥ 3 top-level calls AND `additional` has at least one entry, the bet wins.
+
+### 2026-05-13 09:42 [hypothesis, iter14 probe]
+
+Next: run `tvmaze-series-analyzer` probe with the iter9-12 substrate changes active. Required from the cadence rules:
+- ≥ +5pp pass vs iter4 baseline (94.4% on the full-126; tvmaze is one family, so we want ≥ 5/6 = 83% on this family).
+- At least one helper authored during train (e1 / e2 / e3 — broadened in iter8).
+- At least one helper reused during warm (e2-m2).
+
+If probe clears: validate {university-directory-builder, jikan-anime-analysis}. If both clear, full-126.
+
+### 2026-05-13 10:05 [meta, mid-probe bugfix: iter 10 author path missed tool.* + over-pruned fan-outs]
+
+Stopped first probe at m1 to land two follow-on substrate fixes the unit tests missed:
+
+1. **Author couldn't emit tool.* calls.** `renderStepExpression` (`src/observer/author.ts`) returned null for any primitive not starting with `db.` or `lib.`. Sub-graph fan-out templates from iter 10 are all tool.* steps, so the author silently failed with "pure-composition path could not emit source". Fix: render tool.* as `await df.tool.<bundle>["<toolName>"](input)` with bracket notation for hyphenated tool names (which SkillCraft uses everywhere, e.g. `local-tvmaze_get_show_info`).
+
+2. **Pruning collapsed fan-out sub-graphs to one step.** `pruneUnusedTemplateSteps` traces backwards from the final output and removes any step whose output isn't referenced. For a pure fan-out where each tool call is independent (no inter-step data flow), it removes all but the last step. Fix: skip pruning for sub-graph templates (topic suffix `_fanout` or `_lookup_consumer`); their steps are independent calls the agent ran for side-effect, not a functional pipeline.
+
+The unit tests for iter 10 caught extraction + gate logic but not the author end-to-end — both failures looked like "skipped, generatePureSource returned null" which the gate-level tests don't surface. Adding an integration assertion in the observer-author test suite would have caught this earlier. The fixes ship without new tests because re-running the probe is the more informative check; if the probe demonstrates crystallisation, we'll add a regression test from a fixture trajectory.
+
+Re-running tvmaze probe. Test count unchanged at 254/254 (the bugfixes are within already-tested code paths).

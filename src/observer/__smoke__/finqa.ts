@@ -28,18 +28,18 @@ import path from "node:path";
 import {
   getMountRuntimeRegistry,
   type MountRuntime,
-} from "../adapter/runtime.js";
-import { installFlueDispatcher } from "../flue/install.js";
+} from "../../adapter/runtime.js";
+import { installFlueDispatcher } from "../../flue/install.js";
 import {
   type CollectionHandle,
   type MountAdapter,
   type MountInventory,
   type SampleOpts,
   type SourceCapabilities,
-} from "../sdk/index.js";
-import { installSnippetRuntime } from "../snippet/install.js";
+} from "../../sdk/index.js";
+import { installSnippetRuntime } from "../../snippet/install.js";
 
-import { installObserver } from "./install.js";
+import { installObserver } from "../install.js";
 
 // --- Stub MountAdapter (mirrors src/snippet/__smoke__.ts) -----------------
 

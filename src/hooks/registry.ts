@@ -365,6 +365,133 @@ export class HookRegistry {
   }
 
   /**
+   * Goal-3 iter 12 — smoke-replay promotion gate.
+   *
+   * After the observer authors a candidate-typescript body, this method
+   * statically compares the call sequence in the authored source to the
+   * trajectory's recorded primitives (or a sub-graph's expected step
+   * list). When they match exactly, the hook is promoted to
+   * validated-typescript with callability="callable" and the stats
+   * block records a passed replay. When they mismatch, the hook stays
+   * candidate-typescript with callability="callable-with-fallback" and
+   * the stats block records a failed replay alongside a structured
+   * mismatch reason.
+   *
+   * The match is static-shape (primitive name sequence) rather than a
+   * full runtime invocation: the authored body's call ordering captures
+   * the substrate-rooted chain we trust; the SDK's valibot schema
+   * handles input validation at call time. A full replay would need the
+   * mount + tool bridge to be live for the manifest write, which couples
+   * promotion to a side-effecting harness step.
+   */
+  async smokeReplayAndPromote(args: {
+    tenantId: string;
+    name: string;
+    filePath: string;
+    expectedPrimitives: ReadonlyArray<string>;
+  }): Promise<{
+    matched: boolean;
+    reason: string;
+    bodyPrimitives: string[];
+    manifest: VfsHookManifest | null;
+  }> {
+    const existing = await readManifest(this.baseDir, args.tenantId, args.name);
+    if (!existing) {
+      return {
+        matched: false,
+        reason: "no manifest to promote (run validateImplementation first)",
+        bodyPrimitives: [],
+        manifest: null,
+      };
+    }
+    if (existing.callability === "quarantined") {
+      return {
+        matched: false,
+        reason: "hook is quarantined; cannot promote",
+        bodyPrimitives: [],
+        manifest: existing,
+      };
+    }
+    let source: string;
+    try {
+      source = await fsp.readFile(args.filePath, "utf8");
+    } catch (err) {
+      return {
+        matched: false,
+        reason: `failed to read implementation file: ${errorMessage(err)}`,
+        bodyPrimitives: [],
+        manifest: existing,
+      };
+    }
+    const bodyPrimitives = extractAuthoredPrimitives(source);
+    const expected = Array.from(args.expectedPrimitives);
+    const matched =
+      bodyPrimitives.length === expected.length &&
+      bodyPrimitives.every((p, i) => p === expected[i]);
+
+    const now = new Date().toISOString();
+    existing.stats = existing.stats ?? emptyHookStats();
+    if (matched) {
+      existing.stats.replaysPassed += 1;
+      // Don't downgrade provider-native; otherwise promote candidates to
+      // validated-typescript and recompute callability under current mode.
+      if (
+        existing.maturity !== "provider-native" &&
+        existing.maturity !== "validated-typescript"
+      ) {
+        existing.maturity = "validated-typescript";
+      }
+      existing.callability = this.decideCallability(existing, this.mode());
+    } else {
+      existing.stats.replaysFailed += 1;
+      // Leave maturity at candidate-typescript; downgrade callability so
+      // a fallback runs when the agent invokes the hook.
+      if (
+        existing.maturity !== "validated-typescript" &&
+        existing.maturity !== "provider-native"
+      ) {
+        existing.maturity = "candidate-typescript";
+      }
+      // Under hooks-draft we already use callable-with-fallback for
+      // candidates; in legacy mode the call path doesn't gate on
+      // callability, so the demotion is harmless. Recompute to keep the
+      // manifest consistent.
+      existing.callability = this.decideCallability(existing, this.mode());
+    }
+    existing.origin.updatedAt = now;
+    await writeManifest(this.baseDir, existing);
+    this.rememberManifest(existing);
+
+    if (this.telemetry) {
+      await this.emit(matched ? "hook.replay_passed" : "hook.replay_failed", {
+        name: existing.name,
+        tenantId: args.tenantId,
+        maturity: existing.maturity,
+        callability: existing.callability,
+        bodyPrimitives,
+        expectedPrimitives: expected,
+      });
+      if (matched && existing.maturity === "validated-typescript") {
+        await this.emit("hook.promoted", {
+          name: existing.name,
+          tenantId: args.tenantId,
+          maturity: existing.maturity,
+          callability: existing.callability,
+        });
+      }
+    }
+
+    return {
+      matched,
+      reason: matched
+        ? "primitive sequence matches trajectory"
+        : `body primitives [${bodyPrimitives.join(", ")}] did not match expected [${expected.join(", ")}]`,
+      bodyPrimitives,
+      manifest: existing,
+    };
+  }
+
+  /**
    * Manually quarantine an existing manifest (used when a later runtime
    * crash reveals the body is unsafe even though static validation
    * passed).
@@ -476,4 +603,59 @@ export function hookManifestFile(
   name: string,
 ): string {
   return hookManifestPath(baseDir, tenantId, name);
+}
+
+// Goal-3 iter 12 — extract the primitive call sequence from an authored
+// helper's source. Recognises three call shapes:
+//   - df.db.<ident>.<method>(...)         → "db.<ident>.<method>"
+//   - df.lib.<name>(...)                  → "lib.<name>"
+//   - df.tool.<bundle>.<tool>(...) OR
+//     df.tool.<bundle>["<tool>"]({...})   → "tool.<bundle>.<tool>"
+// The match order follows source order so the resulting array is
+// directly comparable to a trajectory's `calls.map(c => c.primitive)`.
+// Calls inside `await Promise.all([...])` are included in the order they
+// appear in the source, which matches the trajectory's record order
+// (the trajectory records on call boundary, not on await resolution).
+export function extractAuthoredPrimitives(source: string): string[] {
+  // Strip line + block comments so commented-out df.* calls aren't counted.
+  const stripped = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((line) => line.replace(/\/\/.*$/, ""))
+    .join("\n");
+  const out: Array<{ pos: number; primitive: string }> = [];
+
+  // df.db.<ident>.<method>(...)
+  const dbRe = /\bdf\.db\.([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const m of stripped.matchAll(dbRe)) {
+    out.push({
+      pos: m.index ?? 0,
+      primitive: `db.${m[1]}.${m[2]}`,
+    });
+  }
+  // df.lib.<name>(...)
+  const libRe = /\bdf\.lib\.([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const m of stripped.matchAll(libRe)) {
+    out.push({
+      pos: m.index ?? 0,
+      primitive: `lib.${m[1]}`,
+    });
+  }
+  // df.tool.<bundle>.<tool>(...)  AND  df.tool.<bundle>["<tool>"](...)
+  const toolDotRe = /\bdf\.tool\.([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s*\(/g;
+  for (const m of stripped.matchAll(toolDotRe)) {
+    out.push({
+      pos: m.index ?? 0,
+      primitive: `tool.${m[1]}.${m[2]}`,
+    });
+  }
+  const toolBracketRe = /\bdf\.tool\.([A-Za-z_$][\w$]*)\[\s*["']([^"']+)["']\s*\]\s*\(/g;
+  for (const m of stripped.matchAll(toolBracketRe)) {
+    out.push({
+      pos: m.index ?? 0,
+      primitive: `tool.${m[1]}.${m[2]}`,
+    });
+  }
+  out.sort((a, b) => a.pos - b.pos);
+  return out.map((c) => c.primitive);
 }

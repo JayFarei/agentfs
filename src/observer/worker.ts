@@ -28,8 +28,9 @@ import {
 import { authorFunction, type AuthorResult } from "./author.js";
 import { shouldCrystallise } from "./gate.js";
 import {
-  extractTemplate,
+  extractCandidateTemplates,
   readLibrarySnapshot,
+  type CallTemplate,
 } from "./template.js";
 import { resolveWorkspaceHeadForTrajectory } from "./workspaceHead.js";
 
@@ -44,6 +45,12 @@ export type ObserveCrystallised = {
   kind: "crystallised";
   name: string;
   path: string;
+  // Goal-3 iter 10: when sub-graph extraction also crystallises one or
+  // more sibling helpers, they show up here. The primary `name`/`path`
+  // still references the whole-trajectory crystallisation when one was
+  // accepted; if only sub-graphs cleared the gate, the first sub-graph
+  // is promoted to the primary.
+  additional?: Array<{ name: string; path: string }>;
 };
 
 export type ObserveResult = ObserveSkipped | ObserveCrystallised;
@@ -137,9 +144,9 @@ export class Observer {
     const allowOverwrite = workspaceHead.kind === "head";
 
     // Build the template + library snapshot.
-    let template;
+    let candidates: CallTemplate[];
     try {
-      template = extractTemplate(trajectory);
+      candidates = extractCandidateTemplates(trajectory);
     } catch (err) {
       return {
         kind: "skipped",
@@ -148,6 +155,11 @@ export class Observer {
         }`,
       };
     }
+    if (candidates.length === 0) {
+      return { kind: "skipped", reason: "no template candidates extracted" };
+    }
+    const whole = candidates[0]!;
+    const subGraphs = candidates.slice(1);
 
     const snapshot = await readLibrarySnapshot({
       baseDir: this.baseDir,
@@ -155,23 +167,14 @@ export class Observer {
     });
 
   const gateSnapshot =
-    allowOverwrite && snapshot.shapeHashes.has(template.shapeHash)
+    allowOverwrite && snapshot.shapeHashes.has(whole.shapeHash)
       ? {
           shapeHashes: new Set(
-            [...snapshot.shapeHashes].filter((h) => h !== template.shapeHash),
+            [...snapshot.shapeHashes].filter((h) => h !== whole.shapeHash),
           ),
           learnedNames: snapshot.learnedNames,
         }
       : snapshot;
-
-    const gate = shouldCrystallise({
-      trajectory,
-      shapeHash: template.shapeHash,
-      existing: gateSnapshot,
-    });
-    if (!gate.ok) {
-      return { kind: "skipped", reason: gate.reason };
-    }
 
     const resolver = this.resolverOverride ?? getLibraryResolver();
     if (!resolver) {
@@ -181,23 +184,126 @@ export class Observer {
       };
     }
 
-    const authored: AuthorResult = await authorFunction({
-      tenantId: trajectory.tenantId,
-      baseDir: this.baseDir,
+    // Run the whole-trajectory candidate through the gate first. Sub-graph
+    // candidates run after, with a relaxed gate (`subGraph: true`). Each
+    // additional crystallisation gets accumulated; the primary result keeps
+    // the existing semantics (whole-trajectory if it cleared the gate;
+    // otherwise the first sub-graph that cleared).
+    const wholeGate = shouldCrystallise({
       trajectory,
-      template,
-      libraryResolver: resolver,
-      codifierSkill: this.codifierSkill,
-      allowOverwrite,
+      shapeHash: whole.shapeHash,
+      existing: gateSnapshot,
     });
+    let primary: { name: string; path: string } | null = null;
+    const additional: Array<{ name: string; path: string }> = [];
+    const skipReasons: string[] = [];
+    const acceptedHashes = new Set<string>(gateSnapshot.shapeHashes);
+    const acceptedNames = new Set<string>(gateSnapshot.learnedNames);
+    if (wholeGate.ok) {
+      const authored = await authorFunction({
+        tenantId: trajectory.tenantId,
+        baseDir: this.baseDir,
+        trajectory,
+        template: whole,
+        libraryResolver: resolver,
+        codifierSkill: this.codifierSkill,
+        allowOverwrite,
+      });
+      if (authored.kind === "skipped") {
+        skipReasons.push(`whole: ${authored.reason}`);
+      } else {
+        primary = { name: authored.name, path: authored.path };
+        acceptedHashes.add(whole.shapeHash);
+        acceptedNames.add(whole.name);
+      }
+    } else {
+      skipReasons.push(`whole: ${wholeGate.reason}`);
+    }
 
-    if (authored.kind === "skipped") {
-      return { kind: "skipped", reason: authored.reason };
+    for (const sub of subGraphs) {
+      const slice = sliceForTemplate(trajectory, sub);
+      const subGate = shouldCrystallise({
+        trajectory,
+        shapeHash: sub.shapeHash,
+        existing: { shapeHashes: acceptedHashes, learnedNames: acceptedNames },
+        subGraph: true,
+        callsSlice: slice,
+      });
+      if (!subGate.ok) {
+        skipReasons.push(`sub:${sub.topic}: ${subGate.reason}`);
+        continue;
+      }
+      // Sub-graph templates have slice-relative call indices, so the
+      // author's `pickExample` must walk the slice (not the original
+      // trajectory) when harvesting literal values for the function's
+      // first example. Build a synthetic trajectory whose `calls` is the
+      // slice; everything else (id, tenantId, question, etc) stays the
+      // same so the author's headers reference the original trajectory.
+      const sliceTrajectory: TrajectoryRecord = {
+        ...trajectory,
+        calls: slice as TrajectoryRecord["calls"],
+      };
+      const authored: AuthorResult = await authorFunction({
+        tenantId: trajectory.tenantId,
+        baseDir: this.baseDir,
+        trajectory: sliceTrajectory,
+        template: sub,
+        libraryResolver: resolver,
+        codifierSkill: this.codifierSkill,
+        allowOverwrite,
+      });
+      if (authored.kind === "skipped") {
+        skipReasons.push(`sub:${sub.topic}: ${authored.reason}`);
+        continue;
+      }
+      acceptedHashes.add(sub.shapeHash);
+      acceptedNames.add(sub.name);
+      const slot = { name: authored.name, path: authored.path };
+      if (primary === null) {
+        primary = slot;
+      } else {
+        additional.push(slot);
+      }
+    }
+
+    if (primary === null) {
+      return {
+        kind: "skipped",
+        reason: skipReasons.join("; ") || "no template candidate cleared the gate",
+      };
     }
     return {
       kind: "crystallised",
-      name: authored.name,
-      path: authored.path,
+      name: primary.name,
+      path: primary.path,
+      ...(additional.length > 0 ? { additional } : {}),
     };
   }
+}
+
+// Identify which contiguous slice of trajectory.calls a sub-graph template
+// was extracted from. We look for a contiguous span of calls whose
+// primitives match the template's step primitives in order; the search is
+// O(N*K) but trajectories are small. Falls back to the whole calls array
+// when no slice matches (defensive — should not happen in practice).
+function sliceForTemplate(
+  trajectory: TrajectoryRecord,
+  template: CallTemplate,
+): ReadonlyArray<TrajectoryRecord["calls"][number]> {
+  const calls = trajectory.calls;
+  const stepPrimitives = template.steps.map((s) => s.primitive);
+  if (stepPrimitives.length === 0) return calls;
+  const n = calls.length;
+  const k = stepPrimitives.length;
+  for (let start = 0; start + k <= n; start += 1) {
+    let match = true;
+    for (let i = 0; i < k; i += 1) {
+      if (calls[start + i]!.primitive !== stepPrimitives[i]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) return calls.slice(start, start + k);
+  }
+  return calls;
 }

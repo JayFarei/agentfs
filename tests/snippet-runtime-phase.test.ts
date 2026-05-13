@@ -398,6 +398,94 @@ describe("DiskSnippetRuntime phase artifacts", () => {
     expect(executeTrajectory.calls[0]?.input).toMatchObject({ limit: 50 });
   });
 
+  it("rewrites the answer to unsupported when requireSubstrateRootedChain is set and the trajectory used no db.* / lib.* primitive", async () => {
+    const baseDir = await tempBaseDir("df-runtime-chain-gate-");
+    dirs.push(baseDir);
+
+    const runtime = new DiskSnippetRuntime();
+    const result = await runtime.run({
+      source: [
+        "return df.answer({",
+        '  status: "answered",',
+        "  value: 42,",
+        '  evidence: ["computed locally"],',
+        '  derivation: { operation: "literal" },',
+        "});",
+      ].join("\n"),
+      sessionCtx: {
+        sessionId: "sess_chain_gate_fires",
+        tenantId: "tenant-a",
+        mountIds: ["records"],
+        baseDir,
+        requireSubstrateRootedChain: true,
+      },
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.answer).toMatchObject({
+      status: "unsupported",
+    });
+    expect((result.answer as { reason?: string } | undefined)?.reason).toContain(
+      "substrate-rooted chain absent",
+    );
+    expect(result.stderr).toContain("substrate-rooted chain gate fired");
+  });
+
+  it("leaves the answer intact when requireSubstrateRootedChain is set and the trajectory contains a db.* call", async () => {
+    const baseDir = await tempBaseDir("df-runtime-chain-gate-ok-");
+    dirs.push(baseDir);
+
+    const adapter: MountAdapter & { close: () => Promise<void> } = {
+      id: "chain-adapter",
+      capabilities: () => ({ vector: false, lex: true, stream: false, compile: false }),
+      probe: async () => ({ collections: [] }),
+      sample: async () => [],
+      collection: <T>(): CollectionHandle<T> => ({
+        findExact: async () => [{ id: "row-1" }] as T[],
+        search: async () => [{ id: "row-1" }] as T[],
+        findSimilar: async () => [],
+        hybrid: async () => [],
+      }),
+      close: async () => {},
+    };
+    const reg = new InMemoryMountRuntimeRegistry();
+    setMountRuntimeRegistry(reg);
+    reg.register(
+      "records",
+      makeMountRuntime({
+        mountId: "records",
+        adapter,
+        identMap: [{ ident: "entities", name: "entities" }],
+      }),
+    );
+
+    const runtime = new DiskSnippetRuntime();
+    const result = await runtime.run({
+      source: [
+        'const rows = await df.db.entities.findExact({}, 5);',
+        "return df.answer({",
+        '  status: "answered",',
+        "  value: rows.length,",
+        '  evidence: ["rows: " + rows.length],',
+        '  derivation: { operation: "count", values: [rows.length] },',
+        "});",
+      ].join("\n"),
+      sessionCtx: {
+        sessionId: "sess_chain_gate_passes",
+        tenantId: "tenant-a",
+        mountIds: ["records"],
+        baseDir,
+        requireSubstrateRootedChain: true,
+      },
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.answer).toMatchObject({
+      status: "answered",
+      value: 1,
+    });
+  });
+
   it("records nested implementation work separately from the outer lib call", async () => {
     const baseDir = await tempBaseDir("df-runtime-call-scope-");
     dirs.push(baseDir);

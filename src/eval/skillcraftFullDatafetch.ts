@@ -624,7 +624,7 @@ async function runLiveExperimental(input: {
       baseDir: datafetchHome,
       skipSeedMirror: true,
     });
-    installObserver({ baseDir: datafetchHome, tenantId, snippetRuntime });
+    const { observer } = installObserver({ baseDir: datafetchHome, tenantId, snippetRuntime });
     const run = await snippetRuntime.run({
       source,
       sourcePath: answerPath,
@@ -632,6 +632,11 @@ async function runLiveExperimental(input: {
         tenantId,
         mountIds: mountedRuntime ? [mountId] : [],
         baseDir: datafetchHome,
+        // Goal-3 iter 9: when the eval mounts df.db.records for this
+        // episode, require the final scripts/answer.ts to reach its
+        // answer through the substrate (df.db.* or df.lib.*) rather
+        // than bare df.tool.* fan-out. Non-mounted tenants are unaffected.
+        ...(mountedRuntime ? { requireSubstrateRootedChain: true } : {}),
         skillcraftToolBridge: {
           skillcraftDir: input.skillcraftDir,
           bundles: taskToolBundles(input.task),
@@ -641,6 +646,24 @@ async function runLiveExperimental(input: {
       },
     });
     snippetExitCode = run.exitCode;
+    // Goal-3 iter 10 race fix: the observer is fire-and-forget from the
+    // snippet runtime, so the answer.ts run returns BEFORE the observer
+    // finishes authoring (which can crystallise multiple helpers per
+    // trajectory under iter 10's sub-graph extractor). Without awaiting,
+    // persistFamilyLibCache can fire before the second helper lands on
+    // disk and the warm tier sees only one of the two crystallised
+    // interfaces. Wait up to 5s for the observer to settle on this
+    // trajectory; if it never started (no snippetRuntime.onTrajectorySaved),
+    // the promise lookup returns undefined and we proceed.
+    if (run.trajectoryId) {
+      const observePromise = observer.observerPromise.get(run.trajectoryId);
+      if (observePromise) {
+        const deadline = new Promise<void>((resolve) =>
+          setTimeout(resolve, 5_000),
+        );
+        await Promise.race([observePromise.then(() => undefined), deadline]);
+      }
+    }
     await fsp.writeFile(path.join(artifactDir, "snippet-stdout.txt"), run.stdout);
     await fsp.writeFile(path.join(artifactDir, "snippet-stderr.txt"), run.stderr);
     await fsp.writeFile(path.join(artifactDir, "snippet-result.json"), `${JSON.stringify({
@@ -1130,7 +1153,12 @@ async function mirrorWorkspaceLibsToResolver(input: {
 }): Promise<void> {
   const workspaceLibDir = path.join(input.workspace, "lib");
   const resolverLibDir = path.join(input.datafetchHome, "lib", input.tenantId);
-  await fsp.rm(resolverLibDir, { recursive: true, force: true });
+  // Goal-3 iter 10 race fix: do NOT wipe the resolverLibDir before
+  // mirroring. Observer-crystallised helpers (especially the iter-10
+  // sub-graph helpers authored by the probe subprocess) live under this
+  // dir; wiping erases them before persistFamilyLibCache can promote
+  // them to the cross-episode lib-cache. Just copy workspace files on
+  // top of whatever the observer already wrote.
   await fsp.mkdir(resolverLibDir, { recursive: true });
   if (await isDirectory(workspaceLibDir)) {
     await copyTsFiles(workspaceLibDir, resolverLibDir, { markLearned: true });
@@ -1327,6 +1355,7 @@ function renderLivePrompt(task: SkillCraftTask): string {
     "Read task.md, AGENTS.md, df.d.ts, and any initial workspace files.",
     "Edit scripts/answer.ts so it completes the task.",
     "When df.d.ts declares df.db.records, the entities for this task are mounted as a substrate-rooted record store. Call `const entities = await df.db.records.findExact({}, 999)` first to get the entity list; each record carries `id`, `entity`, `label`, and an `attributes` map. Then use `df.lib.per_entity({ entityIds, toolBundle, toolNames, paramName, extraInput? })` to fan out the required per-entity tool calls. The seed unwraps as `(await df.lib.per_entity({...})).value` and returns `[{ entityId, tools: { <toolName>: <response> } }, ...]`.",
+    "REQUIRED when df.d.ts declares df.db.records: scripts/answer.ts MUST reach the answer through at least one df.db.* call AND/OR at least one df.lib.* call. A scripts/answer.ts that only fan-outs with raw df.tool.* will be auto-rewritten to `{status: \"unsupported\", reason: \"substrate-rooted chain absent\"}` and scored 0. Probes (scripts/probe.ts) are free to use any df.* surface; only the final scripts/answer.ts is gated.",
     "If a learned helper (anything other than `per_entity`) is listed in df.d.ts under df.lib, prefer it over recomposing the chain. Call it the same way: `const r = (await df.lib.<name>({...})).value`.",
     "Use existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.",
     "When creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.",

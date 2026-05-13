@@ -316,7 +316,7 @@ export const per_entity = fn({
       }
       results.push({ entityId, tools: perTool });
     }
-    return { value: results };
+    return results;
   },
 });
 `;
