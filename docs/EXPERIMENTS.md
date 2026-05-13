@@ -240,6 +240,39 @@ hypotheses. Append new entries here as they execute.)
   - Probe variant B: `eval/skillcraft/results/datafetch/goal2-iter5b-probe-tvmaze-20260513-070444/`
   - Substrate edits: `src/eval/evalRecords.ts` (NEW), `src/eval/skillcraftFullDatafetch.ts` (mount/seed/df.d.ts wiring around line 530 and 1013, mount cleanup at ~694), `src/eval/runScript.ts` (mount on probe path)
 
+### E5/E6/E7/E8 (iter6-8): codex on new harness + gate numeric signatures + LEARN_FROM_LEVELS relax — loop fires end-to-end
+- Date: 2026-05-13
+- Goal: Goal 2 (learning loop fires)
+- Hypothesis (E5): swap claude for codex on the new harness with iter5 wiring. Codex was the agent for E3's old-harness proof and used the new primitives naturally; if codex uses them here, the iter5 wiring is fine and Claude's strong df.tool prior was the only blocker.
+- Lever: agent selection (env), then observer gate (signature heuristic), then promotion gate (LEARN_FROM_LEVELS).
+- Change:
+  1. **iter6**: re-ran iter5 probe with `DATAFETCH_AGENT=codex`. Confirmed codex uses df.db.records and df.lib.sc_per_entity. e1 trajectory: `db.records.findExact -> 9× tool.tvmaze_api.* -> lib.sc_per_entity`. Score 100 on all 6 episodes. But observer crystallised nothing — `<datafetchHome>/lib/skillcraft-full/` was empty across all episodes. Forensic: the observer's `consumesEarlierOutput` data-flow check rejected the trajectory because `pickSignatures` only emits string-valued fields ≥ 4 chars. The codex agent extracted entityIds (numbers 169, 82, 526) from `attributes.tvmaze_id` and passed them to tool calls; the strings `"169"` etc. are 3 chars and never become signatures, and the bare numeric values weren't either. So a real data flow existed in the trajectory but the gate's substring check couldn't see it.
+  2. **iter7 (substrate change `src/observer/gate.ts`)**: extended `pickSignatures` to emit numeric values (>= 2 digits) in both bare and JSON-quoted form, AND to recurse one level into nested object values (covers `attributes: {tvmaze_id: 169}` style records). Re-ran. Observer fired this time: e2's trajectory crystallised `scPerEntity.ts` under `<e2>/datafetch-home/lib/skillcraft-full/`. But the helper didn't reach the cross-episode lib-cache because the persist function only runs for levels in `LEARN_FROM_LEVELS={e1}`, and e1's snippet had crashed with a path-doubling bug (codex hardcoded an absolute path in TARGET_IDS that got resolved relative to the workspace, doubling it).
+  3. **iter8 (substrate change `LEARN_FROM_LEVELS`)**: relaxed `LEARN_FROM_LEVELS` from `{e1}` to `{e1, e2, e3, m1, m2}` so any non-hard passing episode promotes its crystallised helper to the family lib-cache. Re-ran. The lib-cache populated: `<probe-dir>/lib-cache/tvmaze-series-analyzer/scPerEntity.ts`. m2 and h1 each saw `libFunctionsAvailable = 1`. Helpers are persisted same-run, observer-crystallised, callable in subsequent episodes.
+- Probe (tvmaze-series-analyzer, codex driver, iter8 final state):
+  | level | pass | score | eff tokens | helpers avail | reuse | promoted |
+  |---|---|---|---|---|---|---|
+  | e1 | ✓ | 100 | 63,268 | 0 | 0.00 | yes |
+  | e2 | ✗ | 30 | 126,631 | 0 | 0.00 | no |
+  | e3 | ✗ | 30 | 79,470 | 0 | 0.08 | no |
+  | m1 | ✓ | 100 | 76,712 | 0 | 0.06 | yes |
+  | m2 | ✓ | 100 | 97,251 | **1** | 0.06 | yes |
+  | h1 | ✗ | 30 | 71,404 | **1** | 0.00 | no |
+- Status: **LOOP CONFIRMED FIRING END-TO-END ON THE NEW HARNESS** but the specific codex+iter8 numbers do NOT clear Goal 2's seven thresholds on a single-family probe. Codex effective tokens (60k-130k/episode) exceed the 8k threshold by an order of magnitude; pass rate 3/6 (50%) misses the 92% target; helpers-available warm avg = 0.2 misses the 2.0 target; reuse-rate warm avg = 0.05 misses 0.30.
+- Validate: SKIPPED for this iteration (single-family result not strong enough to justify validate or full-126 burn).
+- Full-126: SKIPPED.
+- Lessons:
+  1. **The substrate plumbing for the loop is now complete on the new harness** end-to-end: df.db.records mounted from initial_workspace; sc_per_entity seed dropped under `__seed__/`; observer's gate accepts the resulting db→tool*→lib chain with numeric-signature data-flow detection; promotion fires from any non-hard passing episode; observer-crystallised helpers reach the cross-episode lib-cache and become callable in later episodes.
+  2. **Codex on the new harness uses the new primitives naturally but is ~10-20× more expensive per episode than claude.** ~80-130k effective tokens per episode vs claude's 3-8k. The token budget threshold (≤8k) cannot be cleared with codex on tasks of SkillCraft's complexity.
+  3. **Claude on the new harness ignores the new primitives even when they're visible in df.d.ts and surfaced in the prompt.** Goal 1's 4 iterations trained the prompt template into a `df.tool`-only pattern that Claude follows. Forcing Claude via the answer.ts scaffold (variant B in E4) regressed pass rate from 6/6 to 3/6. Convincing Claude to use df.db + df.lib requires either (a) a commit-phase validator that rejects answer.ts with no df.lib.* call, or (b) prompt-engineering work that hasn't been done.
+  4. **The path forward to ≥2.0 helpers-available on warm is multi-shape crystallisation.** Today the observer produces one helper per family because the shape-hash dedup catches similar trajectories. To get to 2+, either (a) sub-graph crystallisation (E7 in PLAN.md, extract multiple helpers per trajectory), or (b) tasks within a family have distinct enough trajectory shapes that the dedup doesn't collapse them. SkillCraft's e1→h1 progression might produce 2-3 shapes per family naturally on the full 126 surface, worth measuring.
+- Artefacts:
+  - iter6 probe (codex, gate-pre-fix): `eval/skillcraft/results/datafetch/goal2-iter6-probe-tvmaze-codex-20260513-071957/`
+  - iter7 probe (codex, gate-fixed): `eval/skillcraft/results/datafetch/goal2-iter7-probe-tvmaze-codex-gate-20260513-073744/`
+  - iter8 probe (codex, gate+promote): `eval/skillcraft/results/datafetch/goal2-iter8-probe-tvmaze-codex-promote-20260513-075808/`
+  - Substrate changes: `src/observer/gate.ts` (pickSignatures numeric+nested), `src/eval/skillcraftFullDatafetch.ts` (LEARN_FROM_LEVELS relax)
+  - Per-family crystallised helper: `<iter8-probe-dir>/lib-cache/tvmaze-series-analyzer/scPerEntity.ts`
+
 ### E2: Old-harness single-family experiment on `country` (proves the loop)
 - Date: 2026-05-12
 - Goal: Goal 2 (learning loop fires)

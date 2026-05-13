@@ -19,7 +19,12 @@ import {
 
 const FULL_SKILLCRAFT_DATAFETCH_ADAPTER_READY = false;
 const LEVEL_ORDER = ["e1", "e2", "e3", "m1", "m2", "h1"] as const;
-const LEARN_FROM_LEVELS = new Set<string>(["e1"]);
+// Promote crystallised helpers to the cross-episode lib-cache after any
+// non-hard passing episode. Holding promotion to e1 alone fails when e1
+// errors (then no helper reaches warm); broadening it lets a later passing
+// episode contribute. Hard episodes (h1) are excluded so we still measure
+// reuse, not just last-mile crystallisation.
+const LEARN_FROM_LEVELS = new Set<string>(["e1", "e2", "e3", "m1", "m2"]);
 const DEFAULT_CODEX_MODEL = "gpt-5.4-mini";
 const DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6";
 const DEFAULT_REASONING_EFFORT = "low";

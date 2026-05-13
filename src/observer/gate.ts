@@ -274,8 +274,28 @@ function pickSignatures(arr: unknown[]): string[] {
   const signatures: string[] = [];
   const seen = new Set<string>();
 
+  const addSignature = (raw: string): void => {
+    if (!seen.has(raw)) {
+      seen.add(raw);
+      signatures.push(raw);
+    }
+  };
+
   for (const item of arr) {
     if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      // Treat numeric and string primitives as their own signatures.
+      // Common when df.db.records returns a list of ids or labels.
+      if (typeof item === "string" && item.length >= 3) {
+        addSignature(JSON.stringify(item));
+        if (signatures.length >= 64) return signatures;
+      } else if (typeof item === "number" && Number.isFinite(item)) {
+        const numStr = String(item);
+        if (numStr.length >= 2) {
+          addSignature(numStr);
+          addSignature(JSON.stringify(numStr));
+          if (signatures.length >= 64) return signatures;
+        }
+      }
       continue;
     }
     const rec = item as Record<string, unknown>;
@@ -286,11 +306,36 @@ function pickSignatures(arr: unknown[]): string[] {
     for (const key of keys) {
       const v = rec[key];
       if (typeof v === "string" && v.length >= 4) {
-        const signature = JSON.stringify(v);
-        if (!seen.has(signature)) {
-          seen.add(signature);
-          signatures.push(signature);
+        addSignature(JSON.stringify(v));
+        if (signatures.length >= 64) return signatures;
+      } else if (typeof v === "number" && Number.isFinite(v)) {
+        // Numeric identifier-like values (>=2 digits) are common
+        // signatures for tool inputs like `{show_id: 169}` or
+        // `{user_id: 42}`. Emit both bare and quoted forms so the
+        // substring check matches whether downstream JSON carries
+        // the value as a number or a string.
+        const numStr = String(v);
+        if (numStr.length >= 2) {
+          addSignature(numStr);
+          addSignature(JSON.stringify(numStr));
           if (signatures.length >= 64) return signatures;
+        }
+      } else if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+        // One level deep into nested object values (covers
+        // `attributes: {tvmaze_id: 169}` style records). Don't
+        // recurse further; we just want distinctive identifiers.
+        for (const inner of Object.values(v as Record<string, unknown>)) {
+          if (typeof inner === "number" && Number.isFinite(inner)) {
+            const numStr = String(inner);
+            if (numStr.length >= 2) {
+              addSignature(numStr);
+              addSignature(JSON.stringify(numStr));
+              if (signatures.length >= 64) return signatures;
+            }
+          } else if (typeof inner === "string" && inner.length >= 4) {
+            addSignature(JSON.stringify(inner));
+            if (signatures.length >= 64) return signatures;
+          }
         }
       }
     }
