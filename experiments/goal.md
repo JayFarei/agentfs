@@ -10,13 +10,30 @@ It is not a runtime artifact. It exists so that whoever opens
 rather than re-inventing one. Goal 3 (current) at the top; Goal 2 and
 Goal 1 preserved below for historical reference.
 
-## Goal 3 (current): close the 7-of-7 gap
+## Goal 3 (current): generic, code-mode-native, cost-effective learning loop
+
+The substrate is meant to be a generic, code-mode-native, cost-effective
+learning interface. Spirit (user-set 2026-05-13):
+
+- VFS + bash + `df.*` snippets are the only interaction surface.
+- Zero tenant-specific code at substrate ship time.
+- Per-tenant interface IMPROVES from observed agent usage on that
+  tenant (`<baseDir>/lib/<tenantId>/` evolves; the substrate ships
+  the learning mechanism, not pre-baked tenant content).
+- Claude-cheap tokens.
+- Code mode is the core primitive for dynamic + adaptive interfaces.
 
 See [`PLAN.md`](./PLAN.md) for the full plan and per-iteration
 hypothesis schedule. Paste-ready condition (≤ 4000 chars):
 
 ```
-/goal Close the 7-of-7 SkillCraft full-126 condition on a single sequentially-ordered lib-cache-enabled run measured by pnpm eval:skillcraft:analyze. All seven must hold simultaneously: arms["datafetch-learned"].passRate >= 0.92; avgEffectiveTokens <= 8000; runtimeErrorRate <= 0.05; avgLearnedInterfacesAvailable averaged over warm tier (n=84) >= 2.0; avgReuseRate averaged over warm tier >= 0.30; warm-tier avgEffectiveTokens <= 70% of train-tier avg on the same run; quarantine rate <= 0.03. Stop after 8 accepted iterations or 24 hours otherwise.
+/goal Prove the substrate's learning loop is generic, code-mode-native, and cost-effective by simultaneously satisfying TWO conditions on a single committed branch state.
+
+(A) SkillCraft full-126 7-of-7 on a single sequentially-ordered lib-cache-enabled run via pnpm eval:skillcraft:analyze, claude driver, hooks-draft mode: arms["datafetch-learned"].passRate >= 0.92; avgEffectiveTokens <= 8000; runtimeErrorRate <= 0.05; avgLearnedInterfacesAvailable averaged over warm tier (n=84) >= 2.0; avgReuseRate averaged over warm tier >= 0.30; warm-tier avgEffectiveTokens <= 70% of train-tier avg on the same run; quarantine rate <= 0.03.
+
+(B) Novel-tenant smoke test src/observer/__smoke__/novel-tenant.ts passes end-to-end with zero edits to substrate code (src/observer, src/hooks, src/snippet, src/sdk, src/adapter): mount a small generic dataset under a new tenantId, run 2-3 code-mode episodes, observer crystallises >=1 helper into <baseDir>/lib/<new-tenant-id>/ from the first passing episode, second episode's trajectory contains a lib.<crystallised-name> call.
+
+Stop after 8 accepted iterations or 24 hours otherwise.
 
 Working files: experiments/PLAN.md (current goal + iteration schedule), experiments/EXPERIMENTS.md (curated log, read before each new hypothesis; Goals 1+2 entries E0.5..E8 shape priors), experiments/EXPERIMENT_NOTES.md (chronological scratchpad), experiments/STATUS.md (snapshot of achievements + remaining work), experiments/goal.md (this file). docs/architecture.md, docs/proof-skillcraft.md, docs/release-plan.md, docs/hook-registry-experiment.md are background reading; the last appends one headline row per iteration.
 

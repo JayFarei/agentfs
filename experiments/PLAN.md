@@ -6,7 +6,85 @@
 > See [STATUS.md](./STATUS.md) for the achievements + remaining work
 > snapshot at the start of this iteration cycle.
 
-## Goal 3 (current): close the 7-of-7 gap
+## Goal 3 (current): prove the learning loop is generic, code-mode-native, cost-effective
+
+> Spirit of the project, framed by the user 2026-05-13:
+> "VFS-based approach with bash commands as the verbiage to interact
+> with it. The goal is a generic solution that works out of the box.
+> Nothing needs to be encoded at the substrate level for any given
+> tenant; the interface improves per tenant from what we learn from
+> the agent's usage on that tenant. Cost-effective. Prove that code
+> mode is the core primitive for dynamic and adaptive interfaces
+> that learn through usage."
+
+Translation into substrate properties to defend on this goal:
+
+- **Generic at ship time.** Zero tenant-specific code, prompt
+  branches, or data-shaped defaults in `src/`. The substrate ships
+  with the generic learning mechanism (observer, hook registry,
+  snippet runtime, generic seeds whose names are substrate-level not
+  benchmark-level). The substrate-level seed renamed `per_entity`
+  (not `sc_per_entity`) reflects this.
+- **Per-tenant adaptation accrues from usage.** Each tenant's
+  `<baseDir>/lib/<tenantId>/` and `<baseDir>/hooks/<tenantId>/`
+  evolve from observed agent trajectories on that tenant. A second
+  tenant gets its own per-tenant evolution from its own usage; the
+  substrate does not pre-bake any of it.
+- **Code-mode-native interface.** The agent's only interaction
+  surface is filesystem (workspace files), bash (`pnpm
+  datafetch:run scripts/probe.ts`), and `df.*` calls inside snippets.
+  No bespoke tool APIs. The substrate is consumed via VFS-shaped
+  affordances.
+- **Cost-effective.** Claude tier (3-8k effective tokens / episode)
+  with no model-cost regression. The substrate's value scales with
+  reuse, so warm tokens drop further as the loop fires.
+- **Loop fires through usage.** Trajectories drive crystallisation;
+  no LLM call inside the observer; no synthetic seed-data shipped
+  per tenant.
+
+### What proves the spirit
+
+Goal 3 holds when both of the following are true:
+
+**(A) SkillCraft 7-of-7 condition on full-126.** Same seven thresholds
+as Goal 2:
+
+- `arms["datafetch-learned"].passRate` ≥ 0.92
+- `arms["datafetch-learned"].avgEffectiveTokens` ≤ 8,000
+- `arms["datafetch-learned"].runtimeErrorRate` ≤ 0.05
+- `avgLearnedInterfacesAvailable` warm ≥ 2.0
+- `avgReuseRate` warm ≥ 0.30
+- warm-tier avg tokens ≤ 70% of train-tier on the same run
+- quarantine rate ≤ 0.03
+
+**(B) Novel-tenant smoke test.** Mount a small dataset that is *not*
+SkillCraft (one new tenant id, 4-6 generic records, a tool bundle
+borrowed from the SDK or stubbed via the test harness) and run 2-3
+episodes through code mode. Required:
+
+- Zero changes to substrate-level code (`src/observer/`,
+  `src/hooks/`, `src/snippet/`, `src/sdk/`, `src/adapter/`) to make
+  the new tenant work.
+- The observer crystallises at least one helper under
+  `<baseDir>/lib/<new-tenant-id>/` from the first passing episode.
+- A second episode on the same tenant sees and calls that helper
+  (`libCalls > 0` in its trajectory).
+
+The novel-tenant smoke test lives under
+`src/observer/__smoke__/novel-tenant.ts` (extends the existing
+`__smoke__` pattern). It is the substrate's "works out of the box"
+proof.
+
+### Why both proofs are needed
+
+(A) without (B) means we tuned to SkillCraft.
+(B) without (A) means the substrate learns but doesn't produce a
+defensible benchmark result.
+Both together means the substrate is generic, learns through usage,
+and produces measurable wins on a public benchmark — the claim the
+project makes.
+
+### Goal 2's residual gaps and how Goal 3 closes them
 
 Goal 2's iterations established that the substrate's learning loop
 fires end-to-end on the new harness (`src/eval/skillcraftFullDatafetch.ts`)
@@ -112,15 +190,19 @@ OR 24 hours elapsed.
 
 | iter | hypothesis | lever |
 |---|---|---|
-| 9 | commit-phase substrate-rooted validator nudges Claude to use df.lib | snippet runtime |
+| 9 | commit-phase substrate-rooted validator nudges Claude to use df.lib when df.db is mounted | snippet runtime |
 | 10 | sub-graph extractor lifts warm helpers-available from 1 → 2+ | observer template |
 | 11 | df.d.ts re-rank lifts warm reuse-rate above 0.30 | df.lib discovery |
 | 12 | smoke-replay gate cuts quarantine rate | hook registry |
-| 13 | full-126 dry run, identify any remaining gaps | none (measurement) |
-| 14-16 | targeted fix per remaining-gap finding | matches gap |
+| 13 | novel-tenant smoke test passes with zero substrate edits | smoke harness (test infra) |
+| 14 | full-126 dry run, identify any remaining 7-of-7 gaps | none (measurement) |
+| 15-16 | targeted fix per remaining-gap finding | matches gap |
 
-After each iter: probe → validate → (full-126 if probe+validate clear
-the gate) → commit headline row to `docs/hook-registry-experiment.md`.
+After each iter: probe (SkillCraft single-family) → validate
+(univ + jikan) → (full-126 if probe+validate clear the gate) → commit
+headline row to `docs/hook-registry-experiment.md` AND confirm the
+novel-tenant smoke is still passing (no regression on the generality
+claim).
 
 ---
 

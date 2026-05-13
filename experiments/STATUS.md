@@ -91,14 +91,37 @@ Test count: 242 / 242. Typecheck: clean.
 No full-126 run has been executed under the iter5-8 substrate state.
 The remaining work is captured in [`PLAN.md`](./PLAN.md) § Goal 3.
 
+## Goal 3 framing (user-set, 2026-05-13)
+
+The substrate is meant to be a **generic, code-mode-native, cost-effective**
+learning interface. Spirit:
+
+- VFS + bash + `df.*` snippets are the only interaction surface.
+- Substrate ships zero tenant-specific code or knowledge.
+- The interface **improves per tenant from what we learn from the agent's
+  usage on that tenant** (per-tenant adaptation accrues from observed
+  usage, not from pre-shipped seeds).
+- Claude-cheap tokens, not codex-expensive.
+- Code mode is the core primitive for dynamic + adaptive interfaces.
+
+Goal 3 holds when **both**:
+
+- (A) SkillCraft 7-of-7 thresholds on a full-126 run (the public-benchmark
+  proof).
+- (B) A novel-tenant smoke test (`src/observer/__smoke__/novel-tenant.ts`)
+  runs end-to-end with zero substrate edits and shows: a helper
+  crystallises into `<baseDir>/lib/<new-tenant-id>/` from the first
+  passing episode, and a second episode on the same tenant sees and
+  calls that helper (the "works out of the box" proof).
+
 ## The path forward in three lines
 
 1. Commit-phase substrate-rooted validator (force Claude to use `df.lib` / `df.db` when they're mounted).
 2. Observer sub-graph extractor (so a trajectory can crystallise multiple distinct helpers).
 3. df.d.ts discovery re-ranking (so the agent's eye lands on validated learned helpers first).
 
-Iterations 9-13 in [`PLAN.md`](./PLAN.md) lay out the sequence. After
-iter13 a full-126 dry run identifies any remaining gap; iters 14-16
+Iterations 9-14 in [`PLAN.md`](./PLAN.md) lay out the sequence. After
+iter14 a full-126 dry run identifies any remaining gap; iters 15-16
 target the remaining gap directly.
 
 ## Working files

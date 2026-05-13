@@ -565,7 +565,7 @@ async function runLiveExperimental(input: {
   if (familyRecords.length > 0) {
     mountedRuntime = await registerEvalRecordsMount({ mountId, records: familyRecords });
   }
-  // Drop the generic sc_per_entity seed under <datafetchHome>/lib/__seed__/.
+  // Drop the substrate-level per_entity seed under <datafetchHome>/lib/__seed__/.
   // The path is outside the per-tenant prohibition (which targets
   // <baseDir>/lib/<tenantId>/) and the body is family-agnostic; the
   // agent supplies toolBundle/toolNames/paramName at call time.
@@ -1326,8 +1326,8 @@ function renderLivePrompt(task: SkillCraftTask): string {
     "",
     "Read task.md, AGENTS.md, df.d.ts, and any initial workspace files.",
     "Edit scripts/answer.ts so it completes the task.",
-    "When df.d.ts declares df.db.records, the entities for this task are mounted as a substrate-rooted record store. Call `const entities = await df.db.records.findExact({}, 999)` first to get the entity list; each record carries `id`, `entity`, `label`, and an `attributes` map. Then use `df.lib.sc_per_entity({ entityIds, toolBundle, toolNames, paramName, extraInput? })` to fan out the required per-entity tool calls. The seed unwraps as `(await df.lib.sc_per_entity({...})).value` and returns `[{ entityId, tools: { <toolName>: <response> } }, ...]`.",
-    "If a learned helper (anything other than `sc_per_entity`) is listed in df.d.ts under df.lib, prefer it over recomposing the chain. Call it the same way: `const r = (await df.lib.<name>({...})).value`.",
+    "When df.d.ts declares df.db.records, the entities for this task are mounted as a substrate-rooted record store. Call `const entities = await df.db.records.findExact({}, 999)` first to get the entity list; each record carries `id`, `entity`, `label`, and an `attributes` map. Then use `df.lib.per_entity({ entityIds, toolBundle, toolNames, paramName, extraInput? })` to fan out the required per-entity tool calls. The seed unwraps as `(await df.lib.per_entity({...})).value` and returns `[{ entityId, tools: { <toolName>: <response> } }, ...]`.",
+    "If a learned helper (anything other than `per_entity`) is listed in df.d.ts under df.lib, prefer it over recomposing the chain. Call it the same way: `const r = (await df.lib.<name>({...})).value`.",
     "Use existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.",
     "When creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.",
     "Use df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.",

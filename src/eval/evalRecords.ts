@@ -254,10 +254,12 @@ function pickLabelValue(
   return undefined;
 }
 
-// Body for the generic `sc_per_entity` seed. Loops a configurable
+// Body for the substrate-level `per_entity` seed. Loops a configurable
 // bundle/tool combination over a list of entity ids and aggregates
-// the results. No family-specific knowledge; the agent supplies
-// `toolBundle`, `toolNames`, and `paramName` at call time.
+// the results. Generic: no tenant-, dataset-, or family-specific
+// knowledge; the agent supplies `toolBundle`, `toolNames`, and
+// `paramName` at call time. Name has no SkillCraft prefix because
+// this helper is substrate-level, not benchmark-level.
 export function renderPerEntitySeed(): string {
   const body = `import { fn } from "@datafetch/sdk";
 import * as v from "valibot";
@@ -276,7 +278,7 @@ type Input = {
   extraInput?: Record<string, unknown>;
 };
 
-export const sc_per_entity = fn({
+export const per_entity = fn({
   intent: "Fan out a configurable list of tools over a list of entity ids, sharing one parameter, and aggregate the results per entity.",
   examples: [],
   input: v.object({
@@ -321,4 +323,4 @@ export const sc_per_entity = fn({
   return body;
 }
 
-export const PER_ENTITY_SEED_NAME = "sc_per_entity";
+export const PER_ENTITY_SEED_NAME = "per_entity";
