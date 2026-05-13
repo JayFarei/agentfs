@@ -387,6 +387,140 @@ hypotheses. Append new entries here as they execute.)
   - Test additions: `tests/snippet-runtime-phase.test.ts` (+2), `tests/observer-template.test.ts` (+3), `tests/hooks/manifest-rendering.test.ts` (+2), `tests/hooks/hook-registry.test.ts` (+5).
   - Smoke moved: `src/observer/__smoke__.ts` → `src/observer/__smoke__/finqa.ts`.
 
+### iter14 probe: tvmaze single-family with iter9-12 substrate
+- Date: 2026-05-13
+- Goal: Goal 3 (A)
+- Hypothesis: the iter9-12 substrate batch + the three bugfixes (per_entity seed return, mirror-wipe race, observer async race) plus the iter 13 novel-tenant smoke proof produce a tvmaze probe that clears ≥ 5pp pass over iter4 baseline AND meets the structurally-formerly-impossible `avgLearnedInterfacesAvailable warm ≥ 2.0` threshold.
+- Change: iter9-12 substrate + three substrate bugfixes (per_entity body returns `results`, mirror skips `rm -rf`, eval awaits observer.observerPromise before persist).
+- Probe single-family tvmaze (claude-sonnet-4-6, hooks-draft, lib-cache on):
+  - 6/6 episodes PASS evaluator.
+  - 4 helpers crystallised into lib-cache across the run: `perEntity`, `perEntityFanout`, `tvmazeApiLocalTvmazeGetShowInfoFa`, `tvmazeApiLocalTvmazeGetShowCastFa`.
+  - Per-tier:
+    | tier | n | pass | tokens | reuse | helpersAvail |
+    |---|---|---|---|---|---|
+    | train | 1 | 100% | 6,165 | 1.00 | 0 |
+    | warm | 4 | 100% | 9,711 | 0.31 | 2.25 |
+    | hard | 1 | 100% | 6,871 | 0.03 | 4 |
+- 5/7 thresholds met:
+  | Threshold | Target | Observed | Status |
+  |---|---|---|---|
+  | passRate | ≥ 0.92 | 1.00 | ✓ |
+  | avgEffectiveTokens (arm) | ≤ 8,000 | 8,647 | ✗ over by 8% |
+  | runtimeErrorRate | ≤ 0.05 | 0.00 | ✓ |
+  | **avgLearnedInterfacesAvailable warm** | **≥ 2.0** | **2.25** | **✓ (was structurally unreachable in iter 8)** |
+  | avgReuseRate warm | ≥ 0.30 | 0.31 | ✓ (barely) |
+  | warm/train tokens | ≤ 0.70 | 1.575 | ✗ warm is 1.6× train |
+  | quarantine rate | ≤ 0.03 | 0.00 | ✓ |
+- Status: **PROBE CLEARED GATE.** Pass-rate gain vs iter4 baseline = +5.6pp (1.0 vs 0.944). At least one helper authored during train (4 over the run). Reuse rate on warm = 0.31 (meets the ≥ 0.30 cadence threshold).
+- Lessons:
+  1. **The headline iter 10 win is real.** Sub-graph extractor produced multiple distinct helpers per family, lifting `avgLearnedInterfacesAvailable warm` from 1.0 (iter 8 ceiling) to 2.25. The threshold the user flagged in STATUS.md as "structurally unreachable with today's observer" is now reachable.
+  2. **Token efficiency is the new bottleneck.** Warm-tier tasks (m1, m2) where the agent abandoned the helpers and went manual cost 16-24 tool calls each. The crystallised helpers, while available, weren't structured in a way the agent felt confident using on harder tasks. This is iter 11 (re-rank) territory but the re-rank alone doesn't solve "the helper isn't useful enough for this harder task".
+  3. **Mid-probe substrate bug-fix cadence worked.** Three bugs that would have made the entire eval cycle useless (per_entity TypeError, mirror-wipe, observer race) surfaced in the first 1-2 probe attempts and were each fixable within ~10-15 minutes once isolated via the saved trajectory + observer-debug script.
+- Artefacts:
+  - Probe dir: `eval/skillcraft/results/datafetch/goal3-iter9_12-probe-tvmaze-20260513-102208/`
+  - Crystallised helpers: `<probe-dir>/lib-cache/tvmaze-series-analyzer/{perEntity,perEntityFanout,tvmazeApiLocalTvmazeGetShowInfoFa,tvmazeApiLocalTvmazeGetShowCastFa}.ts`
+  - Analysis: `<probe-dir>/analysis-normalized.json`
+  - Three bugfixes landed atomically in commit `0d0ea4df`.
+
+### iter14 validate: jikan + university with iter9-12 substrate
+- Date: 2026-05-13
+- Goal: Goal 3 (A)
+- Hypothesis: jikan-anime-analysis + university-directory-builder hold up across the iter9-12 substrate as well as tvmaze did; either clears ≥ 30% reuseRate on the warm tier per the cadence rule.
+- Validate (claude-sonnet-4-6, hooks-draft, lib-cache on, 12 episodes total):
+  - 12/12 episodes PASS evaluator.
+  - Per family:
+    | family | n | pass | tokens | reuse | helpersAvail |
+    |---|---|---|---|---|---|
+    | jikan-anime-analysis | 6 | 100% | 6,804 | 0.37 | 1.67 |
+    | university-directory-builder | 6 | 100% | 7,646 | 0.10 | 2.17 |
+  - jikan-anime-analysis warm reuse = 0.30 (meets cadence's "≥ 30% on warm tier of either family").
+  - Per tier (combined): train n=2 tokens=7913 reuse=0.5, warm n=8 tokens=7769 reuse=0.20, hard n=2 tokens=4360 reuse=0.08.
+- 5/7 thresholds met (combined; same shape as the tvmaze probe):
+  | Threshold | Target | Observed | Status |
+  |---|---|---|---|
+  | passRate | ≥ 0.92 | 1.00 | ✓ |
+  | avgEffectiveTokens (arm) | ≤ 8,000 | 7,225 | ✓ |
+  | runtimeErrorRate | ≤ 0.05 | 0.00 | ✓ |
+  | avgLearnedInterfacesAvailable warm | ≥ 2.0 | 2.25 | ✓ |
+  | avgReuseRate warm | ≥ 0.30 | 0.20 | ✗ |
+  | warm/train tokens | ≤ 0.70 | 0.98 | ✗ |
+  | quarantine rate | ≤ 0.03 | 0.00 | ✓ |
+- Status: **VALIDATE CLEARS CADENCE GATE.** jikan satisfies the ≥ 30% reuseRate requirement on the warm tier. Pass rate +5.6pp over iter4 baseline. Proceeding to full-126.
+- Lessons:
+  1. **Reuse rate is family-bimodal.** jikan reaches 0.37 reuse (helpers fit the task shape); university stalls at 0.10 (helpers exist but the agent goes manual on harder tasks). On the full 126-task surface, the warm-tier average reuse depends on how many families look like jikan vs how many look like university.
+  2. **Warm-tier tokens are not consistently below train**. The 0.70 ratio threshold assumes the substrate's learning loop produces strictly cheaper warm tasks. In practice, warm-tier difficulty (more entities, more tools) costs tokens even when reuse fires. Either the ratio threshold over-promises, or the substrate needs a separate prompt nudge to keep tokens flat as task difficulty rises.
+- Artefacts:
+  - Validate dir: `eval/skillcraft/results/datafetch/goal3-iter9_12-validate-20260513-105025/`
+  - Per-family lib-cache: `<validate-dir>/lib-cache/{jikan-anime-analysis,university-directory-builder}/`
+
+### iter14 full-126: dry run + gap analysis
+- Date: 2026-05-13
+- Goal: Goal 3 (A)
+- Hypothesis: with iter9-12 substrate + the three bugfixes + iter 10 sub-graph extraction, the full SkillCraft 126-task surface clears all 7 thresholds.
+- Full-126 (claude-sonnet-4-6, hooks-draft, lib-cache on, 4 shards parallel, ~2h25m wall):
+  - 126/126 episodes ran.
+  - **Pass rate: 73.8% (93 of 126), DOWN from iter4 baseline 94.4%.** This is the headline regression.
+  - Per tier: train (n=21) pass=71%, warm (n=84) pass=74%, hard (n=21) pass=76%.
+  - 3/7 thresholds met:
+    | Threshold | Target | Observed | Status |
+    |---|---|---|---|
+    | passRate | ≥ 0.92 | 0.738 | ✗ -18pp from target, -21pp vs iter4 baseline |
+    | avgEffectiveTokens (arm) | ≤ 8,000 | 3,993 | ✓ |
+    | runtimeErrorRate | ≤ 0.05 | 0.032 | ✓ |
+    | avgLearnedInterfacesAvailable warm | ≥ 2.0 | 1.08 | ✗ |
+    | avgReuseRate warm | ≥ 0.30 | 0.153 | ✗ |
+    | warm/train tokens | ≤ 0.70 | 0.89 | ✗ |
+    | quarantine rate | ≤ 0.03 | 0.00 | ✓ |
+- Per-family pass rate (sorted, lowest first):
+  - 0%: cat-facts-collector
+  - 17%: dnd-campaign-builder
+  - 67%: cocktail-menu-generator, gitlab-deep-analysis, jikan-anime-analysis, local-dna-analysis, openmeteo-weather, tvmaze-series-analyzer, vocabulary-builder
+  - 83%: countries-encyclopedia, dnd-monster-compendium, jsonplaceholder-blog-analyzer, name-demographics-analyzer, pokeapi-pokedex, random-user-database, rickmorty-multiverse-explorer, usgs-earthquake-monitor
+  - 100%: dog-breeds-encyclopedia, recipe-cookbook-builder, university-directory-builder, world-bank-economic-snapshot
+  - 3/21 families clear warm reuse ≥ 0.30.
+  - 4/21 families clear warm helpersAvail ≥ 2.0.
+- **Root cause analysis — pass rate regression:**
+  - Examined cat-facts-collector (0/6 pass): all episodes had snippetExitCode=0 (answer.ts ran successfully and returned df.answer) but evaluator rejected the output as wrong.
+  - The agent's e1 answer.ts uses `entities.map((e) => e.id)` for entityIds passed to `df.lib.per_entity({entityIds, ...})`. The seed forwards entityIds as `{breed_name: <id>}` to the local catfacts tool.
+  - `record.id` is `"cat-facts-collector:siamese"` (family-prefixed for global uniqueness). The catfacts tool expects `breed_name: "Siamese"` (matching the entity field).
+  - The agent picked the wrong field. The prompt mentions `id`, `entity`, `label`, `attributes` but doesn't specify which to use as entityIds.
+  - **The seed and the substrate-rooted prompt INTRODUCED a regression by giving the agent a primitive it uses incorrectly across many families.** Without lib-cache (iter4), the agent wrote per-entity tool calls directly using `attributes.<correct-field>`, getting 94.4% pass.
+- **Root cause analysis — reuse/helpersAvail thresholds:**
+  - Iter 10 sub-graph extractor produced multiple helpers per family only when the agent's e1 trajectory had ≥ 3 top-level tool calls in addition to db + lib. Most families' e1 answer.ts has shape `[db, lib.per_entity x N]` — a 2-call trajectory whose only sub-graph is itself. No sub-graphs emitted in those families.
+  - 4/21 families have warm helpersAvail ≥ 2.0: tvmaze, dnd-campaign-builder, name-demographics-analyzer, rickmorty-multiverse-explorer (all had agent fan-out trajectories at top level).
+  - Even in families with multiple helpers, agents don't always call them: when a helper is for a specific (entity, tool) combo, it doesn't fit a different task in the family.
+- Status: **FULL-126 RAN; 3/7 THRESHOLDS, REGRESSION ON PASS RATE.** Goal 3 (A) not satisfied. Goal 3 (B) — novel-tenant smoke — passed earlier (11/11). The substrate's learning loop fires (helpers crystallise, get reused in some families) but introduces a correctness regression via the seed's misuse.
+- Lessons:
+  1. **The per_entity seed needs an entity-ID convention the agent can find without ambiguity.** Three reasonable choices: (a) rename `record.id` to `record.recordKey` and have `record.id` be the raw entity name; (b) make per_entity smart enough to strip family prefixes from entityIds when present; (c) tighten the prompt to explicitly say "use `record.entity` as entityIds, NOT `record.id`". (c) is the lowest-risk and most generic.
+  2. **The sub-graph extractor only helps when the agent's e1 trajectory has top-level tool calls.** When the agent uses per_entity as a one-step wrapper, sub-graphs don't emerge. The lever's reach is gated by agent behavior.
+  3. **Iter4 baseline's 94.4% was on a substrate WITHOUT the learning loop firing.** Re-introducing the loop without fixing the entity-id convention regressed pass rate. The thing the loop "learned" was (in many cases) misleading.
+  4. **Goal 3 (B) holds (novel-tenant smoke 11/11).** The substrate's "works out of the box" claim is demonstrable on a new tenant. The 5707854b reframing of Goal 3 to spirit-of-the-project terms is supported by the part-B proof even though part-A regressed.
+- Artefacts:
+  - Full-126 dirs: `eval/skillcraft/results/datafetch/goal3-iter14-full-20260513-113222-{g1,g2,g3,g4}/`
+  - Combined analysis: `<full-dir>/analysis.json`
+  - Combined normalized: `<full-dir>/normalized.jsonl` (126 rows)
+- Next: iter15 prompt-tightening (the entity-id convention fix) to recover pass rate without unwinding the iter9-12 substrate.
+
+#### iter14 architect-diagnosed normalizer bug (2026-05-13 14:05)
+
+A codex architect consultation surfaced a NORMALIZER false-negative that masked ~15pp of measured pass rate: `eval/skillcraft/scripts/normalize-results.ts` was flagging rows as `infrastructure_error` when the agent timed out (`agentExitCode=143` SIGTERM with `llmCalls=0, totalTokens=0`) — even when the snippet ran cleanly and the official evaluator scored the output ≥ 70. 19 of 126 rows were affected.
+
+Patch: in `normalize-results.ts:175`, guard the "agent exit" branch of `infrastructureFailure` behind `!evalAcceptedOutput`, where `evalAcceptedOutput = snippetExitCode===0 && (officialPassed || score >= 70)`. The patch preserves the diagnostic signal for the true `model_usage_limit` and `officialStatus === "infrastructure_error"` paths and for the case where the snippet ALSO failed.
+
+Re-analyzed iter14 numbers with the fix:
+
+| Threshold | Target | Observed | Status |
+|---|---|---|---|
+| passRate | ≥ 0.92 | **0.889** | ✗ -3.1pp short of target (was 0.738) |
+| avgEffectiveTokens (arm) | ≤ 8,000 | 3,993 | ✓ |
+| runtimeErrorRate | ≤ 0.05 | 0.032 | ✓ |
+| avgLearnedInterfacesAvailable warm | ≥ 2.0 | 1.08 | ✗ |
+| avgReuseRate warm | ≥ 0.30 | 0.153 | ✗ |
+| warm/train tokens | ≤ 0.70 | 0.89 | ✗ |
+| quarantine rate | ≤ 0.03 | 0.00 | ✓ |
+
+3/7 thresholds; pass rate at 0.889 vs iter4 baseline 0.944 → the substrate's learning loop costs ~5.5pp of pass rate in exchange for the loop firing. The architect's second finding (the EvalRecord `id`/`entity` confusion for `per_entity` callers) accounts for most of that 5.5pp.
+
 ### iter13: novel-tenant smoke
 - Date: 2026-05-13
 - Goal: Goal 3 (B, the generic-substrate proof)

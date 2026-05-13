@@ -172,10 +172,25 @@ async function normalizeDatafetchRun(runDir: string): Promise<NormalizedRow[]> {
       const level = String(episode.level ?? episode.round);
       const score = numberOr(episode.officialScorePercent, episode.officialScore?.percent, episode.answerCorrect ? 100 : 0);
       const officialStatus = episode.officialStatus ?? episode.answerStatus ?? null;
+      // Goal-3 iter14 normalizer fix: the "agent-exit + 0 llm-calls + 0
+      // tokens" heuristic that flagged rows as infrastructure_error
+      // over-triggers when the snippet ran cleanly and the official
+      // evaluator scored the output. Specifically: the agent can timeout
+      // (agentExitCode=143 SIGTERM) AFTER writing a valid scripts/answer.ts
+      // whose run produced a real output file; the evaluator then scores
+      // the file fairly. Demoting those rows to infrastructure_error
+      // cost the iter14 full-126 ~15pp of measured pass rate. Treat the
+      // agent exit as an infrastructure failure only when the snippet
+      // ALSO failed or the evaluator rejected the output.
+      const evalAcceptedOutput =
+        numberOrNull(episode.snippetExitCode) === 0 &&
+        (Boolean(episode.officialPassed) ||
+          (numberOrNull(episode.officialScorePercent) ?? 0) >= 70);
       const infrastructureFailure =
         episode.agentFailureKind === "model_usage_limit" ||
         officialStatus === "infrastructure_error" ||
         (
+          !evalAcceptedOutput &&
           numberOrNull(episode.agentExitCode) !== null &&
           episode.agentExitCode !== 0 &&
           numberOrNull(episode.llmCalls) === 0 &&
