@@ -4,6 +4,7 @@ import { promises as fsp } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 
+import { installObserver } from "../observer/install.js";
 import { readTrajectory, type TrajectoryRecord } from "../sdk/index.js";
 import { installSnippetRuntime } from "../snippet/install.js";
 
@@ -584,6 +585,7 @@ async function runLiveExperimental(input: {
       baseDir: datafetchHome,
       skipSeedMirror: true,
     });
+    installObserver({ baseDir: datafetchHome, tenantId, snippetRuntime });
     const run = await snippetRuntime.run({
       source,
       sourcePath: answerPath,
@@ -650,6 +652,8 @@ async function runLiveExperimental(input: {
       family: input.task.family,
       libCacheDir: input.libCacheDir,
       workspace,
+      datafetchHome,
+      tenantId,
     });
   }
   const calls = trajectory?.calls ?? [];
@@ -1077,14 +1081,26 @@ async function persistFamilyLibCache(input: {
   family: string;
   libCacheDir: string;
   workspace: string;
+  datafetchHome: string;
+  tenantId: string;
 }): Promise<void> {
   const workspaceLibDir = path.join(input.workspace, "lib");
-  if (!(await isDirectory(workspaceLibDir))) return;
-  const names = await listLibFunctionNames(workspaceLibDir);
-  if (names.length === 0) return;
+  const observerLibDir = path.join(input.datafetchHome, "lib", input.tenantId);
+  const workspaceNames = (await isDirectory(workspaceLibDir))
+    ? await listLibFunctionNames(workspaceLibDir)
+    : [];
+  const observerNames = (await isDirectory(observerLibDir))
+    ? await listLibFunctionNames(observerLibDir)
+    : [];
+  if (workspaceNames.length === 0 && observerNames.length === 0) return;
   const familyCacheDir = path.join(input.libCacheDir, input.family);
   await fsp.mkdir(familyCacheDir, { recursive: true });
-  await copyTsFiles(workspaceLibDir, familyCacheDir, { markLearned: true });
+  if (observerNames.length > 0) {
+    await copyTsFiles(observerLibDir, familyCacheDir, { markLearned: true });
+  }
+  if (workspaceNames.length > 0) {
+    await copyTsFiles(workspaceLibDir, familyCacheDir, { markLearned: true });
+  }
 }
 
 async function copyTsFiles(

@@ -177,22 +177,130 @@
 (See [PLAN.md](./PLAN.md) § Initial direction for E1..E7 seeded
 hypotheses. Append new entries here as they execute.)
 
-<!-- Next entry template:
-
-### E1: <title>
-- Date:
+### E0.5: Instrumentation prelude (per-tier learning-loop rollups)
+- Date: 2026-05-12
 - Goal: Goal 2 (learning loop fires)
-- Hypothesis:
-- Lever:
-- Change:
-- Probe: <family>, pass before X, after Y, delta Z, helpers-created A,
-  reuse-rate B
-- Validate: combined pass before X, after Y, delta Z, helpers
-  available A, reuse-rate B
-- Full-126: pass rate X, avg tokens Y, runtime err Z, helpers-available
-  A, reuse-rate B, warm-vs-train token ratio C
-- Status:
+- Hypothesis: the goal's seven thresholds cannot be evaluated from the existing analyze output because it does not roll up `learnedInterfacesAvailable`, `learnedInterfacesCreated`, `reuseRate`, or `effectiveTokens` per tier. Add per-tier rollups + an arm-level `learningLoop` summary so a single `pnpm eval:skillcraft:analyze` run reports the seven numbers needed.
+- Lever: analyze script (`eval/skillcraft/scripts/analyze-results.ts`)
+- Change: extend `phaseBreakdown` with `avgTokens`, `avgEffectiveTokens`, `avgLearnedInterfacesAvailable`, `avgLearnedInterfacesCreated`, `avgReuseRate`. Add a new `learningLoopSummary` per arm exposing `trainAvgEffectiveTokens`, `warmAvgEffectiveTokens`, `hardAvgEffectiveTokens`, `warmVsTrainEffectiveTokenRatio`, `warmAvgLearnedInterfacesAvailable`, `warmAvgReuseRate`, `trainAvgLearnedInterfacesCreated`, `overallAvgLearnedInterfacesAvailable`, `overallAvgReuseRate`.
+- Probe: n/a (analyze-only change; validated by re-running analyze on the iter4 full-126 JSON and confirming the new fields appear with sensible zeros under `--no-lib-cache`).
+- Validate: n/a
+- Full-126: n/a
+- Status: PASSED (pure instrumentation, no substrate change, no risk to pass rate)
 - Lessons:
-- Artefacts:
+  1. Adding the `learningLoop` aggregate at the arm level avoids forcing every downstream consumer to traverse `phaseBreakdown.warm` and recompute ratios.
+  2. Quarantine rate (the seventh goal threshold) is not yet captured in the row schema. Today we count quarantines by grep'ing `<artifact>/episodes/*/datafetch-home/hooks/skillcraft-full/*.json` for `"callability":"quarantined"`. This is a known gap to fix later if quarantine rate becomes a controlling constraint.
+- Artefacts: `eval/skillcraft/scripts/analyze-results.ts` diff in current branch
 
--->
+### E1: Baseline with lib-cache enabled (no substrate change)
+- Date: 2026-05-12
+- Goal: Goal 2 (learning loop fires)
+- Hypothesis: turning lib-cache on with the iter4 substrate untouched produces non-zero `avgLearnedInterfacesAvailable` and non-zero `avgReuseRate` on warm, with pass rate within 2pp of iter4's 94.4%.
+- Lever: none (config-only: drop `--no-lib-cache` from the runner)
+- Change: new `scripts/goal2-full.sh` is `scripts/iter1-full.sh` minus `--no-lib-cache`. Keeps Goal 1's iter4 reproducer runnable.
+- Probe (tvmaze-series-analyzer): **6/6 evaluator pass, score 100 across all six levels**, but `libFunctionsAvailable`, `libFunctionsCreated`, and `reuseRate` are **0 on every level**. Warm-tier avg effective tokens 7,792 vs train 7,147; **warm/train ratio = 1.09** (warm is more expensive than train, the wrong direction). Probe dir: `eval/skillcraft/results/datafetch/goal2-iter1-probe-tvmaze-20260512-203818/`.
+- Validate: SKIPPED, see Lessons.
+- Full-126: SKIPPED, see Lessons.
+- Status: **INCONCLUSIVE** (pass rate fine, learning-loop metrics null because the observer is not wired into this harness path)
+- Lessons:
+  1. **The observer is not installed in the full SkillCraft harness.** `src/eval/skillcraftFullDatafetch.ts` and `src/eval/runScript.ts` both call `installSnippetRuntime` but never `installObserver`. Trajectories are saved (we counted 6 on disk for the e1 episode) but nothing observes them. Every iter1-4 measurement was on the same dead path; `--no-lib-cache` was a redundant flag on a learning loop that was already disconnected.
+  2. **The lib-cache promotion path only reads from `workspace/lib/`, not from the observer's `<datafetch-home>/lib/<tenant>/`.** Even if we wire the observer up, its output will not feed the cross-episode cache without also extending `persistFamilyLibCache`. Two changes are required, not one.
+  3. **The agent does not spontaneously author `workspace/lib/<helper>.ts` files in e1** even though the prompt template instructs it to. e1 ran 9 raw `df.tool` calls and zero helper writes. The current lib-cache mechanism is essentially "did the agent voluntarily write a helper file?", which is a weak signal.
+  4. Skipped validate + full-126 for E1 because the result is mechanically identical to iter4 (no substrate change other than a dropped flag whose feature was already dead). Burning 4 shards × ~60 min to confirm zero on a known-disconnected path is bad ROI.
+- Next: E1.5 — wire the observer in + extend persist + re-probe.
+- Artefacts:
+  - Probe dir: `eval/skillcraft/results/datafetch/goal2-iter1-probe-tvmaze-20260512-203818/`
+  - Runner: `scripts/goal2-full.sh`
+  - Forensic walk: `EXPERIMENT_NOTES.md` § "2026-05-12 21:05 [analyze, E1 null result]"
+
+### E2: Old-harness single-family experiment on `country` (proves the loop)
+- Date: 2026-05-12
+- Goal: Goal 2 (learning loop fires)
+- Hypothesis: the older `skillcraftDatafetch.ts` (which mounts `df.db.records`, ships a per-family seed `df.lib.<seedFunction>`, and installs the observer) will fire the learning loop on a single family. Compare baseline (no seed, no observer) vs datafetch (seed + observer) across cold/warm/hard rounds to extrapolate the substrate's seed-value and learning-value contributions.
+- Lever: configuration only (no code change). `DATAFETCH_INTERFACE_MODE=hooks-draft` + `pnpm eval:skillcraft:synthetic --live --families=country`.
+- Probe: n/a (single-family experiment IS the probe).
+- Result on country family (3 rounds per arm, codex `gpt-5.4-mini` agent):
+  | Metric | Baseline | Datafetch-Cold | Datafetch-Warm | Delta Warm vs Baseline |
+  |---|---|---|---|---|
+  | Correctness | 100% | 100% | 100% | +0% |
+  | Avg effective tokens | 15,827 | 6,870 | 2,319 | **-85%** |
+  | Reuse rate | N/A | 0% | **100%** | - |
+  | Regressions | N/A | N/A | 0% | - |
+  - Cold trajectory crystallised one observer-authored helper, `scCountryRegionDigest`, wrapping `db.records.search → lib.sc_country_region_digest`.
+  - Warm trajectory's primitive sequence: `db.records.search`, `lib.sc_country_region_digest` (seed, called inside the crystallised helper), `lib.scCountryRegionDigest` (the crystallised helper itself, called by the agent).
+- First-run gotcha (caught and fixed): without `DATAFETCH_INTERFACE_MODE=hooks-draft`, the registry defaults to `hooks-candidate-only` and exposes crystallised helpers as `not-callable`. Symptom: `Error: df.lib.scCountryRegionDigest: hook is observed only (no callable implementation)`. The crystallised helper *was on disk*; the registry refused to expose it. One env var fix.
+- Status: **PASSED.** The substrate's learning loop fires cleanly on `country` when the harness mounts `df.db.records` + ships a seed and the registry runs in `hooks-draft` mode.
+- Lessons:
+  1. **Seed-value vs learning-value decompose cleanly.** Seed alone reduces cold tokens vs baseline (~half). Learning further reduces warm/hard tokens by ~two-thirds beyond cold. The two effects compose multiplicatively into the -85% headline.
+  2. **Goal 2's E1+E1.5 null result was a missing-mount + missing-seed problem, not a gate problem.** The new harness (`skillcraftFullDatafetch.ts`) strips `df.db.records` mounting and seed setup; the old harness retains both. With both in place and `hooks-draft` mode, the existing gate (`src/observer/gate.ts`) fires correctly on the resulting trajectories.
+  3. **The user's reframing was right.** Single-family experiments at the pilot scale (3-6 episodes per arm) are enough to extrapolate substrate behaviour, much cheaper than full-126 sweeps and faster to iterate on. Each old-harness single-family run is ~3 minutes wall-clock with the codex driver.
+- Next: E3 — run the same setup across all six old-harness families to check the pattern generalises. Then port the missing `df.db.records` mount + seed-drop into the new harness so Goal 1's substrate gains (auto-invoke trailer, 300s timeout) compose with the loop's token gains.
+- Artefacts:
+  - Probe dir (failed mode): `eval/skillcraft/results/datafetch/goal2-e2-old-harness-country-20260512-213256/`
+  - Probe dir (working mode): `eval/skillcraft/results/datafetch/goal2-e2b-old-harness-country-draft-20260512-213649/`
+  - Crystallised helper: `<working-probe-dir>/libraries/country/scCountryRegionDigest.ts`
+  - Forensic on first-run mode gotcha: stderr at `<failed-probe-dir>/episodes/datafetch/warm/country-warm/stderr.txt`
+
+### E3: Old-harness all-six-families sweep (loop generalises)
+- Date: 2026-05-12
+- Goal: Goal 2 (learning loop fires)
+- Hypothesis: the country-family E2 result was not family-specific. Run the same setup across all six old-harness pilot families to confirm the loop fires across the substrate's full pilot surface.
+- Lever: configuration only. `DATAFETCH_INTERFACE_MODE=hooks-draft` + `pnpm eval:skillcraft:synthetic --live` (no `--families` flag, runs all six).
+- Result (36 episodes, ~14 min wall-clock, codex `gpt-5.4-mini`):
+  | Metric | Baseline | Datafetch-Cold | Datafetch-Warm | Delta Warm vs Baseline |
+  |---|---|---|---|---|
+  | Correctness | 100% | 100% | 100% | +0% |
+  | Evidence recall | 100% | 100% | 100% | +0% |
+  | Avg effective tokens | 10,803 | 6,020 | 2,542 | **-79%** |
+  | Avg latency (ms) | 31,314 | 20,651 | 11,717 | -63% |
+  | Reuse rate | N/A | 0% | **83%** | - |
+  | Regressions | N/A | N/A | 0% | - |
+  - One crystallised helper per family: `scEconomicSnapshot`, `scBlogUserAnalysis`, `scCountryRegionDigest`, `scProfileDemographics`, `scUniversityDirectory`, `scWeatherRiskSummary`.
+  - Per-family reuse on warm: 5/6 at 100%, blog at 0% (one warm-round episode used a different path). Hard: 6/6 at 100%.
+  - Regressions: 0% (no warm/hard task scored worse than its baseline counterpart).
+- Status: **PASSED.** The substrate's learning loop fires across all six pilot families. Goal 2's seven thresholds, evaluated against this pilot (caveats: smaller surface than full-126; metrics aggregated):
+  | Threshold | Target | Observed | Pass? |
+  |---|---|---|---|
+  | passRate | ≥ 0.92 | 1.00 | ✓ |
+  | avgEffectiveTokens (warm) | ≤ 8,000 | 2,542 | ✓ |
+  | runtimeErrorRate | ≤ 0.05 | 0.00 | ✓ |
+  | avgLearnedInterfacesAvailable (warm) | ≥ 2.0 | 1.00 | ✗ |
+  | avgReuseRate (warm) | ≥ 0.30 | 0.83 | ✓ |
+  | warmAvgEffectiveTokens / trainAvgEffectiveTokens | ≤ 0.70 | 0.42 | ✓ |
+  | quarantine rate | ≤ 0.03 | 0.00 | ✓ |
+- Lessons:
+  1. **The loop fires reliably on the substrate's intended pattern (db.* → lib.*).** One helper per family is what the observer crystallises today. The shape-hash de-dup means a second helper would only land if a meaningfully different trajectory shape appears, which doesn't happen with the seed-shaped tasks the old harness ships.
+  2. **The one miss (`avgLearnedInterfacesAvailable ≥ 2.0`) is structural to today's observer**, not a config issue. To clear it we need either (a) E7-style sub-graph crystallisation (extract multiple sub-helpers from a single trajectory), or (b) tasks that genuinely have multiple distinct composition shapes per family, so the observer learns >1 helper. Neither is necessary to demonstrate "the loop fires"; both are real Goal-2 follow-ons if the headline number `≥ 2.0` is load-bearing.
+  3. **Decomposed answer to the user's two-track question:**
+     - Seed value: baseline 10,803 → cold 6,020 = **-44% tokens at first use**. Seed lets the agent answer immediately via `df.lib.<seed>` instead of composing in TS.
+     - Learning value: cold 6,020 → warm 2,542 = **-58% additional tokens after one observation**. Reuse rate climbs from 0% (cold) to 83% (warm). The observer's crystallised helper is strictly cheaper than the seed alone because it bypasses the cold-round reasoning.
+     - Composed: baseline 10,803 → warm 2,542 = **-77%** with correctness held at 100%.
+  4. **`hooks-draft` is load-bearing.** Without `DATAFETCH_INTERFACE_MODE=hooks-draft`, the registry exposes crystallised helpers as `not-callable` and the agent crashes when it tries to call one. The mode is a one-env-var fix but easy to miss; new-harness scripts already set it, old-harness scripts don't by default.
+- Next: E4 — port the missing `df.db.records` mount and seed-drop into `skillcraftFullDatafetch.ts` so Goal 1's substrate gains (94.4% pass, auto-invoke trailer, 300s timeout, multi-turn probe) compose with this loop. Then re-run on tvmaze and the full 21-family surface.
+- Artefacts:
+  - Run dir: `eval/skillcraft/results/datafetch/goal2-e3-old-harness-allfams-20260512-214103/`
+  - Per-family crystallised helpers: `<run-dir>/libraries/{economic,blog,country,profile,university,weather}/sc<Name>.ts`
+  - report.md: `<run-dir>/report.md`
+
+### E1.5: Wire observer + extend persist (no behavioural fix to the gate)
+- Date: 2026-05-12
+- Goal: Goal 2 (learning loop fires)
+- Hypothesis: with the observer wired into the full harness and `persistFamilyLibCache` extended to also pull from the observer's output dir, e1's clean trajectory will pass the crystallisation gate, an authored helper will land in the per-family lib-cache, and e2 will see `libFunctionsAvailable >= 1`.
+- Lever: full-harness wiring (`src/eval/skillcraftFullDatafetch.ts` + `src/eval/runScript.ts`) + persist (`persistFamilyLibCache`)
+- Change:
+  1. `installObserver({ baseDir, tenantId, snippetRuntime })` called immediately after `installSnippetRuntime` in both files (uncommitted).
+  2. `persistFamilyLibCache` now reads from both `<workspace>/lib/` and `<datafetch-home>/lib/<tenantId>/`, observer output copied first then workspace-authored helpers (workspace wins on filename collision).
+- Probe (tvmaze-series-analyzer): **6/6 evaluator pass, score 100 across all six levels.** `libFunctionsAvailable`, `libFunctionsCreated`, and `reuseRate` STILL all zero on every level. lib-cache directory empty. `<datafetch-home>/lib/skillcraft-full/` empty across all six episodes. `<datafetch-home>/hooks/skillcraft-full/` does not exist (no manifests). Probe dir: `eval/skillcraft/results/datafetch/goal2-iter1p5-probe-tvmaze-20260512-210724/`.
+- Validate: SKIPPED, see Lessons.
+- Full-126: SKIPPED, see Lessons.
+- Status: **INCONCLUSIVE → STRUCTURAL FINDING.** The observer is wired and active; trajectories are saved (3 trajectories per e1 episode, all `mode: novel`, all `errored: false`). The gate's heuristic #5 rejects every single one for the same reason: zero `db.*` calls in the trajectory. The substrate's observer is built to recognise `db.* → lib.*` compositions with data-flow; SkillCraft trajectories are pure-tool fan-out aggregations with no data-flow between primitives.
+- Lessons:
+  1. **The substrate's learning loop, as architected today, cannot fire on SkillCraft.** The observer's gate (`src/observer/gate.ts`) requires a `db.*` call as the first primitive and a downstream `lib.*` consumer with data-flow. SkillCraft tasks use only `df.tool.<bundle>` calls and structure their work as independent fan-out calls with a shared parameter literal. The gate's heuristics are designed for a different composition pattern than the one this benchmark uses.
+  2. **The user-visible behaviour ("agents get cheaper with reuse") has never been demonstrated on this substrate on this benchmark.** All Goal 1 wins (94.4% pass) were achieved by a substrate path that bypasses the learning loop entirely. The substrate's headline value prop is unvalidated on SkillCraft and the architecture in `docs/architecture.md` over-claims what the loop is designed to handle.
+  3. The fix is not single-iteration scope. Three paths exist and none is a one-line change. See `EXPERIMENT_NOTES.md` § "2026-05-12 21:20 [analyze, E1.5 null result, structural finding]" for the full taxonomy (Option A: extend the gate for fan-out aggregations; Option B: trim the gate to data-flow only; Option C: pivot to a learning-loop-friendly benchmark; Option D: lean on agent-authored helpers and strengthen the prompt).
+  4. Halting the autonomous cadence here. Picking one of the four options is a goal-level decision; user input required.
+- Artefacts:
+  - Probe dir: `eval/skillcraft/results/datafetch/goal2-iter1p5-probe-tvmaze-20260512-210724/`
+  - Wired files: `src/eval/skillcraftFullDatafetch.ts` (line ~9, ~588), `src/eval/runScript.ts` (line ~23, ~149)
+  - Extended persist: `src/eval/skillcraftFullDatafetch.ts` `persistFamilyLibCache` ~ line 1078
+  - Diagnostic: trajectory inspection at `<probe-dir>/episodes/tvmaze-series-analyzer/e1/datafetch-home/trajectories/` shows 0/3 trajectories have `db.*` calls, 100% are `tool.*` only

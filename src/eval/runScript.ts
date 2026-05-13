@@ -20,6 +20,7 @@
 import { promises as fsp } from "node:fs";
 import path from "node:path";
 
+import { installObserver } from "../observer/install.js";
 import { installSnippetRuntime } from "../snippet/install.js";
 
 interface DatafetchEpisodeCtx {
@@ -144,6 +145,7 @@ async function main(): Promise<void> {
     baseDir: ctx.datafetchHome,
     skipSeedMirror: true,
   });
+  installObserver({ baseDir: ctx.datafetchHome, tenantId: ctx.tenantId, snippetRuntime });
 
   const result = await snippetRuntime.run({
     source,

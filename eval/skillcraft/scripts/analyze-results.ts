@@ -103,6 +103,7 @@ function aggregateBy(rows: Row[], key: "arm" | "family" | "level" | "phase") {
       runtimeErrorCount: group.filter((row) => row.runtimeStatus === "runtime_error").length,
       infrastructureErrorCount: group.filter((row) => row.runtimeStatus === "infrastructure_error").length,
       phaseBreakdown: phaseBreakdown(group),
+      learningLoop: learningLoopSummary(group),
       runtimeErrorRate: mean(group.map((row) => row.runtimeStatus === "runtime_error" ? 1 : 0)),
       infrastructureErrorRate: mean(group.map((row) => row.runtimeStatus === "infrastructure_error" ? 1 : 0)),
       officialEvaluatorCoverage: mean(group.map((row) => row.scorerSource === "official-evaluator" ? 1 : 0)),
@@ -119,10 +120,42 @@ function phaseBreakdown(rows: Row[]) {
       passed: group.filter((row) => row.officialPassed).length,
       passRate: group.length ? mean(group.map((row) => row.officialPassed ? 1 : 0)) : null,
       avgScore: group.length ? mean(group.map((row) => row.officialScorePercent)) : null,
+      avgTokens: group.length ? meanDefined(group.map((row) => row.tokens)) : null,
+      avgEffectiveTokens: group.length ? meanDefined(group.map((row) => row.effectiveTokens)) : null,
+      avgLearnedInterfacesAvailable: group.length ? meanDefined(group.map((row) => row.learnedInterfacesAvailable)) : null,
+      avgLearnedInterfacesCreated: group.length ? meanDefined(group.map((row) => row.learnedInterfacesCreated)) : null,
+      avgReuseRate: group.length ? meanDefined(group.map((row) => row.reuseRate)) : null,
       runtimeErrors: group.filter((row) => row.runtimeStatus === "runtime_error").length,
       infrastructureErrors: group.filter((row) => row.runtimeStatus === "infrastructure_error").length,
     }];
   }));
+}
+
+function learningLoopSummary(rows: Row[]) {
+  const byPhase = (phase: string) => rows.filter((row) => (row.phase ?? "unknown") === phase);
+  const trainTokens = meanDefined(byPhase("train").map((row) => row.effectiveTokens));
+  const warmTokens = meanDefined(byPhase("warm").map((row) => row.effectiveTokens));
+  const hardTokens = meanDefined(byPhase("hard").map((row) => row.effectiveTokens));
+  return {
+    trainAvgEffectiveTokens: trainTokens,
+    warmAvgEffectiveTokens: warmTokens,
+    hardAvgEffectiveTokens: hardTokens,
+    warmVsTrainEffectiveTokenRatio:
+      typeof warmTokens === "number" && typeof trainTokens === "number" && trainTokens > 0
+        ? warmTokens / trainTokens
+        : null,
+    warmAvgLearnedInterfacesAvailable: meanDefined(
+      byPhase("warm").map((row) => row.learnedInterfacesAvailable),
+    ),
+    warmAvgReuseRate: meanDefined(byPhase("warm").map((row) => row.reuseRate)),
+    trainAvgLearnedInterfacesCreated: meanDefined(
+      byPhase("train").map((row) => row.learnedInterfacesCreated),
+    ),
+    overallAvgLearnedInterfacesAvailable: meanDefined(
+      rows.map((row) => row.learnedInterfacesAvailable),
+    ),
+    overallAvgReuseRate: meanDefined(rows.map((row) => row.reuseRate)),
+  };
 }
 
 function pairedContrast(rows: Row[], treatmentArm: string, controlArm: string) {
