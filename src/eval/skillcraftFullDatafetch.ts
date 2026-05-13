@@ -4,9 +4,18 @@ import { promises as fsp } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 
+import { getMountRuntimeRegistry, type MountRuntime } from "../adapter/runtime.js";
 import { installObserver } from "../observer/install.js";
 import { readTrajectory, type TrajectoryRecord } from "../sdk/index.js";
 import { installSnippetRuntime } from "../snippet/install.js";
+
+import {
+  EvalRecordsMount,
+  extractFamilyEntities,
+  renderPerEntitySeed,
+  PER_ENTITY_SEED_NAME,
+  type EvalRecord,
+} from "./evalRecords.js";
 
 const FULL_SKILLCRAFT_DATAFETCH_ADAPTER_READY = false;
 const LEVEL_ORDER = ["e1", "e2", "e3", "m1", "m2", "h1"] as const;
@@ -536,12 +545,34 @@ async function runLiveExperimental(input: {
         tenantId,
       })
     : [];
+  // Extract the family's entities from the workspace's initial_workspace
+  // JSON (the SkillCraft fixture drops one .json file with a top-level
+  // array of entities to analyse). Records get mounted as df.db.records
+  // for this episode so the agent has a substrate-rooted way to query
+  // the entity list, and trajectories contain a db.* call the observer's
+  // gate can compose around.
+  const familyRecords = await extractFamilyEntities({
+    family: input.task.family,
+    initialWorkspaceDir: workspace,
+  });
+  const mountId = `skillcraft-${input.task.family}`;
+  let mountedRuntime: MountRuntime | null = null;
+  if (familyRecords.length > 0) {
+    mountedRuntime = await registerEvalRecordsMount({ mountId, records: familyRecords });
+  }
+  // Drop the generic sc_per_entity seed under <datafetchHome>/lib/__seed__/.
+  // The path is outside the per-tenant prohibition (which targets
+  // <baseDir>/lib/<tenantId>/) and the body is family-agnostic; the
+  // agent supplies toolBundle/toolNames/paramName at call time.
+  await dropGenericSeed(datafetchHome);
   await prepareLiveWorkspace({
     task: input.task,
     skillcraftDir: input.skillcraftDir,
     workspace,
     artifactDir,
     availableLibFunctions,
+    seededLibFunctions: [PER_ENTITY_SEED_NAME],
+    mountedRecords: familyRecords.length,
   });
   // Drop the episode context file the agent's `pnpm datafetch:run`
   // command reads. With this, the agent can iteratively probe tools
@@ -556,6 +587,9 @@ async function runLiveExperimental(input: {
       bundles: taskToolBundles(input.task),
       skillcraftToolRunnerPath: path.resolve("eval/skillcraft/scripts/invoke-skillcraft-tool.py"),
       snippetTimeoutMs: input.snippetTimeoutMs,
+      family: input.task.family,
+      mountId,
+      records: familyRecords,
     }, null, 2)}\n`,
   );
   const prompt = renderLivePrompt(input.task);
@@ -591,7 +625,7 @@ async function runLiveExperimental(input: {
       sourcePath: answerPath,
       sessionCtx: {
         tenantId,
-        mountIds: [],
+        mountIds: mountedRuntime ? [mountId] : [],
         baseDir: datafetchHome,
         skillcraftToolBridge: {
           skillcraftDir: input.skillcraftDir,
@@ -655,6 +689,9 @@ async function runLiveExperimental(input: {
       datafetchHome,
       tenantId,
     });
+  }
+  if (mountedRuntime) {
+    getMountRuntimeRegistry().unregister(mountId);
   }
   const calls = trajectory?.calls ?? [];
   const toolCalls = calls.filter((call) => call.primitive.startsWith("tool.")).length;
@@ -944,6 +981,8 @@ async function prepareLiveWorkspace(input: {
   workspace: string;
   artifactDir: string;
   availableLibFunctions: string[];
+  seededLibFunctions?: string[];
+  mountedRecords?: number;
 }): Promise<void> {
   const toolCatalog = await collectToolCatalog(input.task, input.skillcraftDir);
   await fsp.copyFile(input.task.taskDocPath, path.join(input.workspace, "task.md"));
@@ -955,9 +994,13 @@ async function prepareLiveWorkspace(input: {
     path.join(input.workspace, "tool_manifest.json"),
     `${JSON.stringify(toolCatalog, null, 2)}\n`,
   );
+  const allLibFunctions = Array.from(new Set([
+    ...(input.seededLibFunctions ?? []),
+    ...input.availableLibFunctions,
+  ]));
   await fsp.writeFile(
     path.join(input.workspace, "df.d.ts"),
-    renderLiveDfDts(toolCatalog, input.availableLibFunctions),
+    renderLiveDfDts(toolCatalog, allLibFunctions, Boolean(input.mountedRecords)),
   );
   await fsp.writeFile(path.join(input.workspace, "AGENTS.md"), renderLiveAgentInstructions(input.task, toolCatalog));
   await writeLibAuthoringGuide({
@@ -973,6 +1016,7 @@ async function prepareLiveWorkspace(input: {
 function renderLiveDfDts(
   toolCatalog: ToolCatalogEntry[],
   availableLibFunctions: string[],
+  recordsMounted: boolean,
 ): string {
   const bundleBlocks: string[] = [];
   for (const entry of toolCatalog) {
@@ -986,9 +1030,20 @@ function renderLiveDfDts(
   const libFields = availableLibFunctions
     .map((name) => `    ${JSON.stringify(name)}(input: any): Promise<${libResultType}>;`)
     .join("\n");
+  const dbBlock = recordsMounted
+    ? `  db: {
+    records: {
+      findExact(filter: Record<string, unknown>, limit?: number): Promise<Array<{ id: string; family: string; entity: string; label: string; attributes: Record<string, string | number | boolean> }>>;
+      search(query: string, opts?: { limit?: number }): Promise<any[]>;
+      findSimilar(query: string, limit?: number): Promise<any[]>;
+      hybrid(query: string, opts?: { limit?: number }): Promise<any[]>;
+    };
+  };
+`
+    : "";
   return `
 declare const df: {
-  tool: {
+${dbBlock}  tool: {
 ${bundleBlocks.join("\n")}
   };
   lib: {
@@ -1075,6 +1130,36 @@ async function mirrorWorkspaceLibsToResolver(input: {
   if (await isDirectory(workspaceLibDir)) {
     await copyTsFiles(workspaceLibDir, resolverLibDir, { markLearned: true });
   }
+}
+
+async function registerEvalRecordsMount(input: {
+  mountId: string;
+  records: EvalRecord[];
+}): Promise<MountRuntime> {
+  const adapter = new EvalRecordsMount(input.mountId, input.records);
+  const runtime: MountRuntime = {
+    mountId: input.mountId,
+    adapter,
+    identMap: [{ ident: "records", name: "records" }],
+    collection<T>(name: string) {
+      return adapter.collection<T>(name);
+    },
+    async close(): Promise<void> {
+      await adapter.close();
+    },
+  };
+  getMountRuntimeRegistry().register(input.mountId, runtime);
+  return runtime;
+}
+
+async function dropGenericSeed(datafetchHome: string): Promise<void> {
+  const seedDir = path.join(datafetchHome, "lib", "__seed__");
+  await fsp.mkdir(seedDir, { recursive: true });
+  await fsp.writeFile(
+    path.join(seedDir, `${PER_ENTITY_SEED_NAME}.ts`),
+    renderPerEntitySeed(),
+    "utf8",
+  );
 }
 
 async function persistFamilyLibCache(input: {
@@ -1236,6 +1321,8 @@ function renderLivePrompt(task: SkillCraftTask): string {
     "",
     "Read task.md, AGENTS.md, df.d.ts, and any initial workspace files.",
     "Edit scripts/answer.ts so it completes the task.",
+    "When df.d.ts declares df.db.records, the entities for this task are mounted as a substrate-rooted record store. Call `const entities = await df.db.records.findExact({}, 999)` first to get the entity list; each record carries `id`, `entity`, `label`, and an `attributes` map. Then use `df.lib.sc_per_entity({ entityIds, toolBundle, toolNames, paramName, extraInput? })` to fan out the required per-entity tool calls. The seed unwraps as `(await df.lib.sc_per_entity({...})).value` and returns `[{ entityId, tools: { <toolName>: <response> } }, ...]`.",
+    "If a learned helper (anything other than `sc_per_entity`) is listed in df.d.ts under df.lib, prefer it over recomposing the chain. Call it the same way: `const r = (await df.lib.<name>({...})).value`.",
     "Use existing df.lib helpers when they fit. If no helper exists and the task has repeated entity-level tool calls, create one under lib/ and call it from scripts/answer.ts.",
     "When creating or updating a helper, make it parameterized over the task's tool names where practical so later levels in this family can reuse it.",
     "Use df.tool calls for the official local tools. Use bracket notation for hyphenated tool names.",

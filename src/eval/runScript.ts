@@ -20,8 +20,11 @@
 import { promises as fsp } from "node:fs";
 import path from "node:path";
 
+import { getMountRuntimeRegistry, type MountRuntime } from "../adapter/runtime.js";
 import { installObserver } from "../observer/install.js";
 import { installSnippetRuntime } from "../snippet/install.js";
+
+import { EvalRecordsMount, type EvalRecord } from "./evalRecords.js";
 
 interface DatafetchEpisodeCtx {
   tenantId: string;
@@ -30,6 +33,9 @@ interface DatafetchEpisodeCtx {
   bundles: string[];
   skillcraftToolRunnerPath: string;
   snippetTimeoutMs?: number;
+  family?: string;
+  mountId?: string;
+  records?: EvalRecord[];
 }
 
 const CTX_FILE = ".datafetch-ctx.json";
@@ -147,25 +153,48 @@ async function main(): Promise<void> {
   });
   installObserver({ baseDir: ctx.datafetchHome, tenantId: ctx.tenantId, snippetRuntime });
 
-  const result = await snippetRuntime.run({
-    source,
-    sourcePath: scriptPath,
-    sessionCtx: {
-      tenantId: ctx.tenantId,
-      mountIds: [],
-      baseDir: ctx.datafetchHome,
-      skillcraftToolBridge: {
-        skillcraftDir: ctx.skillcraftDir,
-        bundles: ctx.bundles,
-        runnerPath: ctx.skillcraftToolRunnerPath,
+  let mountedRuntime: MountRuntime | null = null;
+  if (ctx.mountId && Array.isArray(ctx.records) && ctx.records.length > 0) {
+    const adapter = new EvalRecordsMount(ctx.mountId, ctx.records);
+    mountedRuntime = {
+      mountId: ctx.mountId,
+      adapter,
+      identMap: [{ ident: "records", name: "records" }],
+      collection<T>(name: string) {
+        return adapter.collection<T>(name);
       },
-      snippetTimeoutMs: ctx.snippetTimeoutMs ?? 300_000,
-    },
-  });
+      async close(): Promise<void> {
+        await adapter.close();
+      },
+    };
+    getMountRuntimeRegistry().register(ctx.mountId, mountedRuntime);
+  }
 
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
-  process.exit(result.exitCode);
+  try {
+    const result = await snippetRuntime.run({
+      source,
+      sourcePath: scriptPath,
+      sessionCtx: {
+        tenantId: ctx.tenantId,
+        mountIds: mountedRuntime && ctx.mountId ? [ctx.mountId] : [],
+        baseDir: ctx.datafetchHome,
+        skillcraftToolBridge: {
+          skillcraftDir: ctx.skillcraftDir,
+          bundles: ctx.bundles,
+          runnerPath: ctx.skillcraftToolRunnerPath,
+        },
+        snippetTimeoutMs: ctx.snippetTimeoutMs ?? 300_000,
+      },
+    });
+
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    process.exit(result.exitCode);
+  } finally {
+    if (mountedRuntime && ctx.mountId) {
+      getMountRuntimeRegistry().unregister(ctx.mountId);
+    }
+  }
 }
 
 main().catch((err) => {

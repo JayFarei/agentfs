@@ -213,6 +213,33 @@ hypotheses. Append new entries here as they execute.)
   - Runner: `scripts/goal2-full.sh`
   - Forensic walk: `EXPERIMENT_NOTES.md` § "2026-05-12 21:05 [analyze, E1 null result]"
 
+### E4 (iter5): Port substrate-mount + seed into new harness (loop wiring lands, agent ignores)
+- Date: 2026-05-13
+- Goal: Goal 2 (learning loop fires on the full 126-task surface)
+- Hypothesis: porting the older harness's per-family `df.db.records` mount + a generic `sc_per_entity` seed into `skillcraftFullDatafetch.ts` makes the new harness's trajectories contain `db.records.findExact -> lib.sc_per_entity` chains, the observer's existing gate fires, helpers crystallise per family, and the agent reuses them in warm episodes. Expected: `avgLearnedInterfacesAvailable` on warm climbs above 1, reuse-rate climbs above 0.30, pass rate stays near iter4's 94.4%.
+- Lever: prompt template + harness wiring (df.db mount, __seed__ drop, df.d.ts surface).
+- Change:
+  1. New `src/eval/evalRecords.ts`: family-agnostic `extractFamilyEntities` (finds the single array-valued top-level key in `initial_workspace/*.json` that isn't `output_file` and normalises to generic `EvalRecord`); `EvalRecordsMount` adapter implementing `findExact / search / findSimilar / hybrid`; `renderPerEntitySeed` returning a body that fans out a configurable `toolBundle`/`toolNames`/`paramName` over an entity list and aggregates results.
+  2. `src/eval/skillcraftFullDatafetch.ts`: extract entities from workspace, register `EvalRecordsMount` with `mountId = "skillcraft-<family>"`, pass `mountIds: [mountId]` in `sessionCtx`, drop `sc_per_entity` seed under `<datafetchHome>/lib/__seed__/sc_per_entity.ts`, extend `renderLiveDfDts` to expose `df.db.records` + the seed, unregister the mount after the episode runs.
+  3. `src/eval/runScript.ts` (multi-turn probe path): same mount registration on every invocation, ctx.json carries family/mountId/records.
+  4. Tried two scaffold variants for `scripts/answer.ts` to nudge the agent toward the new primitives.
+- Probe variant A (no scaffold change): 6/6 evaluator pass, scores 80-100, but `libFunctionsAvailable`, `libFunctionsCreated`, `reuseRate` all zero on every level. The agent ignored the new primitives in `df.d.ts` and wrote `df.tool.*` fan-out by hand. The seed is on disk at `<datafetchHome>/lib/__seed__/sc_per_entity.ts`, mount is registered (verified in df.d.ts which exposes `df.db.records`), prompt mentions both, agent went pure-tool anyway. Probe dir: `eval/skillcraft/results/datafetch/goal2-iter5-probe-tvmaze-20260513-065558/`.
+- Probe variant B (strong scaffold replacing answer.ts with a primer that calls `df.db.records.findExact` and `df.lib.sc_per_entity` with replace-this-section markers): **3/6 evaluator pass**, scores 0-100, reuse-rate climbed to 0.03-0.06 on three levels (the agent did call `df.lib.*` on those), but **pass rate regressed from 6/6 to 3/6 because the scaffold confused the agent into hybrid code paths**. Probe dir: `eval/skillcraft/results/datafetch/goal2-iter5b-probe-tvmaze-20260513-070444/`. Reverted the scaffold.
+- Validate: SKIPPED (probe didn't hit the cadence's "≥1 helper authored in e1, ≥1 helper reused in e2-m2" gate).
+- Full-126: SKIPPED.
+- Status: **INCONCLUSIVE.** The mount + seed + df.d.ts surface are functioning end-to-end (verified on disk and in df.d.ts), but the claude-sonnet-4-6 agent has a strong prior to write `df.tool.*` fan-out by hand and ignores the new affordances even when present and prompted. The scaffold approach to push it toward `df.lib.sc_per_entity` regressed pass rate.
+- Lessons:
+  1. **The substrate plumbing is correct.** `df.db.records.findExact()` works, the seed is callable as `df.lib.sc_per_entity({...})`, the observer's gate would fire on a `db.* -> lib.*` chain — but the agent is the rate limiter on whether that chain ever appears in the trajectory.
+  2. **The agent prefers familiar primitives over advertised ones.** Goal 1's iterations trained both me and the prompt template into a `df.tool`-only pattern. Surfacing new primitives in df.d.ts and the prompt is not sufficient to flip the pattern; the agent's strong prior dominates.
+  3. **Forcing the new primitives via scaffold backfires.** A scaffold that says "call df.db.records.findExact then df.lib.sc_per_entity" produces hybrid code that crashes more than it works. The agent treats the scaffold as advisory and patches in its own pattern around it.
+  4. **The proof on the OLD harness still stands.** E3's 6-family pilot (-79% warm tokens, 83% reuse, 100% correctness) used the *codex* agent with prompts that lacked the `df.tool`-fan-out prior — that agent used the new primitives naturally. Claude on the new harness is the harder case because it brings Goal-1's optimised behaviour.
+  5. **The right next move is not more prompt engineering.** Three options that actually move this: (a) a commit-phase validator that rejects answer.ts not calling any `df.lib.*`, forcing the agent to use the seed; (b) E7-style sub-graph crystallisation in `src/observer/template.ts` so SkillCraft's pure-tool fan-out trajectories become learnable shapes too; (c) re-run the same single-family probe with the codex driver instead of claude (cheap to test if the agent prior is the only blocker).
+- Next: E5 — try (c) first (codex on the new harness with iter5 wiring). If codex uses the new primitives, the gap is purely Claude's prior and fixable with stronger prompt engineering. If codex still ignores them, the prompt-only approach is dead.
+- Artefacts:
+  - Probe variant A: `eval/skillcraft/results/datafetch/goal2-iter5-probe-tvmaze-20260513-065558/`
+  - Probe variant B: `eval/skillcraft/results/datafetch/goal2-iter5b-probe-tvmaze-20260513-070444/`
+  - Substrate edits: `src/eval/evalRecords.ts` (NEW), `src/eval/skillcraftFullDatafetch.ts` (mount/seed/df.d.ts wiring around line 530 and 1013, mount cleanup at ~694), `src/eval/runScript.ts` (mount on probe path)
+
 ### E2: Old-harness single-family experiment on `country` (proves the loop)
 - Date: 2026-05-12
 - Goal: Goal 2 (learning loop fires)
