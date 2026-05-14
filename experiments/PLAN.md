@@ -81,19 +81,30 @@ from a single instrumented full-126 + the smokes:
 ### Substrate redesign (the five changes)
 
 **Change 1 — `intentSignature` (data-shape-agnostic crystallisation key).**
-Alongside `shapeHash`, compute a key from: (a) primitive *categories*
-in sequence (`db` / `lib` / `tool`, not names); (b) the data-flow DAG
-(which step consumes which earlier step's output); (c) fan-out
-detection (a run of ≥ 2 same-category calls varying one input field
-collapses to `FANOUT(category, degree)`). `db.records.findExact →
-tool.tvmaze.getInfo(id)×3` and `db.cases.search →
-tool.finqa.getCase(case_id)×5` must hash to the same `intentSignature`.
-The signature carries **capability slots** — the bundle / tool / param
-constants that *must* become parameters for cross-shape transfer.
-Architect note: `db/lib/tool + DAG + FANOUT` alone is too coarse and
-risks merging unrelated workflows; the canonical spec must be pinned
-*from observed cluster purity* (see iter 2), not designed in the
-abstract.
+PINNED SPEC v2 (validated by iter 2's offline analyzer over the iter14
+full-126 + iter15 subset — 146 trajectories → 55 clusters, 22
+multi-trajectory, 17 cross-family, 0 incoherent):
+- Map each top-level call to a CATEGORY: `db` / `lib` / `tool`.
+  Concrete primitive + field names are dropped — this is what makes
+  the key data-shape-agnostic.
+- Collapse a maximal run of ≥ 2 *consecutive* SAME-CATEGORY calls into
+  `FANOUT(category, degreeBucket, cycle<distinctInputShapes>)`.
+  degreeBucket ∈ {2, 3-5, 6+}. Fan-out detection is on category ALONE
+  (not input-field-set) — keying on field-set fragments interleaved
+  multi-tool fan-out (`A,B,C,A,B,C`); category-only collapses it.
+- Each FANOUT node carries STRUCTURAL slots: `varyingFieldCount` /
+  `sharedFieldCount` (input fields whose value differs across the run
+  vs constant). Concrete field names are report-only, NEVER in the key
+  — v1 used nominal slots and produced an 18-name union on the top
+  cluster, which would make parameterised authoring impossible.
+- signature = `→`-joined skeleton.
+`db.records.findExact → tool.tvmaze.getInfo(id)×3 → lib` and
+`db.cases.search → tool.finqa.getCase(case_id)×5 → lib` both hash to
+`db→FANOUT(tool,3-5,cycle1)→lib`. The dominant SkillCraft intent
+`db→FANOUT(tool,6+,cycle1)→lib` spans 10 families with different data
+shapes — that IS the `per_entity` pattern, learnable from convergence.
+The offline analyzer (`eval/skillcraft/scripts/intent-cluster-analysis.ts`)
+is the reference implementation; iter 3-4 ports it into the observer.
 
 **Change 2 — nested-call crystallisation.** Extend
 `extractCandidateTemplates` to also crystallise from calls with
@@ -150,8 +161,8 @@ offline analyzer proves the signatures cluster cleanly.
 
 | iter | hypothesis / deliverable | lever |
 |---|---|---|
-| 1 | metric instrumentation: an artifact walker that records per-episode helper names, called-helper identities, available-helper identities, seed-vs-learned, manifest origin (`origin.trajectoryIds`, new `origin.intentSignature`), quarantine — so R6-R9 are scoreable at all | normalize-results + a new artifact-walk pass |
-| 2 | offline `intentSignature` analyzer over iter14/15 trajectories; pin the canonical signature spec from observed cluster purity; dry-run helper schemas only — **gate untouched** | offline tooling |
+| 1 ✓ | metric instrumentation: artifact walker (`walk-artifacts.ts`) records per-episode helper names / called-helper identities / seed-vs-learned / origin / quarantine. **DONE** — commit `b3b2e18c`. Dry-score confirmed the thesis (shapeHash: 1/28 convergent clusters). | eval tooling |
+| 2 ✓ | offline `intentSignature` analyzer (`intent-cluster-analysis.ts`). **DONE** — commit pending. Verdict: PROCEED. v2 spec pinned in Change 1. 146 traj → 55 clusters, 22 multi-trajectory, 17 cross-family, 0 incoherent. | offline tooling |
 | 3 | nested fan-out extraction grouped by `scope.parentPrimitive`, emitted as candidate templates (spec/candidate only, not yet gated) | observer template |
 | 4 | persistent convergence index in the shared run cache, atomic append; gate crystallises on ≥ 2-trajectory intent convergence | observer gate + new index module |
 | 5 | parameterised authoring for the one proven fan-out signature; capability slots always promoted to params | observer author |

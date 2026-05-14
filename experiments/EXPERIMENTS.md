@@ -534,3 +534,55 @@ Re-analyzed iter14 numbers with the fix:
 - Artefacts:
   - Smoke: `src/observer/__smoke__/novel-tenant.ts`
   - Crystallised file (run-specific): `/tmp/df-novel-tenant-smoke-*/lib/novel-tenant-smoke/summariserecords.ts`
+
+---
+
+## Current goal (Goal 4: intent-convergence crystallisation + learning-honest rubric)
+
+### G4.1: artifact walker — make the learning-honest rubric scoreable
+- Date: 2026-05-14
+- Goal: Goal 4
+- Hypothesis: the rubric R6-R9 cannot be scored from `episodes.jsonl` (counts only); a read-only artifact-walk pass that records helper names / called-helper identities / seed-vs-learned / origin / quarantine makes it scoreable without any substrate behaviour change.
+- Lever: eval tooling (`eval/skillcraft/scripts/walk-artifacts.ts`)
+- Change: new walker emits `helper-instrumentation.jsonl` — per episode: helpersAvailable / helpersAfterAgent / helpersCreatedThisEpisode / helpersCalled (seed-excluded) / seedCalled / helperOrigins (shapeHash + originTrajectory + intentSignature slot, read from the crystallised `.ts` file headers because the persisted hook manifests have empty `origin.trajectoryIds`) / quarantinedHelpers. Commit `b3b2e18c`.
+- Probe: n/a (offline tooling).
+- Result: 126 instrumentation rows from the iter14 full-126. Dry-score confirms the Goal 4 thesis:
+  - R7 conditional reuse = **0.19** (58 warm episodes had a learned helper available; only 11 called one) vs target ≥ 0.60.
+  - R6 convergence = **1 of 28** shapeHash clusters has ≥ 2 origin trajectories — the syntactic `shapeHash` fragments one intent into 28 data-shape-specific clusters.
+- Status: **PASSED** (instrumentation lands; rubric now scoreable).
+- Lessons:
+  1. The persisted hook manifests are NOT a provenance source — `origin.trajectoryIds` is empty because manifests are re-created on lib-cache hydration. The crystallised `.ts` file headers (`@shape-hash`, `@origin-trajectory`) are the only stable origin.
+  2. The dry-score is the empirical case for Goal 4: `shapeHash` clustering yields 1 convergent cluster out of 28; intentSignature has to do better or the redesign is pointless.
+- Artefacts:
+  - Walker: `eval/skillcraft/scripts/walk-artifacts.ts`
+  - Instrumentation: `eval/skillcraft/results/datafetch/goal3-iter14-full-20260513-113222/helper-instrumentation.jsonl`
+
+### G4.2: offline intentSignature analyzer — the de-risk gate
+- Date: 2026-05-14
+- Goal: Goal 4
+- Hypothesis: a data-shape-agnostic `intentSignature` (primitive categories + fan-out detection + structural slot abstraction) clusters trajectories far better than `shapeHash` — and if it does NOT cluster cleanly here, the whole redesign stops before any eval spend.
+- Lever: eval tooling (`eval/skillcraft/scripts/intent-cluster-analysis.ts`)
+- Change: offline analyzer over the iter14 full-126 + iter15 subset trajectory artifacts. Signature spec v2 (pinned below).
+- Probe: n/a (offline tooling).
+- Result over 146 answer-trajectories:
+  | metric | shapeHash (G4.1 dry-score) | intentSignature v2 |
+  |---|---|---|
+  | clusters | 28 | **55** |
+  | multi-trajectory (≥2) clusters | 1 | **22** |
+  | cross-family (≥2 families) clusters | ~0 | **17** |
+  | incoherent clusters (signature bug) | n/a | **0** |
+  - Dominant cluster `db→FANOUT(tool,6+,cycle1)→lib`: **n=35, spans 10 families** with completely different data shapes (cat-facts, cocktail, dnd-monster, dog-breeds, jsonplaceholder, name-demographics, random-user, usgs, vocabulary, world-bank). This is the cross-shape-transfer property (R9) — and it IS the `per_entity` pattern, so the substrate can *learn* per_entity from convergence (Change 5 stretch is viable).
+  - v1 → v2 refinement: v1 keyed fan-out on (category + input-field-set), which (a) made capability slots a noisy union of every family's concrete field names and (b) failed to collapse interleaved multi-tool fan-out (A,B,C,A,B,C). v2 keys fan-out on category alone and carries STRUCTURAL slots (varying/shared field counts, cycle width) — never concrete names. v2: 55 clusters (down from v1's 70), 17 cross-family (up from 13).
+- Status: **PASSED — de-risk verdict is PROCEED.** The signature clusters cleanly (0 incoherent), cross-shape transfer is real, and the dry-run helper schema for the dominant cluster is a coherent generic helper (`fn({ intent, input: { filter?, limit?, entityValues, paramName, toolNames, sharedInput?, aggregateInput? }, body: replays db→FANOUT(tool,N)→lib })`).
+- Lessons:
+  1. **The signature MUST carry structure, not names.** v1's nominal capability slots (18 on the top cluster) would have made parameterised authoring impossible — the architect's "over-coarse signature feeds an under-powered author" risk, caught offline before any eval spend exactly as intended.
+  2. **Fan-out detection on category alone is the right call.** Keying on input-field-set fragments interleaved fan-out; category-only collapses it and the cluster count drops.
+  3. The dominant intent is the fan-out pattern across 10 families — strong evidence the substrate should learn the fan-out interface rather than ship `per_entity` as a seed.
+- Pinned `intentSignature` spec v2 (for Goal 4 iter 3-4 to implement in the observer):
+  - Map each top-level call to a CATEGORY: `db` / `lib` / `tool`. Concrete primitive + field names are dropped.
+  - Collapse a maximal run of ≥ 2 consecutive SAME-CATEGORY calls into `FANOUT(category, degreeBucket, cycle<distinctInputShapes>)`. degreeBucket ∈ {2, 3-5, 6+}.
+  - Per FANOUT node carry structural slots: `varyingFieldCount` / `sharedFieldCount` (fields whose value differs across the run vs constant). Concrete field names are report-only, never in the key.
+  - signature = `→`-joined skeleton.
+- Artefacts:
+  - Analyzer: `eval/skillcraft/scripts/intent-cluster-analysis.ts`
+  - Cluster report: `eval/skillcraft/results/datafetch/goal4-iter2-intent-clusters.json`
