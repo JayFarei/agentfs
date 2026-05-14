@@ -1,8 +1,34 @@
 # Project status: SkillCraft learning-loop iterations
 
-> Snapshot taken 2026-05-13 at the close of Goal 2's iteration cycle.
-> Updated when a new goal cycle closes; intermediate progress lives in
-> [EXPERIMENTS.md](./EXPERIMENTS.md) and [EXPERIMENT_NOTES.md](./EXPERIMENT_NOTES.md).
+> Snapshot refreshed 2026-05-14 at the close of Goal 3 and the start of
+> Goal 4's planning. Updated when a goal cycle closes; intermediate
+> progress lives in [EXPERIMENTS.md](./EXPERIMENTS.md) and
+> [EXPERIMENT_NOTES.md](./EXPERIMENT_NOTES.md).
+
+## Current state (2026-05-14)
+
+**Goal 3 closed at 3/7 thresholds.** iter9-15 made the learning loop
+fire end-to-end on the new harness; full-126 = **88.9% pass** (after the
+normalizer false-negative fix), helpers crystallise, novel-tenant smoke
+passes 11/11 (Goal 3 part B done). The three unmet thresholds
+(`avgLearnedInterfacesAvailable warm ≥ 2.0`, `avgReuseRate warm ≥ 0.30`,
+`warm/train tokens ≤ 0.70`) were diagnosed as over-fitting to
+SkillCraft's per-entity-fan-out data shape — the observer keys
+crystallisation on a syntactic `shapeHash`.
+
+**Goal 4 planned, not started.** Intent-convergence crystallisation:
+replace `shapeHash` with a data-shape-agnostic `intentSignature`,
+crystallise on ≥2-trajectory convergence, add nested-call
+crystallisation, parameterise authoring over the converged cluster.
+The rubric is revised to a learning-honest R1-R9 (architect-reviewed).
+Full plan in [PLAN.md](./PLAN.md) § Goal 4; canonical condition in
+[goal.md](./goal.md). iters 1-2 are instrumentation + offline analysis
+(no substrate behaviour change) — the gate is not touched until an
+offline analyzer proves intent clusters are clean.
+
+Goal-3-era commits on `main`: `0d0ea4df` (iter9-13 substrate + 3
+bugfixes), `bfd8c847` (normalizer false-negative fix), `82cf6688`
+(iter15 EvalRecord entity-id contract), `506c009c` (Goal 4 planning).
 
 ## What this project is
 
