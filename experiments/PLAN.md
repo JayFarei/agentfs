@@ -163,7 +163,7 @@ offline analyzer proves the signatures cluster cleanly.
 |---|---|---|
 | 1 ✓ | metric instrumentation: artifact walker (`walk-artifacts.ts`) records per-episode helper names / called-helper identities / seed-vs-learned / origin / quarantine. **DONE** — commit `b3b2e18c`. Dry-score confirmed the thesis (shapeHash: 1/28 convergent clusters). | eval tooling |
 | 2 ✓ | offline `intentSignature` analyzer (`intent-cluster-analysis.ts`). **DONE** — commit pending. Verdict: PROCEED. v2 spec pinned in Change 1. 146 traj → 55 clusters, 22 multi-trajectory, 17 cross-family, 0 incoherent. | offline tooling |
-| 3 | nested fan-out extraction grouped by `scope.parentPrimitive`, emitted as candidate templates (spec/candidate only, not yet gated) | observer template |
+| 3 ✓ | `intentSignature` + nested-call extraction in the observer. **DONE** — commit pending. `intentSignature` added to `CallTemplate` (computed as metadata); `extractNestedTemplates` groups depth≥1 calls by `scope.parentPrimitive`. Behaviour-preserving: the gate still uses `shapeHash`; iter 4 wires both in. 261 tests pass. | observer template |
 | 4 | persistent convergence index in the shared run cache, atomic append; gate crystallises on ≥ 2-trajectory intent convergence | observer gate + new index module |
 | 5 | parameterised authoring for the one proven fan-out signature; capability slots always promoted to params | observer author |
 | 6 | cross-shape transfer smoke (shared availability across ≥ 2 families with different data shapes); probe + validate | transfer harness (test infra) |

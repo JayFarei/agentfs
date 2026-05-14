@@ -5,7 +5,9 @@ import path from "node:path";
 
 import type { TrajectoryRecord } from "../src/sdk/index.js";
 import {
+  computeIntentSignature,
   extractCandidateTemplates,
+  extractNestedTemplates,
   extractSubGraphTemplates,
   extractTemplate,
   readLibrarySnapshot,
@@ -460,5 +462,93 @@ describe("extractSubGraphTemplates", () => {
     // All candidates have distinct shape hashes.
     const hashes = new Set(candidates.map((c) => c.shapeHash));
     expect(hashes.size).toBe(candidates.length);
+  });
+});
+
+describe("computeIntentSignature (Goal-4 Change 1)", () => {
+  it("collapses consecutive same-category fan-out and is data-shape-agnostic", () => {
+    // db.records.findExact -> tool x3 (same tool) -> lib
+    const tvmaze = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: { filter: {} }, output: [{ id: 1 }], startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.tvmaze_api.getInfo", input: { show_id: 1 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 2, primitive: "tool.tvmaze_api.getInfo", input: { show_id: 2 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 3, primitive: "tool.tvmaze_api.getInfo", input: { show_id: 3 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 4, primitive: "lib.per_entity", input: { ids: [1, 2, 3] }, output: { value: [] }, startedAt: ISO, durationMs: 1 },
+    ]);
+    // A different tenant doing the same structural work over different data.
+    const finqa = buildTrajectory([
+      { index: 0, primitive: "db.cases.search", input: { query: "x" }, output: [{ id: 1 }], startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.finqa_api.getCase", input: { case_id: "a" }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 2, primitive: "tool.finqa_api.getCase", input: { case_id: "b" }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 3, primitive: "tool.finqa_api.getCase", input: { case_id: "c" }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 4, primitive: "lib.aggregate", input: { ids: ["a"] }, output: { value: [] }, startedAt: ISO, durationMs: 1 },
+    ]);
+    const tvmazeSig = computeIntentSignature(tvmaze.calls);
+    const finqaSig = computeIntentSignature(finqa.calls);
+    expect(tvmazeSig).toBe("db→FANOUT(tool,3-5,cycle1)→lib");
+    // Cross-shape transfer property: identical structure over different
+    // data shapes hashes to the SAME intentSignature.
+    expect(finqaSig).toBe(tvmazeSig);
+  });
+
+  it("collapses interleaved multi-tool fan-out (A,B,C,A,B,C) on category alone", () => {
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: {}, output: [], startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.api.A", input: { x: 1 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 2, primitive: "tool.api.B", input: { y: 1 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 3, primitive: "tool.api.C", input: { z: 1 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 4, primitive: "tool.api.A", input: { x: 2 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 5, primitive: "tool.api.B", input: { y: 2 }, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 6, primitive: "tool.api.C", input: { z: 2 }, output: {}, startedAt: ISO, durationMs: 1 },
+    ]);
+    // 6 consecutive tool calls collapse to one FANOUT node; the cycle
+    // width (3 distinct input shapes: {x},{y},{z}) is captured.
+    expect(computeIntentSignature(traj.calls)).toBe("db→FANOUT(tool,6+,cycle3)");
+  });
+
+  it("a single call of a category does not become a FANOUT node", () => {
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: {}, output: [], startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "lib.per_entity", input: {}, output: { value: [] }, startedAt: ISO, durationMs: 1 },
+    ]);
+    expect(computeIntentSignature(traj.calls)).toBe("db→lib");
+  });
+});
+
+describe("extractNestedTemplates (Goal-4 Change 2)", () => {
+  it("groups depth>=1 calls by scope.parentPrimitive and emits a template per group", () => {
+    // A trajectory where lib.per_entity's body fanned out 3 tool calls.
+    // The flat calls array: the nested tool calls (depth 1) are recorded
+    // BEFORE the parent lib.* call (depth 0).
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: {}, output: [{ id: 1 }], startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.api.getInfo", input: { id: 1 }, output: {}, startedAt: ISO, durationMs: 1, scope: { depth: 1, callPath: ["lib.per_entity"], parentPrimitive: "lib.per_entity" } },
+      { index: 2, primitive: "tool.api.getInfo", input: { id: 2 }, output: {}, startedAt: ISO, durationMs: 1, scope: { depth: 1, callPath: ["lib.per_entity"], parentPrimitive: "lib.per_entity" } },
+      { index: 3, primitive: "tool.api.getInfo", input: { id: 3 }, output: {}, startedAt: ISO, durationMs: 1, scope: { depth: 1, callPath: ["lib.per_entity"], parentPrimitive: "lib.per_entity" } },
+      { index: 4, primitive: "lib.per_entity", input: {}, output: { value: [] }, startedAt: ISO, durationMs: 1 },
+    ]);
+    const nested = extractNestedTemplates(traj);
+    expect(nested).toHaveLength(1);
+    expect(nested[0]!.steps).toHaveLength(3);
+    expect(nested[0]!.steps.every((s) => s.primitive === "tool.api.getInfo")).toBe(true);
+    // The nested fan-out has its own intentSignature.
+    expect(nested[0]!.intentSignature).toBe("FANOUT(tool,3-5,cycle1)");
+    expect(nested[0]!.topic).toContain("nested_per_entity");
+  });
+
+  it("ignores nested groups with fewer than 2 calls", () => {
+    const traj = buildTrajectory([
+      { index: 0, primitive: "lib.wrapper", input: {}, output: {}, startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "tool.api.X", input: {}, output: {}, startedAt: ISO, durationMs: 1, scope: { depth: 1, callPath: ["lib.wrapper"], parentPrimitive: "lib.wrapper" } },
+    ]);
+    expect(extractNestedTemplates(traj)).toEqual([]);
+  });
+
+  it("returns nothing for a flat trajectory with no nested calls", () => {
+    const traj = buildTrajectory([
+      { index: 0, primitive: "db.records.findExact", input: {}, output: [], startedAt: ISO, durationMs: 1 },
+      { index: 1, primitive: "lib.per_entity", input: {}, output: { value: [] }, startedAt: ISO, durationMs: 1 },
+    ]);
+    expect(extractNestedTemplates(traj)).toEqual([]);
   });
 });

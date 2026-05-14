@@ -94,6 +94,16 @@ export type CallTemplate = {
   // Canonical a 32-bit non-cryptographic shape hex hash of the step list. Used by the gate's
   // de-dup check and stamped into the authored file as `@shape-hash:`.
   shapeHash: string;
+  // Goal-4: data-shape-agnostic crystallisation key. The category
+  // skeleton (db/lib/tool, concrete names dropped) with consecutive
+  // same-category runs collapsed to `FANOUT(category,degreeBucket,
+  // cycle<distinctInputShapes>)`. Two trajectories doing structurally
+  // identical work over DIFFERENT data shapes share an `intentSignature`
+  // even when their `shapeHash` differs. The pinned spec v2 lives in
+  // experiments/PLAN.md § Goal 4 Change 1; the offline reference impl
+  // is `eval/skillcraft/scripts/intent-cluster-analysis.ts`. iter 3
+  // computes this as metadata; iter 4 keys the convergence gate on it.
+  intentSignature: string;
 };
 
 // Snapshot of a tenant's existing /lib/ overlay used by the gate to avoid
@@ -153,6 +163,7 @@ export function extractTemplateFromCalls(
 
   const finalOutputBinding = steps[steps.length - 1]!.outputName;
   const shapeHash = shapeHashHex(canonicalShape(steps));
+  const intentSignature = computeIntentSignature(calls);
   const baseTopic =
     topicSuffix !== undefined
       ? `${pickTopicForCalls(trajectory, calls)}_${topicSuffix}`
@@ -166,7 +177,115 @@ export function extractTemplateFromCalls(
     name,
     topic: baseTopic,
     shapeHash,
+    intentSignature,
   };
+}
+
+// --- intentSignature (Goal-4 Change 1, pinned spec v2) --------------------
+//
+// Data-shape-agnostic crystallisation key. Validated offline over the
+// iter14 full-126 + iter15 subset (146 trajectories → 55 clusters, 22
+// multi-trajectory, 17 cross-family, 0 incoherent). Reference impl:
+// eval/skillcraft/scripts/intent-cluster-analysis.ts.
+
+type PrimitiveCategory = "db" | "lib" | "tool" | "other";
+
+function categoryOf(primitive: string): PrimitiveCategory {
+  if (primitive.startsWith("db.")) return "db";
+  if (primitive.startsWith("lib.")) return "lib";
+  if (primitive.startsWith("tool.")) return "tool";
+  return "other";
+}
+
+function intentInputFieldSet(input: unknown): string {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    return "<atom>";
+  }
+  return Object.keys(input as Record<string, unknown>).sort().join(",");
+}
+
+function intentDegreeBucket(n: number): string {
+  if (n <= 2) return "2";
+  if (n <= 5) return "3-5";
+  return "6+";
+}
+
+// Compute the data-shape-agnostic intent signature for a call slice.
+// Map each call to a category; collapse a maximal run of >= 2
+// consecutive same-category calls into
+// `FANOUT(category,degreeBucket,cycle<distinctInputShapes>)`. Fan-out
+// detection is on category ALONE — keying on input-field-set fragments
+// interleaved multi-tool fan-out (A,B,C,A,B,C). The signature is the
+// `→`-joined skeleton.
+export function computeIntentSignature(
+  calls: ReadonlyArray<PrimitiveCallRecord>,
+): string {
+  const skeleton: string[] = [];
+  let i = 0;
+  while (i < calls.length) {
+    const cat = categoryOf(calls[i]!.primitive);
+    if (cat === "other") {
+      i += 1;
+      continue;
+    }
+    let j = i + 1;
+    while (j < calls.length && categoryOf(calls[j]!.primitive) === cat) {
+      j += 1;
+    }
+    const runLen = j - i;
+    if (runLen >= 2) {
+      const distinctShapes = new Set(
+        calls.slice(i, j).map((c) => intentInputFieldSet(c.input)),
+      ).size;
+      skeleton.push(
+        `FANOUT(${cat},${intentDegreeBucket(runLen)},cycle${distinctShapes})`,
+      );
+    } else {
+      skeleton.push(cat);
+    }
+    i = j;
+  }
+  return skeleton.join("→");
+}
+
+// --- nested-call extraction (Goal-4 Change 2) ----------------------------
+//
+// A trajectory's `calls` array is FLAT — calls made inside a df.lib.*
+// body carry `scope.depth >= 1` and `scope.parentPrimitive`. The
+// existing extractors only look at the top-level call list, so a
+// `lib.per_entity` whose body fans out over tools contributes ONE
+// top-level template (the wrapper) and the internal fan-out intent is
+// invisible. This walker groups depth>=1 calls by `scope.parentPrimitive`
+// (NOT by contiguity — the parent lib.* call is recorded AFTER its
+// nested calls) and emits each group as a candidate template.
+//
+// iter 3 ships this as a standalone export; the observer worker does
+// not call it yet. iter 4 wires it into the convergence-gated path.
+export function extractNestedTemplates(
+  trajectory: TrajectoryRecord,
+): CallTemplate[] {
+  const byParent = new Map<string, PrimitiveCallRecord[]>();
+  for (const call of trajectory.calls) {
+    const scope = call.scope;
+    if (!scope || scope.depth < 1) continue;
+    const parent = scope.parentPrimitive ?? "<unknown-parent>";
+    const group = byParent.get(parent) ?? [];
+    group.push(call);
+    byParent.set(parent, group);
+  }
+  const out: CallTemplate[] = [];
+  for (const [parent, group] of byParent) {
+    // Need >= 2 calls for a template (extractTemplateFromCalls requires
+    // non-empty; a 1-call nested group is not a reusable pattern).
+    if (group.length < 2) continue;
+    // Suffix keeps the helper name distinct from the wrapper's own
+    // template; derive a short slug from the parent primitive.
+    const parentSlug = sanitizeSlug(parent.replace(/^lib\./, "")).slice(0, 24);
+    out.push(
+      extractTemplateFromCalls(group, trajectory, `nested_${parentSlug}`),
+    );
+  }
+  return out;
 }
 
 // Sub-graph candidate proposal. Returns 0+ additional templates extracted
