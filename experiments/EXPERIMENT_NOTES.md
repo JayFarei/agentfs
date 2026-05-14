@@ -454,3 +454,45 @@ Stopped first probe at m1 to land two follow-on substrate fixes the unit tests m
 The unit tests for iter 10 caught extraction + gate logic but not the author end-to-end — both failures looked like "skipped, generatePureSource returned null" which the gate-level tests don't surface. Adding an integration assertion in the observer-author test suite would have caught this earlier. The fixes ship without new tests because re-running the probe is the more informative check; if the probe demonstrates crystallisation, we'll add a regression test from a fixture trajectory.
 
 Re-running tvmaze probe. Test count unchanged at 254/254 (the bugfixes are within already-tested code paths).
+
+## 2026-05-14, Goal 4 planning
+
+### 2026-05-14 [meta, iter14-15 close + Goal 3 retrospective]
+
+Goal 3 closed at 3/7. The arc: iter9-13 substrate (commit-phase validator, sub-graph extractor, df.d.ts re-rank, smoke-replay gate, novel-tenant smoke) + 3 mid-probe bugfixes (per_entity double-wrap, mirror-wipe race, observer async race) landed in `0d0ea4df`. Full-126 ran at a *reported* 73.8% pass — but the codex architect's first finding was a NORMALIZER false-negative: `normalize-results.ts` demoted 19 evaluator-passing rows to `infrastructure_error` because the agent process timed out (SIGTERM 143) after writing a valid answer.ts. Real pass rate was 88.9%. Fix in `bfd8c847`.
+
+Architect's second finding: `EvalRecord.id` was `"<family>:<entity>"` — agents passed the prefixed string to per-entity tools, tools rejected it, answers were garbage. iter15 fix (`82cf6688`): `id` is now the raw entity identifier, `recordKey` carries the prefix. Subset run on the 4 worst families: 17/24 vs iter14's 9/24 (+33pp on that subset). dnd-campaign-builder 1/6 → 5/6, cocktail 4/6 → 6/6. cat-facts only +1 — it is not actually a per-entity fan-out task (its "entities" are config collections), so per_entity is the wrong tool for it.
+
+The user's read: the three unmet thresholds (helpers-available, reuse-rate, warm/train ratio) and the observer that feeds them over-fit to SkillCraft's data shape. The observer keys crystallisation on `shapeHash` — a syntactic hash of concrete primitive + field names. That is data-shape-dependent by construction.
+
+### 2026-05-14 [hypothesis, Goal 4 — intent-convergence crystallisation]
+
+Goal 4 rebuilds the crystallisation key around INTENT, not shape, and revises the rubric to measure whether the loop genuinely learns + benefits — not whether a SkillCraft-shaped helper count hits an arbitrary number.
+
+The design (PLAN.md § Goal 4 has the full spec): intentSignature (data-shape-agnostic key = primitive categories + data-flow DAG + fan-out detection, with capability slots) replaces shapeHash; nested-call crystallisation grouped by scope.parentPrimitive (user flagged this as the highest-value reuse lever — lib.per_entity's internal fan-out becomes its own crystallisable intent); a per-tenant convergence index gates crystallisation on >=2-trajectory intent convergence; parameterised authoring over the converged cluster; retire the per_entity seed as a stretch.
+
+Rubric revision R1-R9: keep the honest correctness/cost/trust gates (R1-R5), replace the three shape-proxy thresholds with loop-honesty measurements (R6 convergence rate, R7 conditional reuse excluding the seed, R8 conditional cost-drop as a paired same-intent delta), add R9 cross-shape transfer as the genuine-generality proof.
+
+### 2026-05-14 [meta, architect review of the Goal 4 design]
+
+Ran the rubric + the five substrate changes past a codex architect (read-only, advisory). Verdict: "proceed with changes, not as-is." Key corrections folded into PLAN.md:
+
+1. **The rubric is not measurable from today's normalized rows** — they carry counts, not helper names/origins/intent-signatures. Goal 4 iter 1 MUST be metric instrumentation (an artifact walker) or R6-R9 are unscoreable. Also: current `reuseRate` counts the `per_entity` seed as a lib call — R7's conditional reuse must EXCLUDE seeds.
+
+2. **R6 was still SkillCraft-shaped** ("families with >=1 converged helper"). Architect's reframe, adopted: "of intent CLUSTERS with >=2 qualifying trajectories, >=80% crystallise one helper" — cluster-keyed, not family-keyed.
+
+3. **R8's "vs the train episode that birthed it" is ambiguous** with N>=2 origins. Adopted: compare reuse-episodes to the nearest earlier same-intent NON-reuse episode (paired delta).
+
+4. **R9 cross-shape transfer is blocked by the family-partitioned lib-cache** — hydrate/persist are per-family. Needs a deliberate transfer harness (iter 6).
+
+5. **Change 4 (parameterised authoring) is the riskiest + historically under-scoped.** Today's author replays ONE trajectory; it does not infer a generalised helper from a cluster. Naive "varying fields become inputs" freezes toolBundle/toolName when the first two cluster examples are same-family — which kills R9. Scope: implement for the ONE proven fan-out signature first; always promote the capability slots to params even when the first examples share them.
+
+6. **Change 2 grouping**: the parent `lib.*` call is recorded AFTER its nested calls, so nested-call grouping must use `scope.parentPrimitive`, not contiguity.
+
+7. **Change 3 convergence index** must live in the SHARED run cache (not per-episode datafetchHome) and tolerate the 4-shard race.
+
+**The biggest risk** (architect): over-coarse intentSignatures feed an under-powered author → "generic" helpers that are wrong or unusable, discovered only after a $30 full-126. **The cheap de-risk**, adopted as Goal 4 iter 2: an OFFLINE analyzer over the existing iter14/15 trajectory artifacts that computes candidate signatures, reports cluster purity, shows varying-vs-constant fields, and emits dry-run helper schemas WITHOUT writing helpers or touching the gate. If the top clusters do not produce stable schemas, the redesign stops there.
+
+Recommended iteration order (adopted into PLAN.md's iter schedule): instrument metrics → offline analyzer → nested extraction as candidate-only → persistent convergence index → parameterised authoring for the one proven signature → cross-shape transfer smoke → instrumented full-126 → retire-seed stretch.
+
+Goal 4's canonical `/goal` condition is in goal.md. Planning complete; the user starts a fresh `/goal` for it.

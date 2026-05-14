@@ -1,4 +1,4 @@
-# Plan: close the 7-of-7 gap on the SkillCraft full-126
+# Plan: prove the learning loop learns generic intent, not data shape
 
 > Living document. Update when direction shifts. Companion files:
 > [EXPERIMENTS.md](./EXPERIMENTS.md) (curated results) and
@@ -6,7 +6,221 @@
 > See [STATUS.md](./STATUS.md) for the achievements + remaining work
 > snapshot at the start of this iteration cycle.
 
-## Goal 3 (current): prove the learning loop is generic, code-mode-native, cost-effective
+## Goal 4 (current): intent-convergence crystallisation + a learning-honest rubric
+
+> Direction set by the user 2026-05-14, after Goal 3's iter9-15:
+> "I worry that we are not generic enough in our approach. We want our
+> solution to be robust and work across use cases and learn the right
+> intent-shape interface when intent emerges across runs, agnostic of
+> the shape of the data underneath."
+
+### Why Goal 4 exists
+
+Goal 3 (iter9-15) made the learning loop fire on SkillCraft: full-126
+landed 88.9% pass, the loop crystallises helpers, the novel-tenant
+smoke proves zero-substrate-edit onboarding (Goal 3 part B). But three
+thresholds stayed unmet — `avgLearnedInterfacesAvailable warm ≥ 2.0`,
+`avgReuseRate warm ≥ 0.30`, `warm/train tokens ≤ 0.70` — and the user's
+diagnosis is that **those thresholds, and the observer that feeds them,
+over-fit to SkillCraft's per-entity-fan-out data shape.**
+
+The current observer keys crystallisation on `shapeHash` — a hash of
+the *syntactic* trajectory (concrete primitive names + field names).
+Two tenants doing structurally identical work over different data never
+share a learned interface. The substrate ships a hand-written
+`per_entity` seed that bakes in the fan-out assumption.
+
+Goal 4 rebuilds the crystallisation key around **intent**, not shape,
+and revises the rubric to measure **whether the loop genuinely learns
+and benefits from learning** — not whether a SkillCraft-shaped helper
+count hits an arbitrary number.
+
+### What proves Goal 4
+
+A **learning-honest rubric** (replaces Goal 3's 7-of-7). Keep the
+honest correctness/cost/trust gates; replace the three shape-proxy
+thresholds with loop-honesty measurements. All conditions evaluated
+from a single instrumented full-126 + the smokes:
+
+**Kept (unchanged — honest gates):**
+- R1 `passRate ≥ 0.92` — the loop must not regress correctness.
+- R2 `avgEffectiveTokens ≤ 8,000` — substrate stays Claude-cheap.
+- R3 `runtimeErrorRate ≤ 0.05`.
+- R4 `quarantine rate ≤ 0.03`.
+- R5 novel-tenant smoke passes — zero substrate edits for a new tenant
+  (Goal 3 part B, carried forward).
+
+**Revised (shape-proxy → loop-honesty):**
+- R6 **Convergence rate** (replaces `avgLearnedInterfacesAvailable ≥ 2.0`):
+  of the intent clusters observed with ≥ 2 qualifying successful
+  trajectories, ≥ 80% crystallise exactly one callable helper. Measures
+  "the loop learns from *convergence*, not from a single trajectory" —
+  cluster-keyed, not family-keyed, so it is not SkillCraft-shaped.
+- R7 **Conditional reuse** (replaces `avgReuseRate warm ≥ 0.30`): of
+  warm episodes where a same-intent crystallised helper is available,
+  ≥ 60% call it. Excludes the `per_entity` seed from the numerator —
+  only *learned* helper reuse counts. Measures helper *usefulness*, not
+  blanket reuse.
+- R8 **Conditional cost-drop** (replaces `warm/train tokens ≤ 0.70`):
+  episodes that reused a crystallised helper cost ≤ 70% of the nearest
+  earlier same-intent *non-reuse* episode (a paired same-intent delta,
+  not a blanket tier ratio — warm-tier difficulty confounds the old
+  ratio).
+
+**Added (the genuine-generality proof):**
+- R9 **Cross-shape transfer**: the same `intentSignature` crystallises
+  a helper that is reused across ≥ 2 SkillCraft families with *different
+  data shapes* (different db collections, different tool bundles).
+  Requires a deliberate transfer harness — today's lib-cache is
+  family-partitioned. This is the data-shape-agnostic proof.
+
+> R6-R9 are not measurable from today's normalized rows (counts only,
+> no helper names/origins/intent-signatures). **Goal 4 iter 1 is metric
+> instrumentation** — without it the rubric is unscoreable.
+
+### Substrate redesign (the five changes)
+
+**Change 1 — `intentSignature` (data-shape-agnostic crystallisation key).**
+Alongside `shapeHash`, compute a key from: (a) primitive *categories*
+in sequence (`db` / `lib` / `tool`, not names); (b) the data-flow DAG
+(which step consumes which earlier step's output); (c) fan-out
+detection (a run of ≥ 2 same-category calls varying one input field
+collapses to `FANOUT(category, degree)`). `db.records.findExact →
+tool.tvmaze.getInfo(id)×3` and `db.cases.search →
+tool.finqa.getCase(case_id)×5` must hash to the same `intentSignature`.
+The signature carries **capability slots** — the bundle / tool / param
+constants that *must* become parameters for cross-shape transfer.
+Architect note: `db/lib/tool + DAG + FANOUT` alone is too coarse and
+risks merging unrelated workflows; the canonical spec must be pinned
+*from observed cluster purity* (see iter 2), not designed in the
+abstract.
+
+**Change 2 — nested-call crystallisation.** Extend
+`extractCandidateTemplates` to also crystallise from calls with
+`scope.depth ≥ 1`, grouped by `scope.parentPrimitive` (NOT by
+contiguity — the parent `lib.*` call is recorded *after* its nested
+calls). So `lib.per_entity`'s internal `tool.A/B/C` fan-out becomes its
+own crystallisable intent, independent of the wrapper. (User flagged
+this as the highest-value reuse lever.)
+
+**Change 3 — convergence index + gate.** A per-tenant on-disk index
+`intentSignature → [{trajectoryId, shapeHash, varyingParams}]`, living
+in the **shared run cache** (not per-episode `datafetchHome`) with
+atomic append that tolerates the 4-shard race. The gate crystallises
+only when an `intentSignature` has ≥ N entries (default 2; production
+wants 3). First trajectory of a new intent is *recorded, not
+crystallised*; the second convergent one triggers crystallisation.
+N=2 may starve some 6-episode families — acceptable because R7/R8 are
+*conditional* (they only score families where a helper exists).
+
+**Change 4 — parameterised authoring over the converged cluster.**
+RISKIEST + historically under-scoped. Today's author replays *one*
+trajectory and parameterises literal inputs; it does not infer a
+generalised helper from a *cluster*. Naive "fields that vary become
+inputs, constants stay in the body" freezes `toolBundle`/`toolName`
+when the first two cluster examples are same-family — which kills
+cross-shape transfer (R9). Scope: implement parameterised authoring
+**only for the one proven fan-out signature** first; the capability
+slots from Change 1 are *always* promoted to parameters even if the
+first cluster examples happen to share them.
+
+**Change 5 — retire the `per_entity` seed (stretch, last).** Once
+Changes 1-4 reliably learn the fan-out interface from convergence, the
+seed is a cold-start crutch. Goal 4's stretch: demonstrate the
+substrate learns the equivalent of `per_entity` *without shipping it*
+on ≥ 1 family. Premature until R6-R9 hold with the seed in place.
+
+### The biggest risk + the cheap de-risk
+
+**Risk:** over-coarse `intentSignature`s feed an under-powered author,
+producing "generic" helpers that are actually wrong or unusable — and
+we only discover it after a $30 full-126.
+
+**De-risk (Goal 4 iter 2, before touching the observer gate):** build
+an **offline analyzer** over the existing iter14/iter15 trajectory
+artifacts. It computes candidate `intentSignature`s, groups
+trajectories into clusters, reports **cluster purity**, shows
+varying-vs-constant fields per cluster, and emits **dry-run helper
+schemas without writing any helper**. If the top clusters do not
+produce obviously stable, sensible schemas, the redesign stops here and
+we reconsider the signature spec. No substrate code changes until the
+offline analyzer proves the signatures cluster cleanly.
+
+### Iteration schedule for Goal 4
+
+| iter | hypothesis / deliverable | lever |
+|---|---|---|
+| 1 | metric instrumentation: an artifact walker that records per-episode helper names, called-helper identities, available-helper identities, seed-vs-learned, manifest origin (`origin.trajectoryIds`, new `origin.intentSignature`), quarantine — so R6-R9 are scoreable at all | normalize-results + a new artifact-walk pass |
+| 2 | offline `intentSignature` analyzer over iter14/15 trajectories; pin the canonical signature spec from observed cluster purity; dry-run helper schemas only — **gate untouched** | offline tooling |
+| 3 | nested fan-out extraction grouped by `scope.parentPrimitive`, emitted as candidate templates (spec/candidate only, not yet gated) | observer template |
+| 4 | persistent convergence index in the shared run cache, atomic append; gate crystallises on ≥ 2-trajectory intent convergence | observer gate + new index module |
+| 5 | parameterised authoring for the one proven fan-out signature; capability slots always promoted to params | observer author |
+| 6 | cross-shape transfer smoke (shared availability across ≥ 2 families with different data shapes); probe + validate | transfer harness (test infra) |
+| 7 | instrumented full-126 against the learning-honest rubric R1-R9; gap analysis | none (measurement) |
+| 8 | retire-the-seed stretch (learned fan-out without `per_entity` on ≥ 1 family) OR targeted fix per iter-7 gap | matches gap |
+
+Stop conditions: R1-R9 all hold simultaneously on the instrumented
+full-126 + smokes, OR 8 accepted iterations, OR 24 hours elapsed.
+
+### Working procedure (cadence rules)
+
+Same as Goal 3, with one addition: **iters 1-2 ship NO substrate
+behaviour change** — instrumentation + offline analysis only. The
+observer gate is not touched until iter 4, and only after the iter-2
+offline analyzer demonstrates clean clusters.
+
+1. **Hypothesis.** One sentence; update PLAN.md if priority shifts.
+2. **Implement** against the observer / hook registry / snippet
+   runtime. Never family-specific.
+3. **Probe.** Single family, lib-cache on. From iter 4 onward.
+4. **Validate.** Fixed pair {university-directory-builder,
+   jikan-anime-analysis}.
+5. **Full-126.** Family-sequential, 4-shard parallel. Commit a headline
+   row to [`hook-registry-experiment.md`](../docs/hook-registry-experiment.md).
+6. **Hygiene.** `pnpm typecheck` clean, `pnpm test` green, working tree
+   committed. The novel-tenant smoke must stay green every iteration.
+
+### Forbidden behaviours (carried from Goal 3, unchanged)
+
+The condition is NOT met if the transcript reveals any of:
+
+- Code that pattern-matches on SkillCraft family names, task keys,
+  bundle names, or specific tool identifiers.
+- Pre-baked seed helpers under `seeds/<tenantId>/` or
+  `<baseDir>/lib/<tenantId>/` shipped to disk *before episode 1*.
+- Prompt-template branches keyed on dataset / family / tier identity.
+- Hardcoded payload field defaults inside `df.tool` / `df.lib` proxies.
+- Bypassing the hook registry.
+- New server-side LLM call paths that substitute for the agent's own
+  composition. Observers learn FROM agent attempts.
+
+All measured helpers must be observer-crystallised from earlier
+same-run episodes; the lib-cache starts empty per tenant per run.
+
+### What "done" looks like for Goal 4
+
+Surface in the same turn: the instrumented analysis JSON path; the R1-R9
+scorecard; the test count; the per-tier breakdown; the cross-shape
+transfer evidence (which `intentSignature` crystallised which helper,
+reused across which families); and a note on whether `per_entity` could
+be retired.
+
+---
+
+## Goal 3 (closed, partial): prove the learning loop is generic, code-mode-native, cost-effective
+
+> Closed 2026-05-14 at 3/7 thresholds. Headline: the learning loop
+> fires end-to-end on the new harness; full-126 = 88.9% pass after the
+> normalizer fix; Goal 3 part B (novel-tenant smoke) passes 11/11. The
+> three unmet thresholds (`avgLearnedInterfacesAvailable warm ≥ 2.0`,
+> `avgReuseRate warm ≥ 0.30`, `warm/train tokens ≤ 0.70`) were diagnosed
+> as over-fitting to SkillCraft's data shape — Goal 4 supersedes them
+> with a learning-honest rubric. Commits: `0d0ea4df` (iter9-13 substrate
+> + 3 bugfixes), `bfd8c847` (normalizer false-negative fix), `82cf6688`
+> (iter15 EvalRecord entity-id contract). Full iter9-15 detail in
+> EXPERIMENTS.md.
+
+### Goal 3 original definition (preserved for context)
 
 > Spirit of the project, framed by the user 2026-05-13:
 > "VFS-based approach with bash commands as the verbiage to interact

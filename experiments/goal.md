@@ -7,10 +7,59 @@ to that dataset.
 
 It is not a runtime artifact. It exists so that whoever opens
 `/goal` in a future session can paste a tested, reviewed condition
-rather than re-inventing one. Goal 3 (current) at the top; Goal 2 and
-Goal 1 preserved below for historical reference.
+rather than re-inventing one. Goal 4 (current) at the top; Goals 3,
+2, 1 preserved below for historical reference.
 
-## Goal 3 (current): generic, code-mode-native, cost-effective learning loop
+## Goal 4 (current): intent-convergence crystallisation + learning-honest rubric
+
+The substrate should learn the right **intent-shape interface** when
+intent emerges across runs — agnostic of the data shape underneath.
+Goal 3's iter9-15 made the loop fire (88.9% pass on full-126, 3/7
+thresholds) but the three unmet thresholds and the observer that feeds
+them over-fit to SkillCraft's per-entity-fan-out data shape. Goal 4
+rebuilds the crystallisation key around **intent** (data-shape-agnostic)
+and replaces the three shape-proxy thresholds with **loop-honesty**
+measurements.
+
+See [`PLAN.md`](./PLAN.md) § "Goal 4" for the full design (the five
+substrate changes, the offline de-risk step, the iteration schedule)
+and the architect review that shaped it. Paste-ready condition
+(≤ 4000 chars):
+
+```
+/goal Prove the substrate's learning loop learns generic INTENT (not data shape) by satisfying a learning-honest rubric R1-R9 on a single committed branch state, instrumented full-126 + smokes, claude driver, hooks-draft mode.
+
+KEPT honest gates: R1 arms["datafetch-learned"].passRate >= 0.92. R2 avgEffectiveTokens <= 8000. R3 runtimeErrorRate <= 0.05. R4 quarantine rate <= 0.03. R5 novel-tenant smoke src/observer/__smoke__/novel-tenant.ts passes with zero edits to substrate code (src/observer, src/hooks, src/snippet, src/sdk, src/adapter).
+
+REVISED loop-honesty thresholds: R6 convergence rate — of intent clusters observed with >=2 qualifying successful trajectories, >=80% crystallise exactly one callable helper (cluster-keyed, not family-keyed). R7 conditional reuse — of warm episodes where a same-intent crystallised helper is available, >=60% call it; the per_entity seed is EXCLUDED from the numerator (only learned-helper reuse counts). R8 conditional cost-drop — episodes that reused a crystallised helper cost <=70% of the nearest earlier same-intent NON-reuse episode (paired same-intent delta).
+
+ADDED generality proof: R9 cross-shape transfer — the same intentSignature crystallises a helper reused across >=2 SkillCraft families with different data shapes (different db collections, different tool bundles), demonstrated via a deliberate transfer harness.
+
+Substrate redesign (five changes, detail in PLAN.md): (1) intentSignature — data-shape-agnostic crystallisation key = primitive categories + data-flow DAG + fan-out detection, with capability slots for bundle/tool/param constants. (2) nested-call crystallisation grouped by scope.parentPrimitive. (3) per-tenant convergence index in the shared run cache; crystallise on >=2-trajectory intent convergence. (4) parameterised authoring over the converged cluster, scoped to the one proven fan-out signature first. (5) retire the per_entity seed (stretch).
+
+CRITICAL ordering: iters 1-2 ship NO substrate behaviour change. Iter 1 = metric instrumentation (artifact walker recording helper names/origins/intent-signatures — without it R6-R9 are unscoreable). Iter 2 = offline intentSignature analyzer over existing iter14/15 trajectories reporting cluster purity + dry-run helper schemas; the observer gate is NOT touched until iter 2 proves clusters are clean. If clusters are not stable, STOP and reconsider the signature spec.
+
+Stop after 8 accepted iterations or 24 hours otherwise.
+
+Working files: experiments/PLAN.md (Goal 4 plan + iteration schedule + architect review), experiments/EXPERIMENTS.md (curated log; read before each hypothesis; Goal 3 iter9-15 entries shape priors), experiments/EXPERIMENT_NOTES.md (chronological scratchpad), experiments/STATUS.md (snapshot), experiments/goal.md (this file). docs/architecture.md, docs/proof-skillcraft.md, docs/hook-registry-experiment.md are background; the last appends one headline row per iteration.
+
+Per-iteration cadence: (1) Read EXPERIMENTS.md first; state one hypothesis + lever; add [hypothesis] note to EXPERIMENT_NOTES.md. (2) Implement against observer / hook-registry / snippet-runtime — never family-specific. (3) From iter 4 onward: single-family probe, lib-cache on, DATAFETCH_AGENT=claude DATAFETCH_INTERFACE_MODE=hooks-draft. (4) Validate on {university-directory-builder, jikan-anime-analysis}. (5) Full-126, 4-shard parallel, family-sequential; commit headline row to docs/hook-registry-experiment.md. (6) pnpm typecheck clean, pnpm test green, novel-tenant smoke green, working tree committed.
+
+NOT met if the transcript reveals: code pattern-matching on SkillCraft family/task/bundle/tool identifiers; pre-baked seed helpers under seeds/<tenantId>/ or <baseDir>/lib/<tenantId>/ before episode 1; prompt-template branches keyed on dataset/family/tier identity; hardcoded payload defaults in df.tool/df.lib proxies; bypassing the hook registry; new server-side LLM call paths substituting for the agent's composition. The per_entity seed under <baseDir>/lib/__seed__/ remains a permitted cold-start crutch until Change 5 retires it.
+
+Before declaring met, surface in the same turn: instrumented analysis JSON path; the R1-R9 scorecard; pnpm test count; per-tier breakdown; the cross-shape transfer evidence (which intentSignature crystallised which helper, reused across which families); a note on whether per_entity could be retired; confirmation EXPERIMENTS.md has the final iteration's complete entry.
+```
+
+## Goal 3 (closed, partial): generic, code-mode-native, cost-effective learning loop
+
+Closed 2026-05-14 at 3/7 thresholds. The learning loop fires
+end-to-end; full-126 = 88.9% pass after the normalizer fix; Goal 3
+part B (novel-tenant smoke) passes 11/11. The three unmet thresholds
+were diagnosed as over-fitting to SkillCraft's data shape and are
+superseded by Goal 4's learning-honest rubric. Original condition
+preserved below.
+
+### Goal 3 original definition: generic, code-mode-native, cost-effective learning loop
 
 The substrate is meant to be a generic, code-mode-native, cost-effective
 learning interface. Spirit (user-set 2026-05-13):
